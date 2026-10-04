@@ -6,3 +6,14 @@ build/
 .vscode/
 .dart_tool/
 *.log
+.dart_tool/
+.git/
+.github/
+.idea/
+.vscode/
+build/
+android/
+ios/
+linux/
+macos/
+windows/
