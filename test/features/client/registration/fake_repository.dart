@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:ms_frontend/features/client_registration/application/ports/client_registration_repository.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration_exceptions.dart';
+import 'package:ms_frontend/features/client/registration/application/ports/client_registration_repository.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
 
 /// Repositorio de prueba: guarda lo recibido y puede fallar o demorarse.
 class FakeClientRegistrationRepository implements ClientRegistrationRepository {

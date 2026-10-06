@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/client_registration/application/register_client.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client_registration/domain/document_type.dart';
-import 'package:ms_frontend/features/client_registration/presentation/client_registration_controller.dart';
+import 'package:ms_frontend/features/client/registration/application/register_client.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
+import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/features/client/registration/presentation/client_registration_controller.dart';
 
 import 'fake_repository.dart';
 

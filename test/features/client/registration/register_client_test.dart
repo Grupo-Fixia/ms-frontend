@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/client_registration/application/ports/client_registration_repository.dart';
-import 'package:ms_frontend/features/client_registration/application/register_client.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration_exceptions.dart';
+import 'package:ms_frontend/features/client/registration/application/ports/client_registration_repository.dart';
+import 'package:ms_frontend/features/client/registration/application/register_client.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
 
 import 'fixtures.dart';
 

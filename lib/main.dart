@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme/fixia_theme.dart';
-import 'features/client_registration/application/ports/client_registration_repository.dart';
-import 'features/client_registration/application/register_client.dart';
-import 'features/client_registration/domain/client_registration.dart';
-import 'features/client_registration/domain/client_registration_exceptions.dart';
-import 'features/client_registration/presentation/client_registration_page.dart';
+import 'features/client/registration/application/ports/client_registration_repository.dart';
+import 'features/client/registration/application/register_client.dart';
+import 'features/client/registration/domain/client_registration.dart';
+import 'features/client/registration/domain/client_registration_exceptions.dart';
+import 'features/client/registration/presentation/client_registration_page.dart';
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {

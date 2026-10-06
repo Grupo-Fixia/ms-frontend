@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/fixia_theme.dart';
+import '../../../../../core/theme/fixia_theme.dart';
 
 /// Casilla obligatoria de consentimiento para el tratamiento de datos
 /// (RF-007). Muestra la versión de la política aceptada.
@@ -23,6 +23,7 @@ class DataConsentField extends StatelessWidget {
     final theme = Theme.of(context);
     return FormField<bool>(
       initialValue: value,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       validator: (accepted) => accepted == true
           ? null
           : 'Debes aceptar el tratamiento de datos para crear la cuenta.',

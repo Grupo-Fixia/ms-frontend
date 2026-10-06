@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration_rules.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration_rules.dart';
+import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
 
 void main() {
   group('nombres y apellidos', () {
@@ -17,17 +18,44 @@ void main() {
   });
 
   group('documento', () {
-    test('es obligatorio y solo admite letras y números', () {
-      expect(ClientRegistrationRules.documentNumber(''), isNotNull);
-      expect(ClientRegistrationRules.documentNumber('AB123'), isNull);
-      expect(ClientRegistrationRules.documentNumber('1.020.304'), isNotNull);
-      expect(ClientRegistrationRules.documentNumber('AB 12'), isNotNull);
+    test('es obligatorio', () {
+      expect(ClientRegistrationRules.documentNumber('', DocumentType.cc),
+          isNotNull);
+    });
+
+    test('cédula de ciudadanía y de extranjería: solo números', () {
+      for (final type in [DocumentType.cc, DocumentType.ce]) {
+        expect(ClientRegistrationRules.documentNumber('1020304050', type),
+            isNull);
+        expect(ClientRegistrationRules.documentNumber('AB123', type),
+            isNotNull);
+        expect(ClientRegistrationRules.documentNumber('1.020.304', type),
+            isNotNull);
+      }
+      expect(ClientRegistrationRules.documentAllowsLetters(DocumentType.cc),
+          isFalse);
+    });
+
+    test('pasaporte: letras y números, sin símbolos', () {
+      const type = DocumentType.passport;
+      expect(ClientRegistrationRules.documentAllowsLetters(type), isTrue);
+      expect(ClientRegistrationRules.documentNumber('AB123456', type), isNull);
+      expect(ClientRegistrationRules.documentNumber('AB-123', type),
+          isNotNull);
+    });
+
+    test('sin tipo elegido se exigen solo números', () {
+      expect(ClientRegistrationRules.documentNumber('AB1', null), isNotNull);
+      expect(ClientRegistrationRules.documentNumber('123', null), isNull);
     });
 
     test('acepta hasta 30 caracteres y recorta espacios externos', () {
-      expect(ClientRegistrationRules.documentNumber('1' * 30), isNull);
-      expect(ClientRegistrationRules.documentNumber('1' * 31), isNotNull);
-      expect(ClientRegistrationRules.documentNumber(' AB123 '), isNull);
+      expect(ClientRegistrationRules.documentNumber('1' * 30, DocumentType.cc),
+          isNull);
+      expect(ClientRegistrationRules.documentNumber('1' * 31, DocumentType.cc),
+          isNotNull);
+      expect(ClientRegistrationRules.documentNumber(' 123 ', DocumentType.cc),
+          isNull);
     });
   });
 
@@ -57,14 +85,15 @@ void main() {
   });
 
   group('contraseña', () {
-    test('exige 8 a 72 caracteres con letras y números', () {
+    test('exige 8 a 20 caracteres con letras y números', () {
       expect(ClientRegistrationRules.password(''), isNotNull);
       expect(ClientRegistrationRules.password('Segura123'), isNull);
       expect(ClientRegistrationRules.password('Abc1234'), isNotNull);
       expect(ClientRegistrationRules.password('solotexto'), isNotNull);
       expect(ClientRegistrationRules.password('12345678'), isNotNull);
-      expect(ClientRegistrationRules.password('a1${'x' * 70}'), isNull);
-      expect(ClientRegistrationRules.password('a1${'x' * 71}'), isNotNull);
+      expect(ClientRegistrationRules.password('a1${'x' * 18}'), isNull);
+      expect(ClientRegistrationRules.password('a1${'x' * 19}'), isNotNull);
+      expect(ClientRegistrationRules.passwordMaxLength, 20);
     });
 
     test('la confirmación debe coincidir', () {
