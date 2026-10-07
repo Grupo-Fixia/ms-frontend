@@ -1,4 +1,4 @@
-import 'document_type.dart';
+import '../../../../core/models/document_type.dart';
 
 /// Datos que diligencia un cliente para crear su cuenta (GC-234, RF-001).
 class ClientRegistration {

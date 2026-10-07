@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../core/theme/fixia_theme.dart';
+import '../theme/fixia_theme.dart';
 
 /// Casilla obligatoria de consentimiento para el tratamiento de datos
 /// (RF-007). Muestra la versión de la política aceptada.

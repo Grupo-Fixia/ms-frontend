@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_rules.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/core/validation/registration_rules.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
 
 void main() {
   group('nombres y apellidos', () {

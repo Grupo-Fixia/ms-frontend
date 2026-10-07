@@ -1,5 +1,5 @@
 import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
 
 ClientRegistration validRegistration({
   String firstName = 'Ana',

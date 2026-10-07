@@ -4,7 +4,7 @@ import '../../../../core/constants/data_policy.dart';
 import '../application/register_client.dart';
 import '../domain/client_registration.dart';
 import '../domain/client_registration_exceptions.dart';
-import '../domain/document_type.dart';
+import '../../../../core/models/document_type.dart';
 
 /// Estado de la pantalla de registro de cliente.
 class ClientRegistrationController extends ChangeNotifier {

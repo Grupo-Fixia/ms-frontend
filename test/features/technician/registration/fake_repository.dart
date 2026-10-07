@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:ms_frontend/features/technician_registration/application/ports/technician_registration_repository.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_registration.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_registration_exceptions.dart';
+import 'package:ms_frontend/features/technician/registration/application/ports/technician_registration_repository.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_registration.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_registration_exceptions.dart';
 
 class FakeTechnicianRegistrationRepository
     implements TechnicianRegistrationRepository {

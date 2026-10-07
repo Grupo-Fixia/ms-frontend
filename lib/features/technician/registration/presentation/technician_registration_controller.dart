@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../core/constants/data_policy.dart';
+import '../../../../core/constants/data_policy.dart';
 import '../application/register_technician.dart';
 import '../domain/technician_registration.dart';
 import '../domain/technician_registration_exceptions.dart';
 import '../domain/technician_profession.dart';
-import '../../client/registration/domain/document_type.dart';
+import '../../../../core/models/document_type.dart';
 
 /// Estado de la pantalla de registro de técnico.
 class TechnicianRegistrationController extends ChangeNotifier {

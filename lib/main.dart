@@ -19,11 +19,9 @@ import 'features/client/registration/application/register_client.dart';
 import 'features/client/registration/domain/client_registration.dart';
 import 'features/client/registration/domain/client_registration_exceptions.dart';
 import 'features/client/registration/presentation/client_registration_page.dart';
-import 'features/technician_registration/application/ports/technician_registration_repository.dart';
-import 'features/technician_registration/application/register_technician.dart';
-import 'features/technician_registration/domain/technician_registration.dart';
-import 'features/technician_registration/domain/technician_registration_exceptions.dart';
-import 'features/technician_registration/presentation/technician_registration_page.dart';
+import 'features/technician/registration/application/register_technician.dart';
+import 'features/technician/registration/infrastructure/pending_technician_registration_repository.dart';
+import 'features/technician/registration/presentation/technician_registration_page.dart';
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
@@ -81,8 +79,7 @@ class FixiaApp extends StatefulWidget {
 }
 
 class _FixiaAppState extends State<FixiaApp> {
-  late final SessionStore _sessionStore =
-      widget.sessionStore ?? SessionStore();
+  late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
 
   @override
   void dispose() {
@@ -164,19 +161,6 @@ class PendingClientRegistrationRepository
   Future<void> register(ClientRegistration registration) async {
     throw const ClientRegistrationFailure(
       'El registro todavía no está conectado al servicio (GC-253).',
-    );
-  }
-}
-
-/// Repositorio temporal mientras se define la integración del registro técnico.
-class PendingTechnicianRegistrationRepository
-    implements TechnicianRegistrationRepository {
-  const PendingTechnicianRegistrationRepository();
-
-  @override
-  Future<void> register(TechnicianRegistration registration) async {
-    throw const TechnicianRegistrationFailure(
-      'No fue posible conectar con el servidor. Inténtalo de nuevo.',
     );
   }
 }

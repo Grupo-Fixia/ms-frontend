@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/validation/registration_rules.dart';
+import '../../../../core/widgets/data_consent_field.dart';
 import '../application/register_client.dart';
-import '../domain/client_registration_rules.dart';
-import '../domain/document_type.dart';
+import '../../../../core/models/document_type.dart';
 import 'client_registration_controller.dart';
-import 'widgets/data_consent_field.dart';
 
 /// Formulario de registro de cliente (GC-252, historia GC-234).
 class ClientRegistrationPage extends StatefulWidget {

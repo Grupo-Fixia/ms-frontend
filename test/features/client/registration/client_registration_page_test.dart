@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/client/registration/application/register_client.dart';
 import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
 import 'package:ms_frontend/features/client/registration/presentation/client_registration_page.dart';
 
 import 'fake_repository.dart';

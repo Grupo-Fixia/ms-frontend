@@ -1,6 +1,6 @@
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_registration.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_profession.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_registration.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_profession.dart';
 
 TechnicianRegistration validTechnicianRegistration({
   String firstName = 'Ana',
@@ -17,7 +17,7 @@ TechnicianRegistration validTechnicianRegistration({
   return TechnicianRegistration(
     firstName: firstName,
     lastName: lastName,
-    profession: TechnicianProfession.electrician,
+    profession: TechnicianProfession.electrical,
     documentType: DocumentType.cc,
     documentNumber: documentNumber,
     email: email,

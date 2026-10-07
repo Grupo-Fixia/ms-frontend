@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
-import 'package:ms_frontend/features/technician_registration/application/register_technician.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_registration_exceptions.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_profession.dart';
-import 'package:ms_frontend/features/technician_registration/presentation/technician_registration_page.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
+import 'package:ms_frontend/features/technician/registration/application/register_technician.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_registration_exceptions.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_profession.dart';
+import 'package:ms_frontend/features/technician/registration/presentation/technician_registration_page.dart';
 
 import 'fake_repository.dart';
 
@@ -37,7 +37,7 @@ Future<void> _fillValidForm(WidgetTester tester) async {
   await tester.enterText(_field('lastName'), 'Pérez');
   await tester.tap(_field('profession'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text(TechnicianProfession.electrician.label).last);
+  await tester.tap(find.text(TechnicianProfession.electrical.label).last);
   await tester.pumpAndSettle();
   await tester.tap(_field('documentType'));
   await tester.pumpAndSettle();
@@ -139,7 +139,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.calls, 1);
-    expect(repository.saved?.profession, TechnicianProfession.electrician);
+    expect(repository.saved?.profession, TechnicianProfession.electrical);
+    expect(repository.saved?.profession.categoryCode, 'ELECTRICAL');
     expect(
       find.text('No fue posible conectar con el servidor. Inténtalo de nuevo.'),
       findsOneWidget,

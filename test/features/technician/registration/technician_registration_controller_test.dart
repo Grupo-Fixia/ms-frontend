@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
-import 'package:ms_frontend/features/technician_registration/application/register_technician.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_registration_exceptions.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_profession.dart';
-import 'package:ms_frontend/features/technician_registration/presentation/technician_registration_controller.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
+import 'package:ms_frontend/features/technician/registration/application/register_technician.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_registration_exceptions.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_profession.dart';
+import 'package:ms_frontend/features/technician/registration/presentation/technician_registration_controller.dart';
 
 import 'fake_repository.dart';
 
@@ -60,7 +60,7 @@ void main() {
     await controller.register(
       firstName: 'Ana',
       lastName: 'Pérez',
-      profession: TechnicianProfession.electrician,
+      profession: TechnicianProfession.electrical,
       documentType: null,
       documentNumber: '1020304050',
       email: 'ana@fixia.com',
@@ -84,7 +84,7 @@ void main() {
     await controller.register(
       firstName: 'Ana',
       lastName: 'Pérez',
-      profession: TechnicianProfession.electrician,
+      profession: TechnicianProfession.electrical,
       documentType: DocumentType.cc,
       documentNumber: '1020304050',
       email: 'ana@fixia.com',
@@ -105,7 +105,7 @@ void main() {
     final first = controller.register(
       firstName: 'Ana',
       lastName: 'Pérez',
-      profession: TechnicianProfession.electrician,
+      profession: TechnicianProfession.electrical,
       documentType: DocumentType.cc,
       documentNumber: '1020304050',
       email: 'ana@fixia.com',
@@ -116,7 +116,7 @@ void main() {
     await controller.register(
       firstName: 'Ana',
       lastName: 'Pérez',
-      profession: TechnicianProfession.electrician,
+      profession: TechnicianProfession.electrical,
       documentType: DocumentType.cc,
       documentNumber: '1020304050',
       email: 'ana@fixia.com',

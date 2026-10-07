@@ -1,4 +1,4 @@
-import '../../client/registration/domain/document_type.dart';
+import '../../../../core/models/document_type.dart';
 import 'technician_profession.dart';
 
 /// Datos capturados localmente por el formulario de registro de técnico.

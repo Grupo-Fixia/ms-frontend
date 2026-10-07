@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/fixia_theme.dart';
-import '../../client/registration/domain/client_registration_rules.dart';
-import '../../client/registration/domain/document_type.dart';
-import '../../client/registration/presentation/widgets/data_consent_field.dart';
+import '../../../../core/models/document_type.dart';
+import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/validation/registration_rules.dart';
+import '../../../../core/widgets/data_consent_field.dart';
 import '../domain/technician_profession.dart';
 import 'technician_registration_controller.dart';
 import '../application/register_technician.dart';

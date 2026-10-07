@@ -4,7 +4,7 @@ import 'package:ms_frontend/features/auth/login/application/session_store.dart';
 import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
 import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
 import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/core/models/document_type.dart';
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';

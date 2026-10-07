@@ -1,7 +1,7 @@
-import '../../../../core/validation/email_rule.dart';
-import 'document_type.dart';
+import 'email_rule.dart';
+import '../models/document_type.dart';
 
-/// Reglas de validación del registro de cliente.
+/// Reglas compartidas de validación de registro.
 ///
 /// Replican las de `ClientRegistrationRequest` en ms-users para que el
 /// usuario vea el error antes de enviar. Devuelven el mensaje a mostrar o

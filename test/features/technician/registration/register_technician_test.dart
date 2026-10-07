@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/technician_registration/application/register_technician.dart';
-import 'package:ms_frontend/features/technician_registration/domain/technician_registration_exceptions.dart';
+import 'package:ms_frontend/features/technician/registration/application/register_technician.dart';
+import 'package:ms_frontend/features/technician/registration/domain/technician_registration_exceptions.dart';
 
 import 'fake_repository.dart';
 import 'fixtures.dart';
