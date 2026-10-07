@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../../core/theme/fixia_theme.dart';
+import '../../../../core/theme/fixia_theme.dart';
 import '../application/register_client.dart';
 import '../domain/client_registration_rules.dart';
 import '../domain/document_type.dart';
@@ -37,9 +38,12 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
 
+  final _confirmPasswordKey = GlobalKey<FormFieldState<String>>();
+
   late final ClientRegistrationController _controller;
   DocumentType? _documentType;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void initState() {
@@ -95,6 +99,29 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  bool get _documentAllowsLetters =>
+      ClientRegistrationRules.documentAllowsLetters(_documentType);
+
+  void _onDocumentTypeChanged(DocumentType? type) {
+    _controller.clearFieldError('documentType');
+    setState(() {
+      _documentType = type;
+      // Si pasa de pasaporte a cédula, se quitan las letras que ya no aplican.
+      if (!_documentAllowsLetters) {
+        final digits = _documentNumber.text.replaceAll(RegExp('[^0-9]'), '');
+        if (digits != _documentNumber.text) _documentNumber.text = digits;
+      }
+    });
+  }
+
+  /// Si el usuario ya escribió la confirmación, se vuelve a comparar cuando
+  /// cambia la contraseña.
+  void _revalidateConfirmPassword() {
+    if (_confirmPassword.text.isNotEmpty) {
+      _confirmPasswordKey.currentState?.validate();
+    }
+  }
+
   /// Primero el error del backend para ese campo; si no hay, el local.
   FormFieldValidator<String> _validator(
     String field,
@@ -106,7 +133,11 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     required String field,
     required TextEditingController controller,
     required String label,
+    required IconData icon,
     required FormFieldValidator<String> validator,
+    Key? fieldKey,
+    List<TextInputFormatter>? inputFormatters,
+    ValueChanged<String>? onChanged,
     TextInputType? keyboardType,
     TextCapitalization capitalization = TextCapitalization.none,
     int? maxLength,
@@ -116,10 +147,15 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     Iterable<String>? autofillHints,
   }) {
     return Padding(
+      key: ValueKey('client-$field-field'),
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
-        key: ValueKey('client-$field-field'),
+        key: fieldKey,
         controller: controller,
+        // Cada campo se valida solo cuando el usuario lo toca, sin marcar
+        // errores en los demás.
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        inputFormatters: inputFormatters,
         enabled: !_controller.isLocked,
         keyboardType: keyboardType,
         textCapitalization: capitalization,
@@ -129,9 +165,13 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
         enableSuggestions: !obscureText,
         autofillHints: autofillHints,
         textInputAction: TextInputAction.next,
-        onChanged: (_) => _controller.clearFieldError(field),
+        onChanged: (value) {
+          _controller.clearFieldError(field);
+          onChanged?.call(value);
+        },
         decoration: InputDecoration(
           labelText: label,
+          prefixIcon: Icon(icon),
           helperText: helperText,
           suffixIcon: suffixIcon,
           counterText: '',
@@ -176,7 +216,6 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     final theme = Theme.of(context);
     return Form(
       key: _formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -190,6 +229,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     field: 'firstName',
                     controller: _firstName,
                     label: 'Nombres',
+                    icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
                     maxLength: ClientRegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.givenName],
@@ -199,6 +239,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     field: 'lastName',
                     controller: _lastName,
                     label: 'Apellidos',
+                    icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
                     maxLength: ClientRegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.familyName],
@@ -224,18 +265,18 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                 key: const ValueKey('client-documentType-field'),
                 value: _documentType,
                 isExpanded: true,
-                decoration:
-                    const InputDecoration(labelText: 'Tipo de documento'),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                decoration: const InputDecoration(
+                  labelText: 'Tipo de documento',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
                 items: [
                   for (final type in DocumentType.values)
                     DropdownMenuItem(value: type, child: Text(type.label)),
                 ],
                 onChanged: _controller.isLocked
                     ? null
-                    : (value) {
-                        _controller.clearFieldError('documentType');
-                        setState(() => _documentType = value);
-                      },
+                    : _onDocumentTypeChanged,
                 validator: (value) =>
                     _controller.fieldError('documentType') ??
                     (value == null ? 'Selecciona tu tipo de documento.' : null),
@@ -245,14 +286,27 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'documentNumber',
               controller: _documentNumber,
               label: 'Número de documento',
+              icon: Icons.numbers,
               capitalization: TextCapitalization.characters,
+              keyboardType: _documentAllowsLetters
+                  ? TextInputType.text
+                  : TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  _documentAllowsLetters
+                      ? RegExp('[A-Za-z0-9]')
+                      : RegExp('[0-9]'),
+                ),
+              ],
               maxLength: ClientRegistrationRules.documentMaxLength,
-              validator: ClientRegistrationRules.documentNumber,
+              validator: (value) =>
+                  ClientRegistrationRules.documentNumber(value, _documentType),
             ),
             _textField(
               field: 'email',
               controller: _email,
               label: 'Correo electrónico',
+              icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
               maxLength: ClientRegistrationRules.emailMaxLength,
               autofillHints: const [AutofillHints.email],
@@ -262,7 +316,11 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'phone',
               controller: _phone,
               label: 'Teléfono celular',
+              icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+              ],
               maxLength: 16,
               autofillHints: const [AutofillHints.telephoneNumber],
               validator: ClientRegistrationRules.phone,
@@ -271,19 +329,15 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'password',
               controller: _password,
               label: 'Contraseña',
+              icon: Icons.lock_outline,
               obscureText: _obscurePassword,
+              onChanged: (_) => _revalidateConfirmPassword(),
               maxLength: ClientRegistrationRules.passwordMaxLength,
               helperText: 'Mínimo 8 caracteres, con letras y números.',
               autofillHints: const [AutofillHints.newPassword],
-              suffixIcon: IconButton(
-                tooltip: _obscurePassword
-                    ? 'Mostrar contraseña'
-                    : 'Ocultar contraseña',
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
+              suffixIcon: _VisibilityToggle(
+                obscured: _obscurePassword,
+                label: 'contraseña',
                 onPressed: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
               ),
@@ -293,7 +347,16 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'confirmPassword',
               controller: _confirmPassword,
               label: 'Confirmar contraseña',
-              obscureText: _obscurePassword,
+              icon: Icons.lock_outline,
+              fieldKey: _confirmPasswordKey,
+              obscureText: _obscureConfirmPassword,
+              suffixIcon: _VisibilityToggle(
+                obscured: _obscureConfirmPassword,
+                label: 'confirmación',
+                onPressed: () => setState(
+                  () => _obscureConfirmPassword = !_obscureConfirmPassword,
+                ),
+              ),
               maxLength: ClientRegistrationRules.passwordMaxLength,
               validator: (value) => ClientRegistrationRules.confirmPassword(
                 value,
@@ -413,6 +476,30 @@ class _RegistrationSuccess extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Botón del ojo para mostrar u ocultar una contraseña.
+class _VisibilityToggle extends StatelessWidget {
+  const _VisibilityToggle({
+    required this.obscured,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool obscured;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: obscured ? 'Mostrar $label' : 'Ocultar $label',
+      icon: Icon(
+        obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+      ),
+      onPressed: onPressed,
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../../../core/constants/data_policy.dart';
+import '../../../../core/constants/data_policy.dart';
 import '../application/register_client.dart';
 import '../domain/client_registration.dart';
 import '../domain/client_registration_exceptions.dart';

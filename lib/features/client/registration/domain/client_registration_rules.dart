@@ -1,10 +1,13 @@
+import 'document_type.dart';
+
 /// Reglas de validación del registro de cliente.
 ///
 /// Replican las de `ClientRegistrationRequest` en ms-users para que el
 /// usuario vea el error antes de enviar. Devuelven el mensaje a mostrar o
 /// `null` si el valor es válido.
 abstract final class ClientRegistrationRules {
-  static final _documentPattern = RegExp(r'^[A-Za-z0-9]+$');
+  static final _digitsPattern = RegExp(r'^[0-9]+$');
+  static final _alphanumericPattern = RegExp(r'^[A-Za-z0-9]+$');
   static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   static final _phonePattern = RegExp(r'^\+?[0-9]{7,15}$');
   static final _lettersAndDigits = RegExp(r'^(?=.*[A-Za-z])(?=.*\d).*$');
@@ -13,7 +16,7 @@ abstract final class ClientRegistrationRules {
   static const documentMaxLength = 30;
   static const emailMaxLength = 254;
   static const passwordMinLength = 8;
-  static const passwordMaxLength = 72;
+  static const passwordMaxLength = 20;
 
   static bool _isBlank(String? value) => value == null || value.trim().isEmpty;
 
@@ -33,14 +36,23 @@ abstract final class ClientRegistrationRules {
     return null;
   }
 
-  static String? documentNumber(String? value) {
+  /// La cédula de ciudadanía y la de extranjería son solo números; el
+  /// pasaporte admite letras y números (como lo acepta ms-users).
+  static bool documentAllowsLetters(DocumentType? type) =>
+      type == DocumentType.passport;
+
+  static String? documentNumber(String? value, DocumentType? type) {
     if (_isBlank(value)) return 'Ingresa tu número de documento.';
     final trimmed = value!.trim();
     if (trimmed.length > documentMaxLength) {
       return 'El documento no puede superar $documentMaxLength caracteres.';
     }
-    if (!_documentPattern.hasMatch(trimmed)) {
-      return 'Usa solo letras y números, sin espacios ni puntos.';
+    if (documentAllowsLetters(type)) {
+      if (!_alphanumericPattern.hasMatch(trimmed)) {
+        return 'Usa solo letras y números, sin espacios ni símbolos.';
+      }
+    } else if (!_digitsPattern.hasMatch(trimmed)) {
+      return 'Usa solo números, sin puntos ni espacios.';
     }
     return null;
   }

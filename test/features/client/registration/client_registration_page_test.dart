@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
-import 'package:ms_frontend/features/client_registration/application/register_client.dart';
-import 'package:ms_frontend/features/client_registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client_registration/domain/document_type.dart';
-import 'package:ms_frontend/features/client_registration/presentation/client_registration_page.dart';
+import 'package:ms_frontend/features/client/registration/application/register_client.dart';
+import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
+import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/features/client/registration/presentation/client_registration_page.dart';
 
 import 'fake_repository.dart';
 
@@ -35,13 +35,22 @@ Finder _field(String name) => find.byKey(ValueKey('client-$name-field'));
 
 final _submitButton = find.byKey(const ValueKey('client-registration-submit'));
 
+Future<void> _selectDocumentType(WidgetTester tester, DocumentType type) async {
+  await tester.tap(_field('documentType'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(type.label).last);
+  await tester.pumpAndSettle();
+}
+
+EditableText _editable(WidgetTester tester, String field) =>
+    tester.widget<EditableText>(
+      find.descendant(of: _field(field), matching: find.byType(EditableText)),
+    );
+
 Future<void> _fillValidForm(WidgetTester tester) async {
   await tester.enterText(_field('firstName'), 'Ana');
   await tester.enterText(_field('lastName'), 'Pérez');
-  await tester.tap(_field('documentType'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(DocumentType.cc.label).last);
-  await tester.pumpAndSettle();
+  await _selectDocumentType(tester, DocumentType.cc);
   await tester.enterText(_field('documentNumber'), '1020304050');
   await tester.enterText(_field('email'), 'ana@fixia.com');
   await tester.enterText(_field('phone'), '3001234567');
@@ -127,27 +136,107 @@ void main() {
     );
     expect(find.text('Ingresa solo números (7 a 15 dígitos).'), findsOneWidget);
     expect(
-      find.text('Usa entre 8 y 72 caracteres, con letras y números.'),
+      find.text('Usa entre 8 y 20 caracteres, con letras y números.'),
       findsOneWidget,
     );
     expect(find.text('Las contraseñas no coinciden.'), findsOneWidget);
   });
 
-  testWidgets('el botón del ojo muestra y oculta la contraseña',
+  testWidgets('tocar un campo solo marca el error de ese campo',
       (tester) async {
     await _pump(tester, FakeClientRegistrationRepository());
 
-    EditableText password() => tester.widget<EditableText>(
-          find.descendant(
-            of: _field('password'),
-            matching: find.byType(EditableText),
-          ),
-        );
+    await tester.enterText(_field('email'), 'ana@');
+    await tester.pump();
 
-    expect(password().obscureText, isTrue);
+    expect(
+      find.text('Ingresa un correo válido, por ejemplo nombre@correo.com.'),
+      findsOneWidget,
+    );
+    expect(find.text('Ingresa tu nombre.'), findsNothing);
+    expect(find.text('Ingresa tu teléfono.'), findsNothing);
+    expect(find.text('Selecciona tu tipo de documento.'), findsNothing);
+    expect(
+      find.text('Debes aceptar el tratamiento de datos para crear la cuenta.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('con cédula el documento solo acepta números', (tester) async {
+    await _pump(tester, FakeClientRegistrationRepository());
+
+    await _selectDocumentType(tester, DocumentType.cc);
+    await tester.enterText(_field('documentNumber'), 'AB12.34 56');
+    await tester.pump();
+
+    expect(_editable(tester, 'documentNumber').controller.text, '123456');
+  });
+
+  testWidgets('con pasaporte acepta letras y al cambiar a cédula las quita',
+      (tester) async {
+    await _pump(tester, FakeClientRegistrationRepository());
+
+    await _selectDocumentType(tester, DocumentType.passport);
+    await tester.enterText(_field('documentNumber'), 'AB123');
+    await tester.pump();
+    expect(_editable(tester, 'documentNumber').controller.text, 'AB123');
+
+    await _selectDocumentType(tester, DocumentType.ce);
+    expect(_editable(tester, 'documentNumber').controller.text, '123');
+  });
+
+  testWidgets('el teléfono solo acepta números y +', (tester) async {
+    await _pump(tester, FakeClientRegistrationRepository());
+
+    await tester.enterText(_field('phone'), '+57 300-123 4567');
+    await tester.pump();
+
+    expect(_editable(tester, 'phone').controller.text, '+573001234567');
+  });
+
+  testWidgets('cada contraseña tiene su propio botón de ojo', (tester) async {
+    await _pump(tester, FakeClientRegistrationRepository());
+
+    expect(_editable(tester, 'password').obscureText, isTrue);
+    expect(_editable(tester, 'confirmPassword').obscureText, isTrue);
+
+    await tester.tap(find.byTooltip('Mostrar confirmación'));
+    await tester.pump();
+    expect(_editable(tester, 'confirmPassword').obscureText, isFalse);
+    expect(_editable(tester, 'password').obscureText, isTrue);
+
     await tester.tap(find.byTooltip('Mostrar contraseña'));
     await tester.pump();
-    expect(password().obscureText, isFalse);
+    expect(_editable(tester, 'password').obscureText, isFalse);
+  });
+
+  testWidgets('cambiar la contraseña vuelve a comparar la confirmación',
+      (tester) async {
+    await _pump(tester, FakeClientRegistrationRepository());
+
+    await tester.enterText(_field('password'), 'Segura123');
+    await tester.enterText(_field('confirmPassword'), 'Segura123');
+    await tester.pump();
+    expect(find.text('Las contraseñas no coinciden.'), findsNothing);
+
+    await tester.enterText(_field('password'), 'Segura1234');
+    await tester.pump();
+    expect(find.text('Las contraseñas no coinciden.'), findsOneWidget);
+  });
+
+  testWidgets('cada campo muestra su ícono', (tester) async {
+    await _pump(tester, FakeClientRegistrationRepository());
+
+    for (final icon in [
+      Icons.person_outline,
+      Icons.badge_outlined,
+      Icons.numbers,
+      Icons.email_outlined,
+      Icons.phone_outlined,
+      Icons.lock_outline,
+    ]) {
+      expect(find.byIcon(icon), findsWidgets, reason: '$icon');
+    }
   });
 
   testWidgets('con datos válidos crea la cuenta y muestra el siguiente paso',
