@@ -303,6 +303,76 @@ void main() {
     expect(find.text('El correo electrónico no es válido'), findsNothing);
   });
 
+  testWidgets('si la cuenta ya existe lo dice debajo del correo y el documento',
+      (tester) async {
+    const message = 'Ya existe una cuenta con este correo o documento.';
+    final repository = FakeClientRegistrationRepository(
+      failure: const ClientRegistrationFailure(
+        'Ya existe una cuenta',
+        isAccountConflict: true,
+        fieldErrors: {'email': message, 'documentNumber': message},
+      ),
+    );
+    await _pump(tester, repository);
+
+    await _fillValidForm(tester);
+    await _submit(tester);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: _field('email'), matching: find.text(message)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _field('documentNumber'),
+        matching: find.text(message),
+      ),
+      findsOneWidget,
+    );
+    // Sin aviso rojo arriba ni diálogo: el error está en los campos.
+    expect(
+      find.byKey(const ValueKey('client-registration-error')),
+      findsNothing,
+    );
+    expect(find.byType(AlertDialog), findsNothing);
+
+    // Al cambiar el correo desaparece su aviso.
+    await tester.enterText(_field('email'), 'otra@fixia.com');
+    await tester.pump();
+    expect(
+      find.descendant(of: _field('email'), matching: find.text(message)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('otros errores se muestran arriba del formulario y se cierran',
+      (tester) async {
+    final repository = FakeClientRegistrationRepository(
+      failure: const ClientRegistrationFailure(
+        'No pudimos conectar con Fixia.',
+      ),
+    );
+    await _pump(tester, repository);
+
+    await _fillValidForm(tester);
+    await _submit(tester);
+    await tester.pumpAndSettle();
+
+    final banner = find.byKey(const ValueKey('client-registration-error'));
+    expect(banner, findsOneWidget);
+    expect(find.text('No pudimos conectar con Fixia.'), findsOneWidget);
+    // Queda encima del primer campo del formulario.
+    expect(
+      tester.getTopLeft(banner).dy,
+      lessThan(tester.getTopLeft(_field('firstName')).dy),
+    );
+
+    await tester.tap(find.byTooltip('Cerrar aviso'));
+    await tester.pump();
+    expect(banner, findsNothing);
+  });
+
   testWidgets('el enlace lleva al inicio de sesión cuando está disponible',
       (tester) async {
     var wentToLogin = false;
