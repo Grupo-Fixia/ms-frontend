@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/auth/login/application/session_store.dart';
 import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
+import 'features/client/registration/fake_repository.dart';
 
 Future<FakeAuthRepository> _pumpApp(
   WidgetTester tester, {
@@ -21,7 +19,7 @@ Future<FakeAuthRepository> _pumpApp(
   final repository = authRepository ?? FakeAuthRepository();
   await tester.pumpWidget(
     FixiaApp(
-      clientRegistrationRepository: const PendingClientRegistrationRepository(),
+      clientRegistrationRepository: FakeClientRegistrationRepository(),
       authRepository: repository,
       sessionStorage: storage ?? FakeSessionStorage(),
       sessionStore: sessionStore,
@@ -164,26 +162,5 @@ void main() {
 
     expect(find.byKey(const ValueKey('session-card')), findsNothing);
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
-  });
-
-  test('el repositorio temporal avisa que falta conectar el servicio', () {
-    const repository = PendingClientRegistrationRepository();
-    final registration = ClientRegistration(
-      firstName: 'Ana',
-      lastName: 'Pérez',
-      documentType: DocumentType.cc,
-      documentNumber: '1020304050',
-      email: 'ana@fixia.com',
-      phone: '3001234567',
-      password: 'Segura123',
-      policyVersion: 'v1.0',
-      consentAccepted: true,
-      consentAcceptedAt: DateTime(2026, 10, 6),
-    );
-
-    expect(
-      repository.register(registration),
-      throwsA(isA<ClientRegistrationFailure>()),
-    );
   });
 }

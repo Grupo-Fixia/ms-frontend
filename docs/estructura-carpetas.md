@@ -23,6 +23,7 @@ ms-frontend/
 ├── lib/
 │   ├── main.dart           # Punto de entrada: tema, rutas e inyección de dependencias
 │   ├── core/               # Código compartido por TODAS las funcionalidades
+│   │   ├── config/         #   configuración de las APIs (URL base del backend)
 │   │   ├── constants/      #   valores globales (ej. versión de la política de datos)
 │   │   ├── theme/          #   tema según el Brand Board v1.0
 │   │   └── validation/     #   reglas usadas por varias funcionalidades (ej. correo)
@@ -89,6 +90,7 @@ infrastructure ──► application ──► domain
 
 - `core/theme/fixia_theme.dart` es **el único tema** de la app (Brand Board v1.0). No se definen colores ni tipografías sueltos en las páginas: se usan `FixiaColors`, `FixiaTheme` y `FixiaDecorations`.
 - `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend).
+- `core/config/api_config.dart` define la URL base del backend (`ApiConfig.usersBaseUrl`): se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
 
