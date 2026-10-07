@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/features/auth/application/session_store.dart';
 import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
 import 'package:ms_frontend/features/client_registration/domain/client_registration.dart';
 import 'package:ms_frontend/features/client_registration/domain/client_registration_exceptions.dart';
@@ -11,6 +12,8 @@ import 'features/auth/fake_auth_repository.dart';
 Future<FakeAuthRepository> _pumpApp(
   WidgetTester tester, {
   FakeAuthRepository? authRepository,
+  FakeSessionStorage? storage,
+  SessionStore? sessionStore,
 }) async {
   tester.view.physicalSize = const Size(1024, 2000);
   tester.view.devicePixelRatio = 1;
@@ -20,6 +23,8 @@ Future<FakeAuthRepository> _pumpApp(
     FixiaApp(
       clientRegistrationRepository: const PendingClientRegistrationRepository(),
       authRepository: repository,
+      sessionStorage: storage ?? FakeSessionStorage(),
+      sessionStore: sessionStore,
     ),
   );
   await tester.pumpAndSettle();
@@ -70,6 +75,58 @@ void main() {
     expect(repository.logoutCalls, 1);
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
     expect(find.text('Hola, Ana'), findsNothing);
+  });
+
+  testWidgets('con una sesión restaurada la app abre en la pantalla de sesión',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, fixtureProfile);
+
+    await _pumpApp(tester, sessionStore: store);
+
+    expect(find.text('Hola, Ana'), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+  });
+
+  testWidgets('con sesión iniciada, ir a /login muestra la sesión',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, fixtureProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.login);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(find.text('Hola, Ana'), findsOneWidget);
+  });
+
+  testWidgets('"mantener sesión": se guarda al entrar y se borra al salir',
+      (tester) async {
+    final storage = FakeSessionStorage();
+    await _pumpApp(tester, storage: storage);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('login-email-field')),
+      'ana@fixia.com',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('login-password-field')),
+      'Segura123',
+    );
+    await tester.tap(find.byKey(const ValueKey('login-remember-checkbox')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('login-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hola, Ana'), findsOneWidget);
+    expect(storage.refreshToken, fixtureSession.refreshToken);
+
+    await tester.tap(find.byKey(const ValueKey('session-logout')));
+    await tester.pumpAndSettle();
+
+    expect(storage.refreshToken, isNull);
+    expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
   testWidgets('un login rechazado se queda en la pantalla de login',

@@ -17,6 +17,7 @@ Future<void> _pump(
   VoidCallback? onLoggedIn,
   VoidCallback? onGoToRegistration,
   SessionStore? store,
+  FakeSessionStorage? storage,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -25,7 +26,11 @@ Future<void> _pump(
     MaterialApp(
       theme: FixiaTheme.light,
       home: LoginPage(
-        loginUser: LoginUser(repository, store ?? SessionStore()),
+        loginUser: LoginUser(
+          repository,
+          store ?? SessionStore(),
+          storage ?? FakeSessionStorage(),
+        ),
         onLoggedIn: onLoggedIn,
         onGoToRegistration: onGoToRegistration,
       ),
@@ -37,6 +42,7 @@ Future<void> _pump(
 final _email = find.byKey(const ValueKey('login-email-field'));
 final _password = find.byKey(const ValueKey('login-password-field'));
 final _submitButton = find.byKey(const ValueKey('login-submit'));
+final _rememberCheckbox = find.byKey(const ValueKey('login-remember-checkbox'));
 
 Future<void> _fillValidForm(WidgetTester tester) async {
   await tester.enterText(_email, 'ana@fixia.com');
@@ -55,6 +61,78 @@ bool _passwordIsObscured(WidgetTester tester) => tester
     .obscureText;
 
 void main() {
+  testWidgets('los campos llevan el ícono de correo y de contraseña',
+      (tester) async {
+    await _pump(tester, FakeAuthRepository());
+
+    expect(
+      find.descendant(
+        of: _email,
+        matching: find.byIcon(Icons.mail_outline_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: _password,
+        matching: find.byIcon(Icons.lock_outline_rounded),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('muestra "Mantener sesión iniciada" desmarcado por defecto',
+      (tester) async {
+    await _pump(tester, FakeAuthRepository());
+
+    expect(find.text('Mantener sesión iniciada'), findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(_rememberCheckbox).value, isFalse);
+  });
+
+  testWidgets('marcada, la casilla guarda el refresh token al iniciar sesión',
+      (tester) async {
+    final storage = FakeSessionStorage();
+    await _pump(tester, FakeAuthRepository(), storage: storage);
+
+    await tester.tap(_rememberCheckbox);
+    await tester.pump();
+    expect(tester.widget<CheckboxListTile>(_rememberCheckbox).value, isTrue);
+
+    await _fillValidForm(tester);
+    await _submit(tester);
+    await tester.pumpAndSettle();
+
+    expect(storage.refreshToken, fixtureSession.refreshToken);
+  });
+
+  testWidgets('sin marcar la casilla no se guarda ningún token',
+      (tester) async {
+    final storage = FakeSessionStorage();
+    await _pump(tester, FakeAuthRepository(), storage: storage);
+
+    await _fillValidForm(tester);
+    await _submit(tester);
+    await tester.pumpAndSettle();
+
+    expect(storage.refreshToken, isNull);
+  });
+
+  testWidgets('la casilla se bloquea mientras se envía', (tester) async {
+    final pending = Completer<void>();
+    await _pump(tester, FakeAuthRepository(pendingLogin: pending));
+
+    await _fillValidForm(tester);
+    await _submit(tester);
+
+    expect(
+      tester.widget<CheckboxListTile>(_rememberCheckbox).enabled,
+      isFalse,
+    );
+
+    pending.complete();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('muestra el encabezado, los campos y el botón', (tester) async {
     await _pump(tester, FakeAuthRepository());
 

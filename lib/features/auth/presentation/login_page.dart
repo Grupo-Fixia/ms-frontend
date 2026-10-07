@@ -138,6 +138,7 @@ class _LoginPageState extends State<LoginPage> {
                 decoration: const InputDecoration(
                   labelText: 'Correo electrónico',
                   counterText: '',
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
                 ),
                 validator: _validator('email', LoginRules.email),
               ),
@@ -159,6 +160,7 @@ class _LoginPageState extends State<LoginPage> {
                 decoration: InputDecoration(
                   labelText: 'Contraseña',
                   counterText: '',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
                     tooltip: _obscurePassword
                         ? 'Mostrar contraseña'
@@ -173,6 +175,20 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 validator: _validator('password', LoginRules.password),
+              ),
+            ),
+            CheckboxListTile(
+              key: const ValueKey('login-remember-checkbox'),
+              value: _controller.rememberSession,
+              enabled: !isSubmitting,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              activeColor: FixiaColors.secondary,
+              onChanged: (checked) =>
+                  _controller.setRememberSession(checked ?? false),
+              title: Text(
+                'Mantener sesión iniciada',
+                style: theme.textTheme.bodyMedium,
               ),
             ),
             const SizedBox(height: 10),

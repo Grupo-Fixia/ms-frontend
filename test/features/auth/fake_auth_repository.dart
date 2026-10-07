@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:ms_frontend/features/auth/application/ports/auth_repository.dart';
+import 'package:ms_frontend/features/auth/application/ports/session_storage.dart';
 import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
 import 'package:ms_frontend/features/auth/domain/auth_session.dart';
 import 'package:ms_frontend/features/auth/domain/user_profile.dart';
@@ -8,6 +9,13 @@ import 'package:ms_frontend/features/auth/domain/user_profile.dart';
 const fixtureSession = AuthSession(
   accessToken: 'access-token',
   refreshToken: 'refresh-token',
+  expiresIn: Duration(seconds: 900),
+);
+
+/// Sesión que devuelve `refresh`: el refresh token rota en cada canje.
+const fixtureRefreshedSession = AuthSession(
+  accessToken: 'access-token-2',
+  refreshToken: 'refresh-token-2',
   expiresIn: Duration(seconds: 900),
 );
 
@@ -25,6 +33,7 @@ class FakeAuthRepository implements AuthRepository {
     this.loginFailure,
     this.profileFailure,
     this.logoutFailure,
+    this.refreshFailure,
     this.pendingLogin,
     this.pendingLogout,
   });
@@ -32,12 +41,15 @@ class FakeAuthRepository implements AuthRepository {
   AuthFailure? loginFailure;
   final AuthFailure? profileFailure;
   final AuthFailure? logoutFailure;
+  final AuthFailure? refreshFailure;
   final Completer<void>? pendingLogin;
   final Completer<void>? pendingLogout;
 
   int loginCalls = 0;
   int profileCalls = 0;
   int logoutCalls = 0;
+  int refreshCalls = 0;
+  String? lastRefreshToken;
   String? lastEmail;
   String? lastPassword;
   String? lastProfileToken;
@@ -58,6 +70,15 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<AuthSession> refresh(String refreshToken) async {
+    refreshCalls++;
+    lastRefreshToken = refreshToken;
+    final failure = refreshFailure;
+    if (failure != null) throw failure;
+    return fixtureRefreshedSession;
+  }
+
+  @override
   Future<UserProfile> fetchProfile(String accessToken) async {
     profileCalls++;
     lastProfileToken = accessToken;
@@ -73,5 +94,38 @@ class FakeAuthRepository implements AuthRepository {
     await pendingLogout?.future;
     final failure = logoutFailure;
     if (failure != null) throw failure;
+  }
+}
+
+/// Almacenamiento de prueba en memoria; puede simular un navegador que no
+/// deja leer ni escribir.
+class FakeSessionStorage implements SessionStorage {
+  FakeSessionStorage({this.refreshToken, this.failing = false});
+
+  String? refreshToken;
+  final bool failing;
+  int clearCalls = 0;
+
+  void _check() {
+    if (failing) throw StateError('almacenamiento no disponible');
+  }
+
+  @override
+  Future<String?> readRefreshToken() async {
+    _check();
+    return refreshToken;
+  }
+
+  @override
+  Future<void> saveRefreshToken(String token) async {
+    _check();
+    refreshToken = token;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCalls++;
+    _check();
+    refreshToken = null;
   }
 }

@@ -13,7 +13,7 @@ void main() {
       final repository = FakeAuthRepository();
       final store = SessionStore();
 
-      await LoginUser(repository, store)(
+      await LoginUser(repository, store, FakeSessionStorage())(
         email: 'ana@fixia.com',
         password: 'Segura123',
       );
@@ -26,6 +26,58 @@ void main() {
       expect(store.profile, fixtureProfile);
     });
 
+    test('con "mantener sesión" guarda el refresh token (y solo ese)',
+        () async {
+      final storage = FakeSessionStorage();
+
+      await LoginUser(FakeAuthRepository(), SessionStore(), storage)(
+        email: 'ana@fixia.com',
+        password: 'Segura123',
+        rememberSession: true,
+      );
+
+      expect(storage.refreshToken, fixtureSession.refreshToken);
+    });
+
+    test('sin "mantener sesión" descarta cualquier token guardado antes',
+        () async {
+      final storage = FakeSessionStorage(refreshToken: 'viejo');
+
+      await LoginUser(FakeAuthRepository(), SessionStore(), storage)(
+        email: 'ana@fixia.com',
+        password: 'Segura123',
+      );
+
+      expect(storage.refreshToken, isNull);
+    });
+
+    test('si el navegador no deja guardar, el login igual funciona', () async {
+      final store = SessionStore();
+
+      await LoginUser(
+        FakeAuthRepository(),
+        store,
+        FakeSessionStorage(failing: true),
+      )(email: 'ana@fixia.com', password: 'x', rememberSession: true);
+
+      expect(store.isAuthenticated, isTrue);
+    });
+
+    test('un login fallido no guarda nada', () async {
+      final storage = FakeSessionStorage();
+
+      await expectLater(
+        LoginUser(
+          FakeAuthRepository(loginFailure: const AuthFailure('mal')),
+          SessionStore(),
+          storage,
+        )(email: 'ana@fixia.com', password: 'x', rememberSession: true),
+        throwsA(isA<AuthFailure>()),
+      );
+
+      expect(storage.refreshToken, isNull);
+    });
+
     test('con credenciales inválidas no guarda sesión ni pide el perfil',
         () async {
       final repository = FakeAuthRepository(
@@ -34,7 +86,7 @@ void main() {
       final store = SessionStore();
 
       await expectLater(
-        LoginUser(repository, store)(email: 'ana@fixia.com', password: 'x'),
+        LoginUser(repository, store, FakeSessionStorage())(email: 'ana@fixia.com', password: 'x'),
         throwsA(isA<AuthFailure>()),
       );
 
@@ -50,7 +102,7 @@ void main() {
       final store = SessionStore();
 
       await expectLater(
-        LoginUser(repository, store)(email: 'ana@fixia.com', password: 'x'),
+        LoginUser(repository, store, FakeSessionStorage())(email: 'ana@fixia.com', password: 'x'),
         throwsA(isA<AuthFailure>()),
       );
 
@@ -66,7 +118,7 @@ void main() {
       );
 
       await expectLater(
-        LoginUser(repository, SessionStore())(
+        LoginUser(repository, SessionStore(), FakeSessionStorage())(
           email: 'ana@fixia.com',
           password: 'x',
         ),
@@ -80,7 +132,7 @@ void main() {
   group('LogoutUser', () {
     Future<SessionStore> loggedInStore(FakeAuthRepository repository) async {
       final store = SessionStore();
-      await LoginUser(repository, store)(
+      await LoginUser(repository, store, FakeSessionStorage())(
         email: 'ana@fixia.com',
         password: 'Segura123',
       );
@@ -91,7 +143,7 @@ void main() {
       final repository = FakeAuthRepository();
       final store = await loggedInStore(repository);
 
-      await LogoutUser(repository, store)();
+      await LogoutUser(repository, store, FakeSessionStorage())();
 
       expect(repository.loggedOutSession, fixtureSession);
       expect(store.isAuthenticated, isFalse);
@@ -103,16 +155,41 @@ void main() {
       );
       final store = await loggedInStore(FakeAuthRepository());
 
-      await LogoutUser(repository, store)();
+      await LogoutUser(repository, store, FakeSessionStorage())();
 
       expect(repository.logoutCalls, 1);
+      expect(store.isAuthenticated, isFalse);
+    });
+
+    test('borra el refresh token guardado, aunque el backend falle', () async {
+      final storage = FakeSessionStorage(refreshToken: 'guardado');
+      final store = await loggedInStore(FakeAuthRepository());
+
+      await LogoutUser(
+        FakeAuthRepository(logoutFailure: const AuthFailure('sin conexión')),
+        store,
+        storage,
+      )();
+
+      expect(storage.refreshToken, isNull);
+    });
+
+    test('si el navegador no deja borrar, igual cierra la sesión', () async {
+      final store = await loggedInStore(FakeAuthRepository());
+
+      await LogoutUser(
+        FakeAuthRepository(),
+        store,
+        FakeSessionStorage(failing: true),
+      )();
+
       expect(store.isAuthenticated, isFalse);
     });
 
     test('sin sesión no llama al backend', () async {
       final repository = FakeAuthRepository();
 
-      await LogoutUser(repository, SessionStore())();
+      await LogoutUser(repository, SessionStore(), FakeSessionStorage())();
 
       expect(repository.logoutCalls, 0);
     });

@@ -24,7 +24,7 @@ Future<SessionStore> _pump(
       theme: FixiaTheme.light,
       home: SessionPage(
         store: store,
-        logoutUser: LogoutUser(repository, store),
+        logoutUser: LogoutUser(repository, store, FakeSessionStorage()),
         onLoggedOut: onLoggedOut,
       ),
     ),

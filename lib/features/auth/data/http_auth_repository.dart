@@ -55,21 +55,13 @@ class HttpAuthRepository implements AuthRepository {
     );
 
     if (response.statusCode == 200) {
-      final json = _decodeObject(response);
-      final accessToken = json?['accessToken'];
-      final refreshToken = json?['refreshToken'];
-      if (accessToken is String && refreshToken is String) {
-        final expiresIn = json?['expiresIn'];
-        return AuthSession(
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-          expiresIn: Duration(seconds: expiresIn is num ? expiresIn.toInt() : 0),
-        );
-      }
+      final session = _parseSession(response);
+      if (session != null) return session;
     }
     if (response.statusCode == 401) {
       throw AuthFailure(
         _detail(response) ?? 'Correo o contraseña incorrectos.',
+        isUnauthorized: true,
       );
     }
     if (response.statusCode == 400) {
@@ -80,6 +72,28 @@ class HttpAuthRepository implements AuthRepository {
     }
     throw const AuthFailure(
       'No fue posible iniciar sesión. Inténtalo más tarde.',
+    );
+  }
+
+  @override
+  Future<AuthSession> refresh(String refreshToken) async {
+    final response = await _send(
+      () => _client.post(
+        _uri('/auth/refresh'),
+        headers: _jsonHeaders,
+        body: jsonEncode({'refreshToken': refreshToken}),
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final session = _parseSession(response);
+      if (session != null) return session;
+    }
+    if (response.statusCode == 401) {
+      throw const AuthFailure(_sessionExpired, isUnauthorized: true);
+    }
+    throw const AuthFailure(
+      'No fue posible restaurar tu sesión. Inténtalo más tarde.',
     );
   }
 
@@ -103,7 +117,9 @@ class HttpAuthRepository implements AuthRepository {
         );
       }
     }
-    if (response.statusCode == 401) throw const AuthFailure(_sessionExpired);
+    if (response.statusCode == 401) {
+      throw const AuthFailure(_sessionExpired, isUnauthorized: true);
+    }
     throw const AuthFailure(
       'No fue posible cargar tu cuenta. Inténtalo más tarde.',
     );
@@ -120,9 +136,25 @@ class HttpAuthRepository implements AuthRepository {
     );
 
     if (response.statusCode == 200 || response.statusCode == 204) return;
-    if (response.statusCode == 401) throw const AuthFailure(_sessionExpired);
+    if (response.statusCode == 401) {
+      throw const AuthFailure(_sessionExpired, isUnauthorized: true);
+    }
     throw const AuthFailure(
       'No fue posible cerrar la sesión. Inténtalo más tarde.',
+    );
+  }
+
+  /// Tokens de `login` y `refresh` (mismo `TokenResponse`); `null` si falta alguno.
+  AuthSession? _parseSession(http.Response response) {
+    final json = _decodeObject(response);
+    final accessToken = json?['accessToken'];
+    final refreshToken = json?['refreshToken'];
+    if (accessToken is! String || refreshToken is! String) return null;
+    final expiresIn = json?['expiresIn'];
+    return AuthSession(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      expiresIn: Duration(seconds: expiresIn is num ? expiresIn.toInt() : 0),
     );
   }
 

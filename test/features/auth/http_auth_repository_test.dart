@@ -163,6 +163,58 @@ void main() {
     });
   });
 
+  group('refresh', () {
+    test('envía el refresh token y devuelve la sesión rotada', () async {
+      late http.Request sent;
+      final repository = _repository((request) async {
+        sent = request;
+        return _json({
+          'accessToken': 'a2',
+          'refreshToken': 'r2',
+          'tokenType': 'Bearer',
+          'expiresIn': 900,
+        }, 200);
+      });
+
+      final session = await repository.refresh('r1');
+
+      expect(sent.method, 'POST');
+      expect(sent.url.toString(), 'http://localhost/api/users/auth/refresh');
+      expect(jsonDecode(sent.body), {'refreshToken': 'r1'});
+      expect(session.accessToken, 'a2');
+      expect(session.refreshToken, 'r2');
+    });
+
+    test('con 401 marca el fallo como no autorizado', () async {
+      final repository = _repository(
+        (_) async => _json({'detail': 'Refresh token inválido o expirado'}, 401),
+      );
+
+      final failure = await _failureOf(repository.refresh('usado'));
+
+      expect(failure.isUnauthorized, isTrue);
+    });
+
+    test('con un error del servidor NO es no autorizado: el token se conserva',
+        () async {
+      final repository = _repository((_) async => http.Response('', 500));
+
+      final failure = await _failureOf(repository.refresh('r1'));
+
+      expect(failure.isUnauthorized, isFalse);
+    });
+
+    test('sin conexión NO es no autorizado', () async {
+      final repository = _repository(
+        (_) async => throw http.ClientException('sin red'),
+      );
+
+      final failure = await _failureOf(repository.refresh('r1'));
+
+      expect(failure.isUnauthorized, isFalse);
+    });
+  });
+
   group('fetchProfile', () {
     test('envía el access token y mapea la cuenta y el rol', () async {
       late http.Request sent;
@@ -208,6 +260,7 @@ void main() {
       final failure = await _failureOf(repository.fetchProfile('vencido'));
 
       expect(failure.message, 'Tu sesión expiró. Inicia sesión de nuevo.');
+      expect(failure.isUnauthorized, isTrue);
     });
   });
 

@@ -10,11 +10,22 @@ class LoginController extends ChangeNotifier {
   final LoginUser _loginUser;
 
   bool _isSubmitting = false;
+  bool _rememberSession = false;
   String? _errorMessage;
   Map<String, String> _fieldErrors = const {};
 
   bool get isSubmitting => _isSubmitting;
+
+  /// "Mantener sesión iniciada": guarda el refresh token para restaurar la
+  /// sesión al reabrir la app. Desmarcado por defecto.
+  bool get rememberSession => _rememberSession;
   String? get errorMessage => _errorMessage;
+
+  void setRememberSession(bool value) {
+    if (_rememberSession == value) return;
+    _rememberSession = value;
+    notifyListeners();
+  }
 
   /// Error que devolvió el backend para un campo (`email`, `password`).
   String? fieldError(String field) => _fieldErrors[field];
@@ -36,7 +47,11 @@ class LoginController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _loginUser(email: email.trim(), password: password);
+      await _loginUser(
+        email: email.trim(),
+        password: password,
+        rememberSession: _rememberSession,
+      );
       return true;
     } on AuthFailure catch (failure) {
       _errorMessage = failure.message;

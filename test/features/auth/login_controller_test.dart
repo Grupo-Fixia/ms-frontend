@@ -9,9 +9,35 @@ import 'package:ms_frontend/features/auth/presentation/login_controller.dart';
 import 'fake_auth_repository.dart';
 
 LoginController _controller(FakeAuthRepository repository) =>
-    LoginController(loginUser: LoginUser(repository, SessionStore()));
+    LoginController(
+      loginUser: LoginUser(repository, SessionStore(), FakeSessionStorage()),
+    );
 
 void main() {
+  test('"mantener sesión" parte desmarcado y avisa al cambiar', () {
+    final controller = _controller(FakeAuthRepository());
+    var notified = 0;
+    controller.addListener(() => notified++);
+
+    expect(controller.rememberSession, isFalse);
+    controller.setRememberSession(true);
+    controller.setRememberSession(true); // sin cambio: no notifica
+
+    expect(controller.rememberSession, isTrue);
+    expect(notified, 1);
+  });
+
+  test('envía "mantener sesión" al iniciar sesión', () async {
+    final storage = FakeSessionStorage();
+    final controller = LoginController(
+      loginUser: LoginUser(FakeAuthRepository(), SessionStore(), storage),
+    )..setRememberSession(true);
+
+    await controller.login(email: 'ana@fixia.com', password: 'Segura123');
+
+    expect(storage.refreshToken, fixtureSession.refreshToken);
+  });
+
   test('un login correcto devuelve true y no deja error', () async {
     final repository = FakeAuthRepository();
     final controller = _controller(repository);
