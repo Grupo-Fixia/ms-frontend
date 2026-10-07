@@ -15,6 +15,7 @@ Future<void> _pump(
   FakeClientRegistrationRepository repository, {
   Size size = const Size(1024, 2000),
   VoidCallback? onGoToLogin,
+  VoidCallback? onGoToTechnician,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -25,6 +26,7 @@ Future<void> _pump(
       home: ClientRegistrationPage(
         registerClient: RegisterClient(repository),
         onGoToLogin: onGoToLogin,
+        onGoToTechnician: onGoToTechnician,
       ),
     ),
   );
@@ -315,5 +317,20 @@ void main() {
     await tester.ensureVisible(find.text('Inicia sesión'));
     await tester.tap(find.text('Inicia sesión'));
     expect(wentToLogin, isTrue);
+  });
+
+  testWidgets('muestra el enlace para registrarse como técnico si se habilita',
+      (tester) async {
+    var wentToTechnicianRegistration = false;
+    await _pump(
+      tester,
+      FakeClientRegistrationRepository(),
+      onGoToTechnician: () => wentToTechnicianRegistration = true,
+    );
+
+    await tester.ensureVisible(find.text('Regístrate como técnico'));
+    await tester.tap(find.text('Regístrate como técnico'));
+
+    expect(wentToTechnicianRegistration, isTrue);
   });
 }

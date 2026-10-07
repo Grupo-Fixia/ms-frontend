@@ -1,34 +1,29 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../../../core/theme/fixia_theme.dart';
-import '../application/register_client.dart';
-import '../domain/client_registration_rules.dart';
-import '../domain/document_type.dart';
-import 'client_registration_controller.dart';
-import 'widgets/data_consent_field.dart';
+import '../../../core/theme/fixia_theme.dart';
+import '../../client/registration/domain/client_registration_rules.dart';
+import '../../client/registration/domain/document_type.dart';
+import '../../client/registration/presentation/widgets/data_consent_field.dart';
+import '../domain/technician_profession.dart';
+import 'technician_registration_controller.dart';
+import '../application/register_technician.dart';
 
-/// Formulario de registro de cliente (GC-252, historia GC-234).
-class ClientRegistrationPage extends StatefulWidget {
-  const ClientRegistrationPage({
+/// Formulario de registro de técnico (GC-255).
+class TechnicianRegistrationPage extends StatefulWidget {
+  const TechnicianRegistrationPage({
     super.key,
-    required this.registerClient,
-    this.onGoToLogin,
-    this.onGoToTechnician,
+    required this.registerTechnician,
   });
 
-  final RegisterClient registerClient;
-
-  /// Navega al inicio de sesión. Si es `null` el enlace no se muestra.
-  final VoidCallback? onGoToLogin;
-  final VoidCallback? onGoToTechnician;
+  final RegisterTechnician registerTechnician;
 
   @override
-  State<ClientRegistrationPage> createState() => _ClientRegistrationPageState();
+  State<TechnicianRegistrationPage> createState() =>
+      _TechnicianRegistrationPageState();
 }
 
-class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
-  /// Ancho a partir del cual nombres y apellidos van en la misma fila.
+class _TechnicianRegistrationPageState
+    extends State<TechnicianRegistrationPage> {
   static const _twoColumnBreakpoint = 480.0;
 
   final _formKey = GlobalKey<FormState>();
@@ -40,18 +35,16 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
 
-  final _confirmPasswordKey = GlobalKey<FormFieldState<String>>();
-
-  late final ClientRegistrationController _controller;
+  late final TechnicianRegistrationController _controller;
   DocumentType? _documentType;
+  TechnicianProfession? _profession;
   bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
 
   @override
   void initState() {
     super.initState();
-    _controller = ClientRegistrationController(
-      registerClient: widget.registerClient,
+    _controller = TechnicianRegistrationController(
+      registerTechnician: widget.registerTechnician,
     )..addListener(_refresh);
   }
 
@@ -84,6 +77,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     await _controller.register(
       firstName: _firstName.text,
       lastName: _lastName.text,
+      profession: _profession,
       documentType: _documentType,
       documentNumber: _documentNumber.text,
       email: _email.text,
@@ -94,37 +88,12 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
 
     final message = _controller.errorMessage;
     if (message == null) return;
-    // Muestra debajo de cada campo los errores que devolvió el backend.
     _formKey.currentState!.validate();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  bool get _documentAllowsLetters =>
-      ClientRegistrationRules.documentAllowsLetters(_documentType);
-
-  void _onDocumentTypeChanged(DocumentType? type) {
-    _controller.clearFieldError('documentType');
-    setState(() {
-      _documentType = type;
-      // Si pasa de pasaporte a cédula, se quitan las letras que ya no aplican.
-      if (!_documentAllowsLetters) {
-        final digits = _documentNumber.text.replaceAll(RegExp('[^0-9]'), '');
-        if (digits != _documentNumber.text) _documentNumber.text = digits;
-      }
-    });
-  }
-
-  /// Si el usuario ya escribió la confirmación, se vuelve a comparar cuando
-  /// cambia la contraseña.
-  void _revalidateConfirmPassword() {
-    if (_confirmPassword.text.isNotEmpty) {
-      _confirmPasswordKey.currentState?.validate();
-    }
-  }
-
-  /// Primero el error del backend para ese campo; si no hay, el local.
   FormFieldValidator<String> _validator(
     String field,
     FormFieldValidator<String> local,
@@ -135,11 +104,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     required String field,
     required TextEditingController controller,
     required String label,
-    required IconData icon,
     required FormFieldValidator<String> validator,
-    Key? fieldKey,
-    List<TextInputFormatter>? inputFormatters,
-    ValueChanged<String>? onChanged,
     TextInputType? keyboardType,
     TextCapitalization capitalization = TextCapitalization.none,
     int? maxLength,
@@ -149,15 +114,10 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     Iterable<String>? autofillHints,
   }) {
     return Padding(
-      key: ValueKey('client-$field-field'),
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
-        key: fieldKey,
+        key: ValueKey('technician-$field-field'),
         controller: controller,
-        // Cada campo se valida solo cuando el usuario lo toca, sin marcar
-        // errores en los demás.
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        inputFormatters: inputFormatters,
         enabled: !_controller.isLocked,
         keyboardType: keyboardType,
         textCapitalization: capitalization,
@@ -167,13 +127,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
         enableSuggestions: !obscureText,
         autofillHints: autofillHints,
         textInputAction: TextInputAction.next,
-        onChanged: (value) {
-          _controller.clearFieldError(field);
-          onChanged?.call(value);
-        },
+        onChanged: (_) => _controller.clearFieldError(field),
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon),
           helperText: helperText,
           suffixIcon: suffixIcon,
           counterText: '',
@@ -200,10 +156,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     vertical: 32,
                   ),
                   child: _controller.isRegistered
-                      ? _RegistrationSuccess(
-                          email: _email.text.trim(),
-                          onGoToLogin: widget.onGoToLogin,
-                        )
+                      ? _RegistrationSuccess(email: _email.text.trim())
                       : _buildForm(context),
                 ),
               ),
@@ -215,15 +168,44 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
   }
 
   Widget _buildForm(BuildContext context) {
-    final theme = Theme.of(context);
     return Form(
       key: _formKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const _Header(),
             const SizedBox(height: 28),
+            const InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Tipo de cuenta',
+                prefixIcon: Icon(Icons.build_outlined),
+              ),
+              child: Text('Técnico profesional'),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: DropdownButtonFormField<TechnicianProfession>(
+                key: const ValueKey('technician-profession-field'),
+                value: _profession,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Profesión'),
+                items: [
+                  for (final profession in TechnicianProfession.values)
+                    DropdownMenuItem(
+                      value: profession,
+                      child: Text(profession.label),
+                    ),
+                ],
+                onChanged: _controller.isLocked
+                    ? null
+                    : (value) => setState(() => _profession = value),
+                validator: (value) =>
+                    value == null ? 'Selecciona tu profesión.' : null,
+              ),
+            ),
             LayoutBuilder(
               builder: (context, constraints) {
                 final names = [
@@ -231,7 +213,6 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     field: 'firstName',
                     controller: _firstName,
                     label: 'Nombres',
-                    icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
                     maxLength: ClientRegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.givenName],
@@ -241,7 +222,6 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     field: 'lastName',
                     controller: _lastName,
                     label: 'Apellidos',
-                    icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
                     maxLength: ClientRegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.familyName],
@@ -264,21 +244,21 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: DropdownButtonFormField<DocumentType>(
-                key: const ValueKey('client-documentType-field'),
+                key: const ValueKey('technician-documentType-field'),
                 value: _documentType,
                 isExpanded: true,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de documento',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                ),
+                decoration:
+                    const InputDecoration(labelText: 'Tipo de documento'),
                 items: [
                   for (final type in DocumentType.values)
                     DropdownMenuItem(value: type, child: Text(type.label)),
                 ],
                 onChanged: _controller.isLocked
                     ? null
-                    : _onDocumentTypeChanged,
+                    : (value) {
+                        _controller.clearFieldError('documentType');
+                        setState(() => _documentType = value);
+                      },
                 validator: (value) =>
                     _controller.fieldError('documentType') ??
                     (value == null ? 'Selecciona tu tipo de documento.' : null),
@@ -288,27 +268,17 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'documentNumber',
               controller: _documentNumber,
               label: 'Número de documento',
-              icon: Icons.numbers,
               capitalization: TextCapitalization.characters,
-              keyboardType: _documentAllowsLetters
-                  ? TextInputType.text
-                  : TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  _documentAllowsLetters
-                      ? RegExp('[A-Za-z0-9]')
-                      : RegExp('[0-9]'),
-                ),
-              ],
               maxLength: ClientRegistrationRules.documentMaxLength,
-              validator: (value) =>
-                  ClientRegistrationRules.documentNumber(value, _documentType),
+              validator: (value) => ClientRegistrationRules.documentNumber(
+                value,
+                _documentType,
+              ),
             ),
             _textField(
               field: 'email',
               controller: _email,
               label: 'Correo electrónico',
-              icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
               maxLength: ClientRegistrationRules.emailMaxLength,
               autofillHints: const [AutofillHints.email],
@@ -318,11 +288,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'phone',
               controller: _phone,
               label: 'Teléfono celular',
-              icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
-              ],
               maxLength: 16,
               autofillHints: const [AutofillHints.telephoneNumber],
               validator: ClientRegistrationRules.phone,
@@ -331,15 +297,19 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'password',
               controller: _password,
               label: 'Contraseña',
-              icon: Icons.lock_outline,
               obscureText: _obscurePassword,
-              onChanged: (_) => _revalidateConfirmPassword(),
               maxLength: ClientRegistrationRules.passwordMaxLength,
               helperText: 'Mínimo 8 caracteres, con letras y números.',
               autofillHints: const [AutofillHints.newPassword],
-              suffixIcon: _VisibilityToggle(
-                obscured: _obscurePassword,
-                label: 'contraseña',
+              suffixIcon: IconButton(
+                tooltip: _obscurePassword
+                    ? 'Mostrar contraseña'
+                    : 'Ocultar contraseña',
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
                 onPressed: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
               ),
@@ -349,16 +319,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               field: 'confirmPassword',
               controller: _confirmPassword,
               label: 'Confirmar contraseña',
-              icon: Icons.lock_outline,
-              fieldKey: _confirmPasswordKey,
-              obscureText: _obscureConfirmPassword,
-              suffixIcon: _VisibilityToggle(
-                obscured: _obscureConfirmPassword,
-                label: 'confirmación',
-                onPressed: () => setState(
-                  () => _obscureConfirmPassword = !_obscureConfirmPassword,
-                ),
-              ),
+              obscureText: _obscurePassword,
               maxLength: ClientRegistrationRules.passwordMaxLength,
               validator: (value) => ClientRegistrationRules.confirmPassword(
                 value,
@@ -370,11 +331,12 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               value: _controller.consentAccepted,
               policyVersion: _controller.policyVersion,
               enabled: !_controller.isLocked,
+              checkboxKey: const ValueKey('technician-consent-checkbox'),
               onChanged: _controller.setConsentAccepted,
             ),
             const SizedBox(height: 24),
             FilledButton(
-              key: const ValueKey('client-registration-submit'),
+              key: const ValueKey('technician-registration-submit'),
               onPressed: _controller.isLocked ? null : _submit,
               child: _controller.isSubmitting
                   ? const SizedBox.square(
@@ -384,28 +346,8 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                         color: FixiaColors.white,
                       ),
                     )
-                  : const Text('Crear cuenta'),
+                  : const Text('Crear cuenta de técnico'),
             ),
-            if (widget.onGoToLogin != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('¿Ya tienes cuenta?', style: theme.textTheme.bodyMedium),
-                  TextButton(
-                    onPressed: widget.onGoToLogin,
-                    child: const Text('Inicia sesión'),
-                  ),
-                ],
-              ),
-            ],
-            if (widget.onGoToTechnician != null) ...[
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: widget.onGoToTechnician,
-                child: const Text('Regístrate como técnico'),
-              ),
-            ],
           ],
         ),
       ),
@@ -428,13 +370,13 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Text(
-          'Crea tu cuenta',
+          'Crea tu cuenta profesional',
           style: theme.textTheme.headlineSmall,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
-          'Regístrate como cliente y conecta con técnicos verificados.',
+          'Regístrate como técnico y ofrece tus servicios a la comunidad Fixia.',
           style: theme.textTheme.bodyLarge
               ?.copyWith(color: FixiaColors.textSecondary),
           textAlign: TextAlign.center,
@@ -444,18 +386,16 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// Resultado de la acción y siguiente paso (RNF-016).
 class _RegistrationSuccess extends StatelessWidget {
-  const _RegistrationSuccess({required this.email, this.onGoToLogin});
+  const _RegistrationSuccess({required this.email});
 
   final String email;
-  final VoidCallback? onGoToLogin;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
-      key: const ValueKey('client-registration-success'),
+      key: const ValueKey('technician-registration-success'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -466,49 +406,18 @@ class _RegistrationSuccess extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          '¡Tu cuenta fue creada!',
+          '¡Tu cuenta de técnico fue creada!',
           style: theme.textTheme.headlineSmall,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
-          'Ya puedes iniciar sesión con $email.',
+          'El siguiente paso llegará a $email.',
           style: theme.textTheme.bodyLarge
               ?.copyWith(color: FixiaColors.textSecondary),
           textAlign: TextAlign.center,
         ),
-        if (onGoToLogin != null) ...[
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: onGoToLogin,
-            child: const Text('Ir a iniciar sesión'),
-          ),
-        ],
       ],
-    );
-  }
-}
-
-/// Botón del ojo para mostrar u ocultar una contraseña.
-class _VisibilityToggle extends StatelessWidget {
-  const _VisibilityToggle({
-    required this.obscured,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final bool obscured;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: obscured ? 'Mostrar $label' : 'Ocultar $label',
-      icon: Icon(
-        obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-      ),
-      onPressed: onPressed,
     );
   }
 }
