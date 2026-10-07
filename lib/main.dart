@@ -1,6 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/config/api_config.dart';
 import 'core/theme/fixia_theme.dart';
+import 'features/auth/application/login_user.dart';
+import 'features/auth/application/logout_user.dart';
+import 'features/auth/application/ports/auth_repository.dart';
+import 'features/auth/application/ports/session_storage.dart';
+import 'features/auth/application/restore_session.dart';
+import 'features/auth/application/session_store.dart';
+import 'features/auth/data/http_auth_repository.dart';
+import 'features/auth/data/shared_preferences_session_storage.dart';
+import 'features/auth/presentation/login_page.dart';
+import 'features/auth/presentation/session_page.dart';
 import 'features/client_registration/application/ports/client_registration_repository.dart';
 import 'features/client_registration/application/register_client.dart';
 import 'features/client_registration/domain/client_registration.dart';
@@ -9,22 +22,96 @@ import 'features/client_registration/presentation/client_registration_page.dart'
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
+  static const login = '/login';
+  static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
 }
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final authRepository = HttpAuthRepository(
+    client: http.Client(),
+    baseUrl: Uri.parse(ApiConfig.usersBaseUrl),
+  );
+  final sessionStorage =
+      SharedPreferencesSessionStorage(await SharedPreferences.getInstance());
+
+  // "Mantener sesión iniciada": si hay un refresh token guardado, la sesión
+  // se restaura antes de mostrar la primera pantalla.
+  final sessionStore = SessionStore();
+  await RestoreSession(authRepository, sessionStore, sessionStorage)();
+
   runApp(
-    const FixiaApp(
+    FixiaApp(
       // TODO(GC-253): reemplazar por el repositorio HTTP conectado a ms-users.
-      clientRegistrationRepository: PendingClientRegistrationRepository(),
+      clientRegistrationRepository: const PendingClientRegistrationRepository(),
+      authRepository: authRepository,
+      sessionStorage: sessionStorage,
+      sessionStore: sessionStore,
     ),
   );
 }
 
-class FixiaApp extends StatelessWidget {
-  const FixiaApp({super.key, required this.clientRegistrationRepository});
+class FixiaApp extends StatefulWidget {
+  const FixiaApp({
+    super.key,
+    required this.clientRegistrationRepository,
+    required this.authRepository,
+    required this.sessionStorage,
+    this.sessionStore,
+  });
 
   final ClientRegistrationRepository clientRegistrationRepository;
+  final AuthRepository authRepository;
+  final SessionStorage sessionStorage;
+
+  /// Sesión de la app. Si es `null` se crea una vacía. Llega con la sesión ya
+  /// iniciada cuando se restauró desde el almacenamiento.
+  final SessionStore? sessionStore;
+
+  @override
+  State<FixiaApp> createState() => _FixiaAppState();
+}
+
+class _FixiaAppState extends State<FixiaApp> {
+  late final SessionStore _sessionStore =
+      widget.sessionStore ?? SessionStore();
+
+  @override
+  void dispose() {
+    if (widget.sessionStore == null) _sessionStore.dispose();
+    super.dispose();
+  }
+
+  LogoutUser get _logoutUser => LogoutUser(
+        widget.authRepository,
+        _sessionStore,
+        widget.sessionStorage,
+      );
+
+  Widget _sessionPage(BuildContext context) => SessionPage(
+        store: _sessionStore,
+        logoutUser: _logoutUser,
+        onLoggedOut: () => Navigator.of(context)
+            .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false),
+      );
+
+  Widget _loginPage(BuildContext context) {
+    // Con una sesión ya iniciada (por ejemplo, restaurada) no se pide login.
+    if (_sessionStore.isAuthenticated) return _sessionPage(context);
+    return LoginPage(
+      loginUser: LoginUser(
+        widget.authRepository,
+        _sessionStore,
+        widget.sessionStorage,
+      ),
+      onLoggedIn: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.session),
+      onGoToRegistration: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.clientRegistration),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,11 +119,22 @@ class FixiaApp extends StatelessWidget {
       title: 'Fixia',
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
-      // TODO(GC-258): la ruta inicial pasa a ser el inicio de sesión.
-      initialRoute: AppRoutes.clientRegistration,
+      initialRoute:
+          _sessionStore.isAuthenticated ? AppRoutes.session : AppRoutes.login,
       routes: {
-        AppRoutes.clientRegistration: (_) => ClientRegistrationPage(
-              registerClient: RegisterClient(clientRegistrationRepository),
+        AppRoutes.login: _loginPage,
+        // Sin sesión no se muestra la cuenta: la ruta cae en el login.
+        AppRoutes.session: (context) => ListenableBuilder(
+              listenable: _sessionStore,
+              builder: (context, _) => _sessionStore.isAuthenticated
+                  ? _sessionPage(context)
+                  : _loginPage(context),
+            ),
+        AppRoutes.clientRegistration: (context) => ClientRegistrationPage(
+              registerClient:
+                  RegisterClient(widget.clientRegistrationRepository),
+              onGoToLogin: () =>
+                  Navigator.of(context).pushReplacementNamed(AppRoutes.login),
             ),
       },
     );
