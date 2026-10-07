@@ -4,9 +4,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ms_frontend/features/auth/data/http_auth_repository.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/auth/domain/user_profile.dart';
+import 'package:ms_frontend/features/auth/login/infrastructure/http_auth_repository.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/domain/user_profile.dart';
 
 import 'fake_auth_repository.dart';
 

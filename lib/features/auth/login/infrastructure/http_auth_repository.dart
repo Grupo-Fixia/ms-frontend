@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -32,11 +33,14 @@ class HttpAuthRepository implements AuthRepository {
         'Authorization': 'Bearer $accessToken',
       };
 
-  /// Ejecuta la llamada y convierte cualquier fallo de red en `AuthFailure`.
+  /// Ejecuta la llamada y convierte los fallos de red (sin conexión o sin
+  /// respuesta a tiempo) en `AuthFailure`.
   Future<http.Response> _send(Future<http.Response> Function() request) async {
     try {
       return await request().timeout(timeout);
-    } on Exception {
+    } on TimeoutException {
+      throw const AuthFailure(_connectionError);
+    } on http.ClientException {
       throw const AuthFailure(_connectionError);
     }
   }

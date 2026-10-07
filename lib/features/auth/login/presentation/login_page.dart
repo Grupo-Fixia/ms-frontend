@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/fixia_theme.dart';
+import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/validation/email_rule.dart';
 import '../application/login_user.dart';
 import '../domain/login_rules.dart';
 import 'login_controller.dart';
@@ -116,7 +117,6 @@ class _LoginPageState extends State<LoginPage> {
     final isSubmitting = _controller.isSubmitting;
     return Form(
       key: _formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -128,9 +128,11 @@ class _LoginPageState extends State<LoginPage> {
               child: TextFormField(
                 key: const ValueKey('login-email-field'),
                 controller: _email,
+                // Cada campo se valida solo cuando el usuario lo toca.
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 enabled: !isSubmitting,
                 keyboardType: TextInputType.emailAddress,
-                maxLength: 254,
+                maxLength: EmailRule.maxLength,
                 autocorrect: false,
                 autofillHints: const [AutofillHints.username],
                 textInputAction: TextInputAction.next,
@@ -138,7 +140,7 @@ class _LoginPageState extends State<LoginPage> {
                 decoration: const InputDecoration(
                   labelText: 'Correo electrónico',
                   counterText: '',
-                  prefixIcon: Icon(Icons.mail_outline_rounded),
+                  prefixIcon: Icon(Icons.email_outlined),
                 ),
                 validator: _validator('email', LoginRules.email),
               ),
@@ -148,6 +150,7 @@ class _LoginPageState extends State<LoginPage> {
               child: TextFormField(
                 key: const ValueKey('login-password-field'),
                 controller: _password,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 enabled: !isSubmitting,
                 obscureText: _obscurePassword,
                 maxLength: LoginRules.passwordMaxLength,
@@ -160,7 +163,7 @@ class _LoginPageState extends State<LoginPage> {
                 decoration: InputDecoration(
                   labelText: 'Contraseña',
                   counterText: '',
-                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
                     tooltip: _obscurePassword
                         ? 'Mostrar contraseña'

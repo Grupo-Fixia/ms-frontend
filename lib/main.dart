@@ -4,21 +4,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config/api_config.dart';
 import 'core/theme/fixia_theme.dart';
-import 'features/auth/application/login_user.dart';
-import 'features/auth/application/logout_user.dart';
-import 'features/auth/application/ports/auth_repository.dart';
-import 'features/auth/application/ports/session_storage.dart';
-import 'features/auth/application/restore_session.dart';
-import 'features/auth/application/session_store.dart';
-import 'features/auth/data/http_auth_repository.dart';
-import 'features/auth/data/shared_preferences_session_storage.dart';
-import 'features/auth/presentation/login_page.dart';
-import 'features/auth/presentation/session_page.dart';
-import 'features/client_registration/application/ports/client_registration_repository.dart';
-import 'features/client_registration/application/register_client.dart';
-import 'features/client_registration/domain/client_registration.dart';
-import 'features/client_registration/domain/client_registration_exceptions.dart';
-import 'features/client_registration/presentation/client_registration_page.dart';
+import 'features/auth/login/application/login_user.dart';
+import 'features/auth/login/application/logout_user.dart';
+import 'features/auth/login/application/ports/auth_repository.dart';
+import 'features/auth/login/application/ports/session_storage.dart';
+import 'features/auth/login/application/restore_session.dart';
+import 'features/auth/login/application/session_store.dart';
+import 'features/auth/login/infrastructure/http_auth_repository.dart';
+import 'features/auth/login/infrastructure/shared_preferences_session_storage.dart';
+import 'features/auth/login/presentation/login_page.dart';
+import 'features/auth/login/presentation/session_page.dart';
+import 'features/client/registration/application/ports/client_registration_repository.dart';
+import 'features/client/registration/application/register_client.dart';
+import 'features/client/registration/domain/client_registration.dart';
+import 'features/client/registration/domain/client_registration_exceptions.dart';
+import 'features/client/registration/presentation/client_registration_page.dart';
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {

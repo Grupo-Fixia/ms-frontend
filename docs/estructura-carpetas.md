@@ -24,7 +24,8 @@ ms-frontend/
 │   ├── main.dart           # Punto de entrada: tema, rutas e inyección de dependencias
 │   ├── core/               # Código compartido por TODAS las funcionalidades
 │   │   ├── constants/      #   valores globales (ej. versión de la política de datos)
-│   │   └── theme/          #   tema según el Brand Board v1.0
+│   │   ├── theme/          #   tema según el Brand Board v1.0
+│   │   └── validation/     #   reglas usadas por varias funcionalidades (ej. correo)
 │   └── features/           # Una carpeta por actor y, dentro, una por funcionalidad
 │       ├── auth/           #   común a todos los roles
 │       │   └── login/      #     inicio y cierre de sesión (GC-236)
@@ -88,6 +89,7 @@ infrastructure ──► application ──► domain
 
 - `core/theme/fixia_theme.dart` es **el único tema** de la app (Brand Board v1.0). No se definen colores ni tipografías sueltos en las páginas: se usan `FixiaColors`, `FixiaTheme` y `FixiaDecorations`.
 - `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend).
+- `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
 
 ## 6. Compatibilidad con Flutter 3.22
@@ -103,7 +105,13 @@ El build de QA usa la imagen `instrumentisto/flutter:3.22.0`. No usar APIs que n
 
 Al leer respuestas del backend, decodificar siempre como UTF-8 (`utf8.decode(response.bodyBytes)`): `ms-users` responde `application/problem+json` sin `charset` y, si no, las tildes llegan dañadas (TD V1, DEF-02).
 
-## 7. Antes de abrir un PR
+## 7. Sesión y seguridad
+
+- El access token y el perfil viven **solo en memoria** (`SessionStore`).
+- Con "Mantener sesión iniciada", el refresh token se guarda en el navegador (`localStorage`, vía `shared_preferences`) para restaurar la sesión al reabrir la app. Es un riesgo conocido: un script malicioso en la página (XSS) podría leerlo. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión. Sin esa opción no se guarda nada.
+- Al cerrar sesión se revocan los tokens en ms-users; si el access token ya venció (dura 15 minutos), primero se renueva para poder revocar el refresh token.
+
+## 8. Antes de abrir un PR
 
 Desde la raíz de `ms-frontend`, con Flutter 3.22.0:
 

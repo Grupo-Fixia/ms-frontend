@@ -1,4 +1,4 @@
-import '../../client_registration/domain/client_registration_rules.dart';
+import '../../../../core/validation/email_rule.dart';
 
 /// Reglas de validación del formulario de inicio de sesión.
 ///
@@ -8,7 +8,7 @@ import '../../client_registration/domain/client_registration_rules.dart';
 abstract final class LoginRules {
   static const passwordMaxLength = 128;
 
-  static String? email(String? value) => ClientRegistrationRules.email(value);
+  static String? email(String? value) => EmailRule.validate(value);
 
   static String? password(String? value) {
     if (value == null || value.isEmpty) return 'Ingresa tu contraseña.';

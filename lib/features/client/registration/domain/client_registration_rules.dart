@@ -1,3 +1,4 @@
+import '../../../../core/validation/email_rule.dart';
 import 'document_type.dart';
 
 /// Reglas de validación del registro de cliente.
@@ -8,13 +9,12 @@ import 'document_type.dart';
 abstract final class ClientRegistrationRules {
   static final _digitsPattern = RegExp(r'^[0-9]+$');
   static final _alphanumericPattern = RegExp(r'^[A-Za-z0-9]+$');
-  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   static final _phonePattern = RegExp(r'^\+?[0-9]{7,15}$');
   static final _lettersAndDigits = RegExp(r'^(?=.*[A-Za-z])(?=.*\d).*$');
 
   static const nameMaxLength = 100;
   static const documentMaxLength = 30;
-  static const emailMaxLength = 254;
+  static const emailMaxLength = EmailRule.maxLength;
   static const passwordMinLength = 8;
   static const passwordMaxLength = 20;
 
@@ -57,14 +57,7 @@ abstract final class ClientRegistrationRules {
     return null;
   }
 
-  static String? email(String? value) {
-    if (_isBlank(value)) return 'Ingresa tu correo electrónico.';
-    final trimmed = value!.trim();
-    if (trimmed.length > emailMaxLength || !_emailPattern.hasMatch(trimmed)) {
-      return 'Ingresa un correo válido, por ejemplo nombre@correo.com.';
-    }
-    return null;
-  }
+  static String? email(String? value) => EmailRule.validate(value);
 
   static String? phone(String? value) {
     if (_isBlank(value)) return 'Ingresa tu teléfono.';
