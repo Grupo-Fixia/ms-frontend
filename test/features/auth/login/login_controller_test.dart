@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/auth/application/login_user.dart';
-import 'package:ms_frontend/features/auth/application/session_store.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/auth/presentation/login_controller.dart';
+import 'package:ms_frontend/features/auth/login/application/login_user.dart';
+import 'package:ms_frontend/features/auth/login/application/session_store.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/presentation/login_controller.dart';
 
 import 'fake_auth_repository.dart';
 

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/auth/application/restore_session.dart';
-import 'package:ms_frontend/features/auth/application/session_store.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/application/restore_session.dart';
+import 'package:ms_frontend/features/auth/login/application/session_store.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
 
 import 'fake_auth_repository.dart';
 

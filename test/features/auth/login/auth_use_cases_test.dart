@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/auth/application/login_user.dart';
-import 'package:ms_frontend/features/auth/application/logout_user.dart';
-import 'package:ms_frontend/features/auth/application/session_store.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/application/login_user.dart';
+import 'package:ms_frontend/features/auth/login/application/logout_user.dart';
+import 'package:ms_frontend/features/auth/login/application/session_store.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
 
 import 'fake_auth_repository.dart';
 
@@ -183,6 +183,51 @@ void main() {
         FakeSessionStorage(failing: true),
       )();
 
+      expect(store.isAuthenticated, isFalse);
+    });
+
+    test('con el access token vencido lo renueva y revoca la sesión nueva',
+        () async {
+      final repository = FakeAuthRepository(
+        logoutFailure: const AuthFailure('vencido', isUnauthorized: true),
+        failOnlyFirstLogout: true,
+      );
+      final store = await loggedInStore(FakeAuthRepository());
+
+      await LogoutUser(repository, store, FakeSessionStorage())();
+
+      expect(repository.refreshCalls, 1);
+      expect(repository.lastRefreshToken, fixtureSession.refreshToken);
+      expect(repository.loggedOutSessions, [
+        fixtureSession,
+        fixtureRefreshedSession,
+      ]);
+      expect(store.isAuthenticated, isFalse);
+    });
+
+    test('si tampoco se puede renovar, igual cierra la sesión local', () async {
+      final repository = FakeAuthRepository(
+        logoutFailure: const AuthFailure('vencido', isUnauthorized: true),
+        refreshFailure: const AuthFailure('revocado', isUnauthorized: true),
+      );
+      final store = await loggedInStore(FakeAuthRepository());
+
+      await LogoutUser(repository, store, FakeSessionStorage())();
+
+      expect(repository.refreshCalls, 1);
+      expect(repository.logoutCalls, 1);
+      expect(store.isAuthenticated, isFalse);
+    });
+
+    test('ante una falla de red no intenta renovar', () async {
+      final repository = FakeAuthRepository(
+        logoutFailure: const AuthFailure('sin conexión'),
+      );
+      final store = await loggedInStore(FakeAuthRepository());
+
+      await LogoutUser(repository, store, FakeSessionStorage())();
+
+      expect(repository.refreshCalls, 0);
       expect(store.isAuthenticated, isFalse);
     });
 

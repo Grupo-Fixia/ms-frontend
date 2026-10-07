@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/fixia_theme.dart';
+import '../../../../core/theme/fixia_theme.dart';
 import '../application/logout_user.dart';
 import '../application/session_store.dart';
 

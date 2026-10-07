@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:ms_frontend/features/auth/application/ports/auth_repository.dart';
-import 'package:ms_frontend/features/auth/application/ports/session_storage.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/auth/domain/auth_session.dart';
-import 'package:ms_frontend/features/auth/domain/user_profile.dart';
+import 'package:ms_frontend/features/auth/login/application/ports/auth_repository.dart';
+import 'package:ms_frontend/features/auth/login/application/ports/session_storage.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_session.dart';
+import 'package:ms_frontend/features/auth/login/domain/user_profile.dart';
 
 const fixtureSession = AuthSession(
   accessToken: 'access-token',
@@ -36,6 +36,7 @@ class FakeAuthRepository implements AuthRepository {
     this.refreshFailure,
     this.pendingLogin,
     this.pendingLogout,
+    this.failOnlyFirstLogout = false,
   });
 
   AuthFailure? loginFailure;
@@ -44,6 +45,10 @@ class FakeAuthRepository implements AuthRepository {
   final AuthFailure? refreshFailure;
   final Completer<void>? pendingLogin;
   final Completer<void>? pendingLogout;
+
+  /// Con `true`, `logoutFailure` solo se lanza en el primer cierre de sesión
+  /// (simula un access token vencido que se renueva y luego sí se revoca).
+  final bool failOnlyFirstLogout;
 
   int loginCalls = 0;
   int profileCalls = 0;
@@ -54,6 +59,7 @@ class FakeAuthRepository implements AuthRepository {
   String? lastPassword;
   String? lastProfileToken;
   AuthSession? loggedOutSession;
+  final List<AuthSession> loggedOutSessions = [];
 
   @override
   Future<AuthSession> login({
@@ -91,9 +97,12 @@ class FakeAuthRepository implements AuthRepository {
   Future<void> logout(AuthSession session) async {
     logoutCalls++;
     loggedOutSession = session;
+    loggedOutSessions.add(session);
     await pendingLogout?.future;
     final failure = logoutFailure;
-    if (failure != null) throw failure;
+    if (failure != null && (!failOnlyFirstLogout || logoutCalls == 1)) {
+      throw failure;
+    }
   }
 }
 

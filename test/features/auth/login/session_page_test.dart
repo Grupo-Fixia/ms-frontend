@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
-import 'package:ms_frontend/features/auth/application/logout_user.dart';
-import 'package:ms_frontend/features/auth/application/session_store.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/auth/presentation/session_page.dart';
+import 'package:ms_frontend/features/auth/login/application/logout_user.dart';
+import 'package:ms_frontend/features/auth/login/application/session_store.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/presentation/session_page.dart';
 
 import 'fake_auth_repository.dart';
 

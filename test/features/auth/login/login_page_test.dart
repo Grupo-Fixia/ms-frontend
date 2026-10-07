@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
-import 'package:ms_frontend/features/auth/application/login_user.dart';
-import 'package:ms_frontend/features/auth/application/session_store.dart';
-import 'package:ms_frontend/features/auth/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/auth/presentation/login_page.dart';
+import 'package:ms_frontend/features/auth/login/application/login_user.dart';
+import 'package:ms_frontend/features/auth/login/application/session_store.dart';
+import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
+import 'package:ms_frontend/features/auth/login/presentation/login_page.dart';
 
 import 'fake_auth_repository.dart';
 
@@ -68,14 +68,14 @@ void main() {
     expect(
       find.descendant(
         of: _email,
-        matching: find.byIcon(Icons.mail_outline_rounded),
+        matching: find.byIcon(Icons.email_outlined),
       ),
       findsOneWidget,
     );
     expect(
       find.descendant(
         of: _password,
-        matching: find.byIcon(Icons.lock_outline_rounded),
+        matching: find.byIcon(Icons.lock_outline),
       ),
       findsOneWidget,
     );
@@ -164,6 +164,17 @@ void main() {
 
     expect(find.textContaining('Ingresa un correo válido'), findsOneWidget);
     expect(repository.loginCalls, 0);
+  });
+
+  testWidgets('tocar un campo solo marca el error de ese campo',
+      (tester) async {
+    await _pump(tester, FakeAuthRepository());
+
+    await tester.enterText(_email, 'ana');
+    await tester.pump();
+
+    expect(find.textContaining('Ingresa un correo válido'), findsOneWidget);
+    expect(find.text('Ingresa tu contraseña.'), findsNothing);
   });
 
   testWidgets('con datos válidos inicia sesión y avisa con onLoggedIn',
