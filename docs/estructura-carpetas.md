@@ -30,6 +30,8 @@ ms-frontend/
 │   └── features/           # Una carpeta por actor y, dentro, una por funcionalidad
 │       ├── auth/           #   común a todos los roles
 │       │   └── login/      #     inicio y cierre de sesión (GC-236)
+│       ├── home/           #   página de inicio pública (común a todos)
+│       │   └── presentation/
 │       ├── client/         #   funcionalidades del cliente
 │       │   └── registration/   # registro de cliente (GC-234)
 │       └── technician/     #   funcionalidades del técnico
