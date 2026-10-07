@@ -18,9 +18,11 @@ import 'features/client/registration/application/ports/client_registration_repos
 import 'features/client/registration/application/register_client.dart';
 import 'features/client/registration/infrastructure/http_client_registration_repository.dart';
 import 'features/client/registration/presentation/client_registration_page.dart';
+import 'features/home/presentation/home_page.dart';
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
+  static const home = '/';
   static const login = '/login';
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
@@ -123,8 +125,17 @@ class _FixiaAppState extends State<FixiaApp> {
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
       initialRoute:
-          _sessionStore.isAuthenticated ? AppRoutes.session : AppRoutes.login,
+          _sessionStore.isAuthenticated ? AppRoutes.session : AppRoutes.home,
       routes: {
+        // Con sesión iniciada la página de inicio lleva directo a la cuenta.
+        AppRoutes.home: (context) => _sessionStore.isAuthenticated
+            ? _sessionPage(context)
+            : HomePage(
+                onRegisterClient: () => Navigator.of(context)
+                    .pushNamed(AppRoutes.clientRegistration),
+                onLogin: () =>
+                    Navigator.of(context).pushNamed(AppRoutes.login),
+              ),
         AppRoutes.login: _loginPage,
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
         AppRoutes.session: (context) => ListenableBuilder(
