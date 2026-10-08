@@ -310,14 +310,14 @@ void main() {
     expect(find.text('El correo electrónico no es válido'), findsNothing);
   });
 
-  testWidgets('si la cuenta ya existe lo dice debajo del correo y el documento',
+  testWidgets('si la cuenta ya existe lo dice solo debajo del correo',
       (tester) async {
-    const message = 'Ya existe una cuenta con este correo o documento.';
+    const message = 'Ya existe una cuenta con este correo.';
     final repository = FakeAccountRegistrationRepository(
       failure: const RegistrationFailure(
         'Ya existe una cuenta',
         isAccountConflict: true,
-        fieldErrors: {'email': message, 'documentNumber': message},
+        fieldErrors: {'email': message},
       ),
     );
     await _pump(tester, repository);
@@ -335,9 +335,9 @@ void main() {
         of: _field('documentNumber'),
         matching: find.text(message),
       ),
-      findsOneWidget,
+      findsNothing,
     );
-    // Sin aviso rojo arriba ni diálogo: el error está en los campos.
+    // Sin aviso rojo arriba ni diálogo: el error está en el campo.
     expect(
       find.byKey(const ValueKey('registration-error')),
       findsNothing,
@@ -350,6 +350,35 @@ void main() {
     expect(
       find.descendant(of: _field('email'), matching: find.text(message)),
       findsNothing,
+    );
+  });
+
+  testWidgets('tras el aviso de correo en uso, con otro correo se puede crear '
+      'la cuenta', (tester) async {
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
+        'Ya existe una cuenta',
+        isAccountConflict: true,
+        fieldErrors: {'email': 'Ya existe una cuenta con este correo.'},
+      ),
+    );
+    await _pump(tester, repository);
+    await _fillValidForm(tester);
+    await _submit(tester);
+    await tester.pumpAndSettle();
+    expect(repository.calls, 1);
+
+    repository.failure = null;
+    await tester.enterText(_field('email'), 'otra@fixia.com');
+    await tester.pump();
+    await _submit(tester);
+    await tester.pumpAndSettle();
+
+    expect(repository.calls, 2);
+    expect(repository.saved?.email, 'otra@fixia.com');
+    expect(
+      find.byKey(const ValueKey('registration-success')),
+      findsOneWidget,
     );
   });
 

@@ -35,10 +35,9 @@ class HttpAccountRegistrationRepository implements AccountRegistrationRepository
   static const connectionErrorMessage =
       'No pudimos conectar con Fixia. Revisa tu conexión e inténtalo de nuevo.';
   static const conflictMessage =
-      'Ya existe una cuenta con ese correo o número de documento. '
-      'Si ya te registraste, inicia sesión.';
-  static const conflictFieldMessage =
-      'Ya existe una cuenta con este correo o documento.';
+      'Ya existe una cuenta con este correo. Si ya te registraste, '
+      'inicia sesión.';
+  static const conflictFieldMessage = 'Ya existe una cuenta con este correo.';
   static const invalidDataMessage = 'Revisa los datos marcados en el formulario.';
   static const unexpectedErrorMessage =
       'No pudimos crear tu cuenta en este momento. Inténtalo más tarde.';
@@ -95,18 +94,16 @@ class HttpAccountRegistrationRepository implements AccountRegistrationRepository
       };
 
   /// Cuenta existente (409). Hoy ms-users no dice si se repite el correo o el
-  /// documento, así que el aviso va en los dos campos. Si el backend llega a
-  /// enviar `errors[{field, message}]`, se muestra solo en el campo indicado.
+  /// documento; el aviso va solo debajo del correo, así al corregirlo el
+  /// formulario se puede volver a enviar. Si el backend llega a enviar
+  /// `errors[{field, message}]`, se muestra en el campo indicado.
   RegistrationFailure _conflictFailure(http.Response response) {
     final fieldErrors = _fieldErrors(_decodeJson(response));
     return RegistrationFailure(
       conflictMessage,
       fieldErrors: fieldErrors.isNotEmpty
           ? fieldErrors
-          : const {
-              'email': conflictFieldMessage,
-              'documentNumber': conflictFieldMessage,
-            },
+          : const {'email': conflictFieldMessage},
       isAccountConflict: true,
     );
   }
