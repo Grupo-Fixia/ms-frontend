@@ -120,9 +120,15 @@ Al leer respuestas del backend, decodificar siempre como UTF-8 (`utf8.decode(res
 Desde la raíz de `ms-frontend`, con Flutter 3.22.0:
 
 ```bash
-flutter analyze        # debe decir: No issues found!
-flutter test           # debe decir: All tests passed!
+flutter analyze                 # debe decir: No issues found!
+flutter test --coverage         # debe decir: All tests passed!
+tool/check_coverage.sh          # cobertura de líneas >= 80 % (Quality Gate de la wiki)
 flutter build web --release
 ```
+
+El workflow `ci` de GitHub Actions corre esos mismos pasos (analyze, pruebas y
+cobertura) en cada PR y push a `develop` y `Qa`; si alguno falla, el PR queda
+con el check en rojo y no se construye ni despliega la imagen de QA. El reporte
+`coverage/lcov.info` queda como artefacto del workflow.
 
 Y seguir las convenciones de ramas, commits y PRs de la wiki (`05-git-control-versiones/`).
