@@ -37,7 +37,11 @@ class FakeAuthRepository implements AuthRepository {
     this.pendingLogin,
     this.pendingLogout,
     this.failOnlyFirstLogout = false,
+    this.profile = fixtureProfile,
   });
+
+  /// Cuenta que devuelve `fetchProfile` (por defecto, una clienta).
+  final UserProfile profile;
 
   AuthFailure? loginFailure;
   final AuthFailure? profileFailure;
@@ -90,7 +94,7 @@ class FakeAuthRepository implements AuthRepository {
     lastProfileToken = accessToken;
     final failure = profileFailure;
     if (failure != null) throw failure;
-    return fixtureProfile;
+    return profile;
   }
 
   @override

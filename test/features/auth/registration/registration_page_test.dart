@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
+import 'package:ms_frontend/core/widgets/technician_steps.dart';
 import 'package:ms_frontend/features/auth/registration/application/register_account.dart';
 import 'package:ms_frontend/features/auth/registration/domain/account_role.dart';
 import 'package:ms_frontend/features/auth/registration/domain/document_type.dart';
@@ -19,6 +20,7 @@ Future<void> _pump(
   AccountRole role = AccountRole.client,
   VoidCallback? onGoToLogin,
   VoidCallback? onSwitchRole,
+  Future<bool> Function(String email, String password)? onAutoLogin,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -31,6 +33,7 @@ Future<void> _pump(
         role: role,
         onGoToLogin: onGoToLogin,
         onSwitchRole: onSwitchRole,
+        onAutoLogin: onAutoLogin,
       ),
     ),
   );
@@ -309,14 +312,14 @@ void main() {
     expect(find.text('El correo electrónico no es válido'), findsNothing);
   });
 
-  testWidgets('si la cuenta ya existe lo dice debajo del correo y el documento',
+  testWidgets('si la cuenta ya existe lo dice solo debajo del correo',
       (tester) async {
-    const message = 'Ya existe una cuenta con este correo o documento.';
+    const message = 'Ya existe una cuenta con este correo.';
     final repository = FakeAccountRegistrationRepository(
       failure: const RegistrationFailure(
         'Ya existe una cuenta',
         isAccountConflict: true,
-        fieldErrors: {'email': message, 'documentNumber': message},
+        fieldErrors: {'email': message},
       ),
     );
     await _pump(tester, repository);
@@ -334,9 +337,9 @@ void main() {
         of: _field('documentNumber'),
         matching: find.text(message),
       ),
-      findsOneWidget,
+      findsNothing,
     );
-    // Sin aviso rojo arriba ni diálogo: el error está en los campos.
+    // Sin aviso rojo arriba ni diálogo: el error está en el campo.
     expect(
       find.byKey(const ValueKey('registration-error')),
       findsNothing,
@@ -349,6 +352,35 @@ void main() {
     expect(
       find.descendant(of: _field('email'), matching: find.text(message)),
       findsNothing,
+    );
+  });
+
+  testWidgets('tras el aviso de correo en uso, con otro correo se puede crear '
+      'la cuenta', (tester) async {
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
+        'Ya existe una cuenta',
+        isAccountConflict: true,
+        fieldErrors: {'email': 'Ya existe una cuenta con este correo.'},
+      ),
+    );
+    await _pump(tester, repository);
+    await _fillValidForm(tester);
+    await _submit(tester);
+    await tester.pumpAndSettle();
+    expect(repository.calls, 1);
+
+    repository.failure = null;
+    await tester.enterText(_field('email'), 'otra@fixia.com');
+    await tester.pump();
+    await _submit(tester);
+    await tester.pumpAndSettle();
+
+    expect(repository.calls, 2);
+    expect(repository.saved?.email, 'otra@fixia.com');
+    expect(
+      find.byKey(const ValueKey('registration-success')),
+      findsOneWidget,
     );
   });
 
@@ -574,6 +606,110 @@ void main() {
       expect(find.text('Regístrate como cliente'), findsOneWidget);
       await tester.tap(link);
       expect(switched, isTrue);
+    });
+  });
+
+  group('inicio de sesión automático al crear la cuenta', () {
+    testWidgets('inicia sesión con el correo y la contraseña recién creados',
+        (tester) async {
+      String? email;
+      String? password;
+      final pending = Completer<bool>();
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onAutoLogin: (e, p) {
+          email = e;
+          password = p;
+          return pending.future;
+        },
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pump();
+
+      expect(email, 'ana@fixia.com');
+      expect(password, 'Segura123');
+      expect(
+        find.byKey(const ValueKey('registration-signing-in')),
+        findsOneWidget,
+      );
+      expect(find.text('Iniciando sesión…'), findsOneWidget);
+
+      pending.complete(true);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('registration-success')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('si no puede iniciar sesión muestra la confirmación',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onGoToLogin: () {},
+        onAutoLogin: (_, __) async => false,
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('registration-signing-in')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('registration-success')),
+        findsOneWidget,
+      );
+      expect(find.text('Ir a iniciar sesión'), findsOneWidget);
+    });
+
+    testWidgets('si el inicio de sesión lanza un error también la muestra',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onAutoLogin: (_, __) async => throw StateError('falló'),
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('registration-success')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('si el registro falla no intenta iniciar sesión',
+        (tester) async {
+      var calls = 0;
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(
+          failure: const RegistrationFailure('No disponible'),
+        ),
+        role: AccountRole.technician,
+        onAutoLogin: (_, __) async {
+          calls++;
+          return true;
+        },
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(calls, 0);
     });
   });
 }

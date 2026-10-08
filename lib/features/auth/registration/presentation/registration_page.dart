@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/technician_steps.dart';
 import '../application/register_account.dart';
 import '../domain/account_role.dart';
 import '../domain/registration_rules.dart';
@@ -20,6 +21,7 @@ class RegistrationPage extends StatefulWidget {
     this.role = AccountRole.client,
     this.onGoToLogin,
     this.onSwitchRole,
+    this.onAutoLogin,
   });
 
   final RegisterAccount registerAccount;
@@ -32,6 +34,12 @@ class RegistrationPage extends StatefulWidget {
 
   /// Lleva al registro del otro rol. Si es `null` el enlace no se muestra.
   final VoidCallback? onSwitchRole;
+
+  /// Inicia sesión con la cuenta recién creada para seguir sin volver a
+  /// escribir la contraseña (el técnico pasa directo al paso 2). Devuelve
+  /// `true` si la sesión quedó iniciada. Si es `null` o falla, se muestra la
+  /// confirmación con el botón para iniciar sesión.
+  final Future<bool> Function(String email, String password)? onAutoLogin;
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -62,6 +70,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
   DocumentType? _documentType;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isSigningIn = false;
 
   @override
   void initState() {
@@ -109,6 +118,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
     );
     if (!mounted) return;
 
+    if (_controller.isRegistered) {
+      await _signInAfterRegistration();
+      return;
+    }
     if (_controller.errorMessage == null) return;
     // Muestra debajo de cada campo los errores que devolvió el backend.
     _formKey.currentState!.validate();
@@ -120,6 +133,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
         curve: Curves.easeOut,
       );
     }
+  }
+
+  Future<void> _signInAfterRegistration() async {
+    final autoLogin = widget.onAutoLogin;
+    if (autoLogin == null) return;
+    setState(() => _isSigningIn = true);
+    var signedIn = false;
+    try {
+      signedIn = await autoLogin(_email.text.trim(), _password.text);
+    } catch (_) {
+      signedIn = false;
+    }
+    // Si no se pudo, queda la confirmación con el botón para iniciar sesión.
+    if (mounted && !signedIn) setState(() => _isSigningIn = false);
   }
 
   bool get _documentAllowsLetters =>
@@ -210,13 +237,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       decoration: FixiaDecorations.card,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        child: _controller.isRegistered
-            ? _RegistrationSuccess(
-                role: widget.role,
-                email: _email.text.trim(),
-                onGoToLogin: widget.onGoToLogin,
-              )
-            : _buildForm(context),
+        child: _cardContent(context),
       ),
     );
     return Scaffold(
@@ -234,6 +255,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _cardContent(BuildContext context) {
+    if (!_controller.isRegistered) return _buildForm(context);
+    if (_isSigningIn) return const _SigningIn();
+    return _RegistrationSuccess(
+      role: widget.role,
+      email: _email.text.trim(),
+      onGoToLogin: widget.onGoToLogin,
     );
   }
 
@@ -541,6 +572,44 @@ class _Header extends StatelessWidget {
           const SizedBox(height: 24),
           const TechnicianSteps(),
         ],
+      ],
+    );
+  }
+}
+
+/// Cuenta creada mientras se inicia sesión automáticamente.
+class _SigningIn extends StatelessWidget {
+  const _SigningIn();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      key: const ValueKey('registration-signing-in'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.check_circle_rounded,
+          size: 64,
+          color: FixiaColors.accent,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '¡Tu cuenta fue creada!',
+          style: theme.textTheme.headlineSmall,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        const SizedBox.square(
+          dimension: 24,
+          child: CircularProgressIndicator(strokeWidth: 2.5),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Iniciando sesión…',
+          style: theme.textTheme.bodyLarge
+              ?.copyWith(color: FixiaColors.textSecondary),
+        ),
       ],
     );
   }

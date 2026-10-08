@@ -8,7 +8,7 @@ import 'package:ms_frontend/features/auth/registration/domain/registration_excep
 class FakeAccountRegistrationRepository implements AccountRegistrationRepository {
   FakeAccountRegistrationRepository({this.failure, this.pending});
 
-  final RegistrationFailure? failure;
+  RegistrationFailure? failure;
   final Completer<void>? pending;
 
   AccountRegistration? saved;
