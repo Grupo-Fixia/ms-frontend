@@ -40,7 +40,7 @@ class DataConsentField extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CheckboxListTile(
-              key: const ValueKey('client-consent-checkbox'),
+              key: const ValueKey('registration-consent-checkbox'),
               value: field.value ?? false,
               enabled: enabled,
               contentPadding: EdgeInsets.zero,

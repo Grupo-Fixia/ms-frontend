@@ -4,18 +4,18 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/infrastructure/http_client_registration_repository.dart';
+import 'package:ms_frontend/features/auth/registration/domain/registration_exceptions.dart';
+import 'package:ms_frontend/features/auth/registration/infrastructure/http_account_registration_repository.dart';
 
 import 'fixtures.dart';
 
 final _baseUrl = Uri.parse('http://localhost');
 
-HttpClientRegistrationRepository _repository(
+HttpAccountRegistrationRepository _repository(
   MockClientHandler handler, {
   Duration timeout = const Duration(seconds: 15),
 }) {
-  return HttpClientRegistrationRepository(
+  return HttpAccountRegistrationRepository(
     client: MockClient(handler),
     baseUrl: _baseUrl,
     timeout: timeout,
@@ -37,7 +37,7 @@ Matcher _failure({
   Map<String, String>? fieldErrors,
   bool? isAccountConflict,
 }) {
-  var matcher = isA<ClientRegistrationFailure>();
+  var matcher = isA<RegistrationFailure>();
   if (isAccountConflict != null) {
     matcher = matcher.having(
       (f) => f.isAccountConflict,
@@ -103,7 +103,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.invalidDataMessage,
+          message: HttpAccountRegistrationRepository.invalidDataMessage,
           fieldErrors: {
             'email': 'El correo electrónico no es válido',
             'phone': 'El teléfono no es válido',
@@ -162,7 +162,7 @@ void main() {
     await expectLater(
       repository.register(validRegistration()),
       throwsA(
-        _failure(message: HttpClientRegistrationRepository.invalidDataMessage),
+        _failure(message: HttpAccountRegistrationRepository.invalidDataMessage),
       ),
     );
   });
@@ -179,12 +179,12 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.conflictMessage,
+          message: HttpAccountRegistrationRepository.conflictMessage,
           isAccountConflict: true,
           fieldErrors: const {
-            'email': HttpClientRegistrationRepository.conflictFieldMessage,
+            'email': HttpAccountRegistrationRepository.conflictFieldMessage,
             'documentNumber':
-                HttpClientRegistrationRepository.conflictFieldMessage,
+                HttpAccountRegistrationRepository.conflictFieldMessage,
           },
         ),
       ),
@@ -220,7 +220,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.unexpectedErrorMessage,
+          message: HttpAccountRegistrationRepository.unexpectedErrorMessage,
           isAccountConflict: false,
         ),
       ),
@@ -236,7 +236,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.connectionErrorMessage,
+          message: HttpAccountRegistrationRepository.connectionErrorMessage,
         ),
       ),
     );
@@ -253,7 +253,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.connectionErrorMessage,
+          message: HttpAccountRegistrationRepository.connectionErrorMessage,
         ),
       ),
     );
