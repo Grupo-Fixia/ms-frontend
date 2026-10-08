@@ -11,8 +11,10 @@ import 'fake_repository.dart';
 
 Future<void> _pump(
   WidgetTester tester,
-  FakeTechnicianRegistrationRepository repository,
-) async {
+  FakeTechnicianRegistrationRepository repository, {
+  VoidCallback? onGoToLogin,
+  VoidCallback? onGoToClientRegistration,
+}) async {
   tester.view.physicalSize = const Size(1024, 2000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -21,6 +23,8 @@ Future<void> _pump(
       theme: FixiaTheme.light,
       home: TechnicianRegistrationPage(
         registerTechnician: RegisterTechnician(repository),
+        onGoToLogin: onGoToLogin,
+        onGoToClientRegistration: onGoToClientRegistration,
       ),
     ),
   );
@@ -84,6 +88,50 @@ void main() {
       expect(find.text(label), findsOneWidget, reason: label);
     }
     expect(find.textContaining('v1.0'), findsOneWidget);
+  });
+
+  testWidgets(
+      'usa iconos alineados al registro cliente y permite volver al login',
+      (tester) async {
+    var wentToLogin = false;
+    await _pump(
+      tester,
+      FakeTechnicianRegistrationRepository(),
+      onGoToLogin: () => wentToLogin = true,
+    );
+
+    for (final icon in [
+      Icons.person_outline,
+      Icons.badge_outlined,
+      Icons.numbers,
+      Icons.email_outlined,
+      Icons.phone_outlined,
+      Icons.lock_outline,
+    ]) {
+      expect(find.byIcon(icon), findsWidgets);
+    }
+
+    final loginLink = find.byKey(const ValueKey('technician-go-to-login'));
+    await tester.ensureVisible(loginLink);
+    await tester.tap(loginLink);
+    expect(wentToLogin, isTrue);
+  });
+
+  testWidgets('permite ir al registro de usuario', (tester) async {
+    var wentToClientRegistration = false;
+    await _pump(
+      tester,
+      FakeTechnicianRegistrationRepository(),
+      onGoToClientRegistration: () => wentToClientRegistration = true,
+    );
+
+    final registrationLink =
+        find.byKey(const ValueKey('technician-go-to-client-registration'));
+    await tester.ensureVisible(registrationLink);
+    await tester.tap(registrationLink);
+
+    expect(find.text('Regístrate como usuario'), findsOneWidget);
+    expect(wentToClientRegistration, isTrue);
   });
 
   testWidgets('valida correo y confirmación antes de enviar', (tester) async {

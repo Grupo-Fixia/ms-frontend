@@ -13,9 +13,13 @@ class TechnicianRegistrationPage extends StatefulWidget {
   const TechnicianRegistrationPage({
     super.key,
     required this.registerTechnician,
+    this.onGoToLogin,
+    this.onGoToClientRegistration,
   });
 
   final RegisterTechnician registerTechnician;
+  final VoidCallback? onGoToLogin;
+  final VoidCallback? onGoToClientRegistration;
 
   @override
   State<TechnicianRegistrationPage> createState() =>
@@ -104,6 +108,7 @@ class _TechnicianRegistrationPageState
     required String field,
     required TextEditingController controller,
     required String label,
+    required IconData icon,
     required FormFieldValidator<String> validator,
     TextInputType? keyboardType,
     TextCapitalization capitalization = TextCapitalization.none,
@@ -130,6 +135,7 @@ class _TechnicianRegistrationPageState
         onChanged: (_) => _controller.clearFieldError(field),
         decoration: InputDecoration(
           labelText: label,
+          prefixIcon: Icon(icon),
           helperText: helperText,
           suffixIcon: suffixIcon,
           counterText: '',
@@ -156,7 +162,10 @@ class _TechnicianRegistrationPageState
                     vertical: 32,
                   ),
                   child: _controller.isRegistered
-                      ? _RegistrationSuccess(email: _email.text.trim())
+                      ? _RegistrationSuccess(
+                          email: _email.text.trim(),
+                          onGoToLogin: widget.onGoToLogin,
+                        )
                       : _buildForm(context),
                 ),
               ),
@@ -191,7 +200,10 @@ class _TechnicianRegistrationPageState
                 key: const ValueKey('technician-profession-field'),
                 value: _profession,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Profesión'),
+                decoration: const InputDecoration(
+                  labelText: 'Profesión',
+                  prefixIcon: Icon(Icons.work_outline),
+                ),
                 items: [
                   for (final profession in TechnicianProfession.values)
                     DropdownMenuItem(
@@ -213,6 +225,7 @@ class _TechnicianRegistrationPageState
                     field: 'firstName',
                     controller: _firstName,
                     label: 'Nombres',
+                    icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
                     maxLength: ClientRegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.givenName],
@@ -222,6 +235,7 @@ class _TechnicianRegistrationPageState
                     field: 'lastName',
                     controller: _lastName,
                     label: 'Apellidos',
+                    icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
                     maxLength: ClientRegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.familyName],
@@ -247,8 +261,10 @@ class _TechnicianRegistrationPageState
                 key: const ValueKey('technician-documentType-field'),
                 value: _documentType,
                 isExpanded: true,
-                decoration:
-                    const InputDecoration(labelText: 'Tipo de documento'),
+                decoration: const InputDecoration(
+                  labelText: 'Tipo de documento',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
                 items: [
                   for (final type in DocumentType.values)
                     DropdownMenuItem(value: type, child: Text(type.label)),
@@ -268,6 +284,7 @@ class _TechnicianRegistrationPageState
               field: 'documentNumber',
               controller: _documentNumber,
               label: 'Número de documento',
+              icon: Icons.numbers,
               capitalization: TextCapitalization.characters,
               maxLength: ClientRegistrationRules.documentMaxLength,
               validator: (value) => ClientRegistrationRules.documentNumber(
@@ -279,6 +296,7 @@ class _TechnicianRegistrationPageState
               field: 'email',
               controller: _email,
               label: 'Correo electrónico',
+              icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
               maxLength: ClientRegistrationRules.emailMaxLength,
               autofillHints: const [AutofillHints.email],
@@ -288,6 +306,7 @@ class _TechnicianRegistrationPageState
               field: 'phone',
               controller: _phone,
               label: 'Teléfono celular',
+              icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
               maxLength: 16,
               autofillHints: const [AutofillHints.telephoneNumber],
@@ -297,6 +316,7 @@ class _TechnicianRegistrationPageState
               field: 'password',
               controller: _password,
               label: 'Contraseña',
+              icon: Icons.lock_outline,
               obscureText: _obscurePassword,
               maxLength: ClientRegistrationRules.passwordMaxLength,
               helperText: 'Mínimo 8 caracteres, con letras y números.',
@@ -319,6 +339,7 @@ class _TechnicianRegistrationPageState
               field: 'confirmPassword',
               controller: _confirmPassword,
               label: 'Confirmar contraseña',
+              icon: Icons.lock_outline,
               obscureText: _obscurePassword,
               maxLength: ClientRegistrationRules.passwordMaxLength,
               validator: (value) => ClientRegistrationRules.confirmPassword(
@@ -348,6 +369,33 @@ class _TechnicianRegistrationPageState
                     )
                   : const Text('Crear cuenta de técnico'),
             ),
+            if (widget.onGoToLogin != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '¿Ya tienes cuenta?',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  TextButton(
+                    key: const ValueKey('technician-go-to-login'),
+                    onPressed: _controller.isLocked ? null : widget.onGoToLogin,
+                    child: const Text('Inicia sesión'),
+                  ),
+                ],
+              ),
+            ],
+            if (widget.onGoToClientRegistration != null) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                key: const ValueKey('technician-go-to-client-registration'),
+                onPressed: _controller.isLocked
+                    ? null
+                    : widget.onGoToClientRegistration,
+                child: const Text('Regístrate como usuario'),
+              ),
+            ],
           ],
         ),
       ),
@@ -387,9 +435,10 @@ class _Header extends StatelessWidget {
 }
 
 class _RegistrationSuccess extends StatelessWidget {
-  const _RegistrationSuccess({required this.email});
+  const _RegistrationSuccess({required this.email, this.onGoToLogin});
 
   final String email;
+  final VoidCallback? onGoToLogin;
 
   @override
   Widget build(BuildContext context) {
@@ -417,6 +466,14 @@ class _RegistrationSuccess extends StatelessWidget {
               ?.copyWith(color: FixiaColors.textSecondary),
           textAlign: TextAlign.center,
         ),
+        if (onGoToLogin != null) ...[
+          const SizedBox(height: 24),
+          FilledButton(
+            key: const ValueKey('technician-success-go-to-login'),
+            onPressed: onGoToLogin,
+            child: const Text('Ir a iniciar sesión'),
+          ),
+        ],
       ],
     );
   }

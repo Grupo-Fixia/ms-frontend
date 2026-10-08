@@ -163,6 +163,8 @@ class _FixiaAppState extends State<FixiaApp> {
               ),
               onGoToLogin: () => Navigator.of(context)
                   .pushReplacementNamed(AppRoutes.login),
+              onGoToClientRegistration: () => Navigator.of(context)
+                  .pushNamed(AppRoutes.clientRegistration),
             ),
       },
     );
