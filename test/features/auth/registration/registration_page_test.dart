@@ -20,6 +20,7 @@ Future<void> _pump(
   AccountRole role = AccountRole.client,
   VoidCallback? onGoToLogin,
   VoidCallback? onSwitchRole,
+  Future<bool> Function(String email, String password)? onAutoLogin,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -32,6 +33,7 @@ Future<void> _pump(
         role: role,
         onGoToLogin: onGoToLogin,
         onSwitchRole: onSwitchRole,
+        onAutoLogin: onAutoLogin,
       ),
     ),
   );
@@ -604,6 +606,110 @@ void main() {
       expect(find.text('Regístrate como cliente'), findsOneWidget);
       await tester.tap(link);
       expect(switched, isTrue);
+    });
+  });
+
+  group('inicio de sesión automático al crear la cuenta', () {
+    testWidgets('inicia sesión con el correo y la contraseña recién creados',
+        (tester) async {
+      String? email;
+      String? password;
+      final pending = Completer<bool>();
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onAutoLogin: (e, p) {
+          email = e;
+          password = p;
+          return pending.future;
+        },
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pump();
+
+      expect(email, 'ana@fixia.com');
+      expect(password, 'Segura123');
+      expect(
+        find.byKey(const ValueKey('registration-signing-in')),
+        findsOneWidget,
+      );
+      expect(find.text('Iniciando sesión…'), findsOneWidget);
+
+      pending.complete(true);
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('registration-success')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('si no puede iniciar sesión muestra la confirmación',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onGoToLogin: () {},
+        onAutoLogin: (_, __) async => false,
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('registration-signing-in')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('registration-success')),
+        findsOneWidget,
+      );
+      expect(find.text('Ir a iniciar sesión'), findsOneWidget);
+    });
+
+    testWidgets('si el inicio de sesión lanza un error también la muestra',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onAutoLogin: (_, __) async => throw StateError('falló'),
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('registration-success')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('si el registro falla no intenta iniciar sesión',
+        (tester) async {
+      var calls = 0;
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(
+          failure: const RegistrationFailure('No disponible'),
+        ),
+        role: AccountRole.technician,
+        onAutoLogin: (_, __) async {
+          calls++;
+          return true;
+        },
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(calls, 0);
     });
   });
 }

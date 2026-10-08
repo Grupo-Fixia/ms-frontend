@@ -16,4 +16,13 @@ enum ServiceCategory {
 
   /// Texto que ve el usuario.
   final String label;
+
+  /// Devuelve `null` si el backend envía una categoría que el frontend no
+  /// conoce.
+  static ServiceCategory? fromApi(String? value) {
+    for (final category in values) {
+      if (category.apiValue == value) return category;
+    }
+    return null;
+  }
 }

@@ -523,17 +523,11 @@ class _ProfileSummary extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Center(child: _VerificationBadge(status: status)),
-        if (status == VerificationStatus.pending) ...[
+        const SizedBox(height: 20),
+        _VerificationStatusCard(status: status),
+        if (status == null || status == VerificationStatus.pending) ...[
           const SizedBox(height: 24),
           const TechnicianSteps(currentStep: 3),
-          const SizedBox(height: 12),
-          Text(
-            'Fixia está revisando tu información. Te avisaremos cuando tu '
-            'cuenta quede verificada.',
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: FixiaColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
         ],
         const SizedBox(height: 28),
         _Section(
@@ -608,6 +602,92 @@ class _Section extends StatelessWidget {
           const SizedBox(height: 6),
           child,
         ],
+      ),
+    );
+  }
+}
+
+/// Estado de la solicitud para ser técnico en Fixia, con lo que significa
+/// para él (la verificación la define el equipo de Fixia).
+class _VerificationStatusCard extends StatelessWidget {
+  const _VerificationStatusCard({required this.status});
+
+  final VerificationStatus? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (Color background, Color accent, IconData icon, String title,
+        String text) = switch (status) {
+      VerificationStatus.valid => (
+          const Color(0xFFE0F6F2),
+          FixiaColors.accent,
+          Icons.verified_rounded,
+          'Tu cuenta de técnico está aprobada',
+          'Fixia verificó tu información. Ya puedes recibir solicitudes de '
+              'clientes.',
+        ),
+      VerificationStatus.rejected => (
+          const Color(0xFFFDECEA),
+          theme.colorScheme.error,
+          Icons.error_outline,
+          'Tu solicitud no fue aprobada',
+          'Revisa tu perfil o escríbenos a soporte para saber qué corregir.',
+        ),
+      VerificationStatus.expired => (
+          const Color(0xFFFDECEA),
+          theme.colorScheme.error,
+          Icons.event_busy_outlined,
+          'Tu verificación venció',
+          'Escríbenos a soporte para renovarla y seguir recibiendo '
+              'solicitudes.',
+        ),
+      _ => (
+          FixiaColors.supportBackground,
+          FixiaColors.secondary,
+          Icons.hourglass_top_rounded,
+          'Tu solicitud está en revisión',
+          'Fixia está verificando tu información. Cuando quede aprobada '
+              'podrás recibir solicitudes de clientes; te avisaremos.',
+        ),
+    };
+    return Semantics(
+      container: true,
+      child: Container(
+        key: const ValueKey('profile-verification-card'),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(FixiaRadii.input),
+          border: Border(left: BorderSide(color: accent, width: 4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: accent, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: FixiaColors.primary,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    text,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: FixiaColors.textPrimary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
