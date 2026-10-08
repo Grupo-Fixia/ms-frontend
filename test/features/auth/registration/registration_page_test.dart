@@ -3,18 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
-import 'package:ms_frontend/features/client/registration/application/register_client.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
-import 'package:ms_frontend/features/client/registration/presentation/client_registration_page.dart';
+import 'package:ms_frontend/features/auth/registration/application/register_account.dart';
+import 'package:ms_frontend/features/auth/registration/domain/account_role.dart';
+import 'package:ms_frontend/features/auth/registration/domain/document_type.dart';
+import 'package:ms_frontend/features/auth/registration/domain/registration_exceptions.dart';
+import 'package:ms_frontend/features/auth/registration/presentation/registration_page.dart';
+import 'package:ms_frontend/features/auth/registration/presentation/widgets/technician_registration_extras.dart';
 
 import 'fake_repository.dart';
 
 Future<void> _pump(
   WidgetTester tester,
-  FakeClientRegistrationRepository repository, {
+  FakeAccountRegistrationRepository repository, {
   Size size = const Size(1024, 2000),
+  AccountRole role = AccountRole.client,
   VoidCallback? onGoToLogin,
+  VoidCallback? onSwitchRole,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -22,18 +26,20 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: FixiaTheme.light,
-      home: ClientRegistrationPage(
-        registerClient: RegisterClient(repository),
+      home: RegistrationPage(
+        registerAccount: RegisterAccount(repository),
+        role: role,
         onGoToLogin: onGoToLogin,
+        onSwitchRole: onSwitchRole,
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
-Finder _field(String name) => find.byKey(ValueKey('client-$name-field'));
+Finder _field(String name) => find.byKey(ValueKey('registration-$name-field'));
 
-final _submitButton = find.byKey(const ValueKey('client-registration-submit'));
+final _submitButton = find.byKey(const ValueKey('registration-submit'));
 
 Future<void> _selectDocumentType(WidgetTester tester, DocumentType type) async {
   await tester.tap(_field('documentType'));
@@ -57,9 +63,9 @@ Future<void> _fillValidForm(WidgetTester tester) async {
   await tester.enterText(_field('password'), 'Segura123');
   await tester.enterText(_field('confirmPassword'), 'Segura123');
   await tester.ensureVisible(
-    find.byKey(const ValueKey('client-consent-checkbox')),
+    find.byKey(const ValueKey('registration-consent-checkbox')),
   );
-  await tester.tap(find.byKey(const ValueKey('client-consent-checkbox')));
+  await tester.tap(find.byKey(const ValueKey('registration-consent-checkbox')));
   await tester.pump();
 }
 
@@ -72,7 +78,7 @@ Future<void> _submit(WidgetTester tester) async {
 void main() {
   testWidgets('muestra los datos de identificación, contacto y consentimiento',
       (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     for (final label in [
       'Nombres',
@@ -94,7 +100,7 @@ void main() {
       (tester) async {
     await _pump(
       tester,
-      FakeClientRegistrationRepository(),
+      FakeAccountRegistrationRepository(),
       size: const Size(360, 1600),
     );
 
@@ -106,7 +112,7 @@ void main() {
 
   testWidgets('con el formulario vacío no envía y marca qué corregir',
       (tester) async {
-    final repository = FakeClientRegistrationRepository();
+    final repository = FakeAccountRegistrationRepository();
     await _pump(tester, repository);
 
     await _submit(tester);
@@ -122,7 +128,7 @@ void main() {
   });
 
   testWidgets('valida formatos mientras el usuario escribe', (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     await tester.enterText(_field('email'), 'ana@');
     await tester.enterText(_field('phone'), '12');
@@ -144,7 +150,7 @@ void main() {
 
   testWidgets('tocar un campo solo marca el error de ese campo',
       (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     await tester.enterText(_field('email'), 'ana@');
     await tester.pump();
@@ -163,7 +169,7 @@ void main() {
   });
 
   testWidgets('con cédula el documento solo acepta números', (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     await _selectDocumentType(tester, DocumentType.cc);
     await tester.enterText(_field('documentNumber'), 'AB12.34 56');
@@ -174,7 +180,7 @@ void main() {
 
   testWidgets('con pasaporte acepta letras y al cambiar a cédula las quita',
       (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     await _selectDocumentType(tester, DocumentType.passport);
     await tester.enterText(_field('documentNumber'), 'AB123');
@@ -186,7 +192,7 @@ void main() {
   });
 
   testWidgets('el teléfono solo acepta números y +', (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     await tester.enterText(_field('phone'), '+57 300-123 4567');
     await tester.pump();
@@ -195,7 +201,7 @@ void main() {
   });
 
   testWidgets('cada contraseña tiene su propio botón de ojo', (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     expect(_editable(tester, 'password').obscureText, isTrue);
     expect(_editable(tester, 'confirmPassword').obscureText, isTrue);
@@ -212,7 +218,7 @@ void main() {
 
   testWidgets('cambiar la contraseña vuelve a comparar la confirmación',
       (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     await tester.enterText(_field('password'), 'Segura123');
     await tester.enterText(_field('confirmPassword'), 'Segura123');
@@ -225,7 +231,7 @@ void main() {
   });
 
   testWidgets('cada campo muestra su ícono', (tester) async {
-    await _pump(tester, FakeClientRegistrationRepository());
+    await _pump(tester, FakeAccountRegistrationRepository());
 
     for (final icon in [
       Icons.person_outline,
@@ -241,7 +247,7 @@ void main() {
 
   testWidgets('con datos válidos crea la cuenta y muestra el siguiente paso',
       (tester) async {
-    final repository = FakeClientRegistrationRepository();
+    final repository = FakeAccountRegistrationRepository();
     var wentToLogin = false;
     await _pump(tester, repository, onGoToLogin: () => wentToLogin = true);
 
@@ -254,7 +260,7 @@ void main() {
     expect(repository.saved?.consentAccepted, isTrue);
     expect(repository.saved?.consentAcceptedAt, isNotNull);
     expect(
-      find.byKey(const ValueKey('client-registration-success')),
+      find.byKey(const ValueKey('registration-success')),
       findsOneWidget,
     );
     expect(find.text('Ya puedes iniciar sesión con ana@fixia.com.'),
@@ -267,7 +273,7 @@ void main() {
   testWidgets('bloquea el botón mientras envía (sin doble envío)',
       (tester) async {
     final pending = Completer<void>();
-    final repository = FakeClientRegistrationRepository(pending: pending);
+    final repository = FakeAccountRegistrationRepository(pending: pending);
     await _pump(tester, repository);
 
     await _fillValidForm(tester);
@@ -283,8 +289,8 @@ void main() {
 
   testWidgets('muestra debajo del campo el error que devuelve el backend',
       (tester) async {
-    final repository = FakeClientRegistrationRepository(
-      failure: const ClientRegistrationFailure(
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
         'Hay datos que debe corregir',
         fieldErrors: {'email': 'El correo electrónico no es válido'},
       ),
@@ -306,8 +312,8 @@ void main() {
   testWidgets('si la cuenta ya existe lo dice debajo del correo y el documento',
       (tester) async {
     const message = 'Ya existe una cuenta con este correo o documento.';
-    final repository = FakeClientRegistrationRepository(
-      failure: const ClientRegistrationFailure(
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
         'Ya existe una cuenta',
         isAccountConflict: true,
         fieldErrors: {'email': message, 'documentNumber': message},
@@ -332,7 +338,7 @@ void main() {
     );
     // Sin aviso rojo arriba ni diálogo: el error está en los campos.
     expect(
-      find.byKey(const ValueKey('client-registration-error')),
+      find.byKey(const ValueKey('registration-error')),
       findsNothing,
     );
     expect(find.byType(AlertDialog), findsNothing);
@@ -348,8 +354,8 @@ void main() {
 
   testWidgets('otros errores se muestran arriba del formulario y se cierran',
       (tester) async {
-    final repository = FakeClientRegistrationRepository(
-      failure: const ClientRegistrationFailure(
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
         'No pudimos conectar con Fixia.',
       ),
     );
@@ -359,7 +365,7 @@ void main() {
     await _submit(tester);
     await tester.pumpAndSettle();
 
-    final banner = find.byKey(const ValueKey('client-registration-error'));
+    final banner = find.byKey(const ValueKey('registration-error'));
     expect(banner, findsOneWidget);
     expect(find.text('No pudimos conectar con Fixia.'), findsOneWidget);
     // Queda encima del primer campo del formulario.
@@ -378,12 +384,196 @@ void main() {
     var wentToLogin = false;
     await _pump(
       tester,
-      FakeClientRegistrationRepository(),
+      FakeAccountRegistrationRepository(),
       onGoToLogin: () => wentToLogin = true,
     );
 
     await tester.ensureVisible(find.text('Inicia sesión'));
     await tester.tap(find.text('Inicia sesión'));
     expect(wentToLogin, isTrue);
+  });
+
+  group('registro de técnico', () {
+    testWidgets('usa los textos del técnico y los mismos campos',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+      );
+
+      expect(find.text('Crea tu cuenta de técnico'), findsOneWidget);
+      expect(
+        find.text('Regístrate para ofrecer tus servicios y conseguir '
+            'clientes cerca de ti.'),
+        findsOneWidget,
+      );
+      for (final field in [
+        'firstName',
+        'lastName',
+        'documentType',
+        'documentNumber',
+        'email',
+        'phone',
+        'password',
+        'confirmPassword',
+      ]) {
+        expect(_field(field), findsOneWidget, reason: field);
+      }
+      expect(
+        find.byKey(const ValueKey('registration-consent-checkbox')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('con datos válidos crea la cuenta y pide completar el perfil',
+        (tester) async {
+      final repository = FakeAccountRegistrationRepository();
+      await _pump(tester, repository, role: AccountRole.technician);
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(repository.calls, 1);
+      expect(repository.saved?.consentAccepted, isTrue);
+      expect(find.text('¡Tu cuenta de técnico fue creada!'), findsOneWidget);
+      expect(
+        find.text('Inicia sesión con ana@fixia.com para completar tu perfil '
+            'profesional. Tu cuenta queda pendiente de verificación.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('si el registro falla lo muestra arriba del formulario',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(
+          failure: const RegistrationFailure('No disponible'),
+        ),
+        role: AccountRole.technician,
+      );
+
+      await _fillValidForm(tester);
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('registration-error')), findsOneWidget);
+      expect(find.text('No disponible'), findsOneWidget);
+    });
+  });
+
+  group('distintivos del registro de técnico', () {
+    final badge = find.byKey(const ValueKey('technician-badge'));
+    final steps = find.byKey(const ValueKey('technician-steps'));
+    final benefits = find.byKey(const ValueKey('technician-benefits'));
+
+    testWidgets('el cliente no ve etiqueta, pasos ni razones', (tester) async {
+      await _pump(tester, FakeAccountRegistrationRepository());
+
+      expect(badge, findsNothing);
+      expect(steps, findsNothing);
+      expect(benefits, findsNothing);
+    });
+
+    testWidgets('el técnico ve la etiqueta y los 3 pasos', (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+      );
+
+      expect(badge, findsOneWidget);
+      expect(find.text('Cuenta de técnico'), findsOneWidget);
+      expect(steps, findsOneWidget);
+      for (final label in TechnicianSteps.labels) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+    });
+
+    testWidgets('en pantalla ancha las razones van al lado del formulario',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+      );
+
+      expect(benefits, findsOneWidget);
+      for (final reason in TechnicianBenefits.reasons) {
+        expect(find.text(reason.title), findsOneWidget);
+        expect(find.text(reason.text), findsOneWidget);
+      }
+      final panel = tester.getRect(benefits);
+      final form = tester.getRect(_field('firstName'));
+      expect(panel.right, lessThan(form.left));
+    });
+
+    for (final size in const [Size(320, 900), Size(375, 900)]) {
+      testWidgets(
+          'en celular de ${size.width.toInt()} px van arriba, cortas y sin '
+          'desbordes', (tester) async {
+        await _pump(
+          tester,
+          FakeAccountRegistrationRepository(),
+          role: AccountRole.technician,
+          size: size,
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(benefits, findsOneWidget);
+        for (final reason in TechnicianBenefits.reasons) {
+          expect(find.text(reason.title), findsOneWidget);
+          expect(find.text(reason.text), findsNothing);
+        }
+        expect(
+          tester.getRect(benefits).bottom,
+          lessThan(tester.getRect(badge).top),
+        );
+      });
+    }
+  });
+
+  group('enlace al otro tipo de cuenta', () {
+    testWidgets('sin callback no se muestra', (tester) async {
+      await _pump(tester, FakeAccountRegistrationRepository());
+
+      expect(
+        find.byKey(const ValueKey('registration-switch-role')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('desde cliente lleva al registro de técnico', (tester) async {
+      var switched = false;
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        onSwitchRole: () => switched = true,
+      );
+
+      final link = find.byKey(const ValueKey('registration-switch-role'));
+      await tester.ensureVisible(link);
+      expect(find.text('Regístrate como técnico'), findsOneWidget);
+      await tester.tap(link);
+      expect(switched, isTrue);
+    });
+
+    testWidgets('desde técnico lleva al registro de cliente', (tester) async {
+      var switched = false;
+      await _pump(
+        tester,
+        FakeAccountRegistrationRepository(),
+        role: AccountRole.technician,
+        onSwitchRole: () => switched = true,
+      );
+
+      final link = find.byKey(const ValueKey('registration-switch-role'));
+      await tester.ensureVisible(link);
+      expect(find.text('Regístrate como cliente'), findsOneWidget);
+      await tester.tap(link);
+      expect(switched, isTrue);
+    });
   });
 }

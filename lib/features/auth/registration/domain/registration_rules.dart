@@ -1,12 +1,12 @@
 import '../../../../core/validation/email_rule.dart';
 import 'document_type.dart';
 
-/// Reglas de validación del registro de cliente.
+/// Reglas de validación del registro de cuentas (cliente y técnico).
 ///
-/// Replican las de `ClientRegistrationRequest` en ms-users para que el
-/// usuario vea el error antes de enviar. Devuelven el mensaje a mostrar o
-/// `null` si el valor es válido.
-abstract final class ClientRegistrationRules {
+/// Replican las de `ClientRegistrationRequest` en ms-users (el registro de
+/// técnico usa el mismo contrato) para que el usuario vea el error antes de
+/// enviar. Devuelven el mensaje a mostrar o `null` si el valor es válido.
+abstract final class RegistrationRules {
   static final _digitsPattern = RegExp(r'^[0-9]+$');
   static final _alphanumericPattern = RegExp(r'^[A-Za-z0-9]+$');
   static final _phonePattern = RegExp(r'^\+?[0-9]{7,15}$');

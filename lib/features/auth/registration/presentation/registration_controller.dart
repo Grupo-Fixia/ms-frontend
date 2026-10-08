@@ -1,20 +1,20 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/constants/data_policy.dart';
-import '../application/register_client.dart';
-import '../domain/client_registration.dart';
-import '../domain/client_registration_exceptions.dart';
+import '../application/register_account.dart';
+import '../domain/account_registration.dart';
+import '../domain/registration_exceptions.dart';
 import '../domain/document_type.dart';
 
-/// Estado de la pantalla de registro de cliente.
-class ClientRegistrationController extends ChangeNotifier {
-  ClientRegistrationController({
-    required RegisterClient registerClient,
+/// Estado de la pantalla de registro (cliente o técnico).
+class RegistrationController extends ChangeNotifier {
+  RegistrationController({
+    required RegisterAccount registerAccount,
     DateTime Function()? clock,
-  })  : _registerClient = registerClient,
+  })  : _registerAccount = registerAccount,
         _clock = clock ?? DateTime.now;
 
-  final RegisterClient _registerClient;
+  final RegisterAccount _registerAccount;
   final DateTime Function() _clock;
 
   bool _consentAccepted = false;
@@ -81,10 +81,10 @@ class ClientRegistrationController extends ChangeNotifier {
 
     try {
       if (documentType == null) {
-        throw const InvalidClientRegistrationException(['documentType']);
+        throw const InvalidRegistrationException(['documentType']);
       }
-      await _registerClient(
-        ClientRegistration(
+      await _registerAccount(
+        AccountRegistration(
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           documentType: documentType,
@@ -98,10 +98,10 @@ class ClientRegistrationController extends ChangeNotifier {
         ),
       );
       _isRegistered = true;
-    } on InvalidClientRegistrationException {
+    } on InvalidRegistrationException {
       _errorMessage =
           'Completa los campos obligatorios y acepta el tratamiento de datos.';
-    } on ClientRegistrationFailure catch (failure) {
+    } on RegistrationFailure catch (failure) {
       _errorMessage = failure.message;
       _fieldErrors = failure.fieldErrors;
       _isAccountConflict = failure.isAccountConflict;

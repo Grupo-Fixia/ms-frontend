@@ -3,18 +3,19 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../application/ports/client_registration_repository.dart';
-import '../domain/client_registration.dart';
-import '../domain/client_registration_exceptions.dart';
+import '../application/ports/account_registration_repository.dart';
+import '../domain/account_registration.dart';
+import '../domain/registration_exceptions.dart';
 
-/// Registra clientes contra `POST /api/users/clients` de ms-users (GC-253).
+/// Registra cuentas de cliente contra `POST /api/users/clients` de ms-users
+/// (GC-253).
 ///
 /// Contrato (ms-users `ClientRegistrationController`):
 /// - `201 Created`: cuenta creada.
 /// - `400`: ProblemDetail (RFC 7807) con `errors: [{field, message}]`.
 /// - `409`: ya existe una cuenta con ese correo o documento.
-class HttpClientRegistrationRepository implements ClientRegistrationRepository {
-  HttpClientRegistrationRepository({
+class HttpAccountRegistrationRepository implements AccountRegistrationRepository {
+  HttpAccountRegistrationRepository({
     required http.Client client,
     required Uri baseUrl,
     this.timeout = const Duration(seconds: 15),
@@ -37,7 +38,7 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
   final Duration timeout;
 
   @override
-  Future<void> register(ClientRegistration registration) async {
+  Future<void> register(AccountRegistration registration) async {
     final http.Response response;
     try {
       response = await _client
@@ -51,9 +52,9 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
           )
           .timeout(timeout);
     } on TimeoutException {
-      throw const ClientRegistrationFailure(connectionErrorMessage);
+      throw const RegistrationFailure(connectionErrorMessage);
     } on http.ClientException {
-      throw const ClientRegistrationFailure(connectionErrorMessage);
+      throw const RegistrationFailure(connectionErrorMessage);
     }
 
     switch (response.statusCode) {
@@ -65,13 +66,13 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
       case 409:
         throw _conflictFailure(response);
       default:
-        throw const ClientRegistrationFailure(unexpectedErrorMessage);
+        throw const RegistrationFailure(unexpectedErrorMessage);
     }
   }
 
   /// Cuerpo exacto que espera `ClientRegistrationRequest` en ms-users.
   /// La fecha del consentimiento la registra el backend al crear la cuenta.
-  Map<String, Object> _toJson(ClientRegistration registration) => {
+  Map<String, Object> _toJson(AccountRegistration registration) => {
         'firstName': registration.firstName.trim(),
         'lastName': registration.lastName.trim(),
         'documentType': registration.documentType.apiValue,
@@ -86,9 +87,9 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
   /// Cuenta existente (409). Hoy ms-users no dice si se repite el correo o el
   /// documento, así que el aviso va en los dos campos. Si el backend llega a
   /// enviar `errors[{field, message}]`, se muestra solo en el campo indicado.
-  ClientRegistrationFailure _conflictFailure(http.Response response) {
+  RegistrationFailure _conflictFailure(http.Response response) {
     final fieldErrors = _fieldErrors(_decodeJson(response));
-    return ClientRegistrationFailure(
+    return RegistrationFailure(
       conflictMessage,
       fieldErrors: fieldErrors.isNotEmpty
           ? fieldErrors
@@ -101,7 +102,7 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
   }
 
   /// Convierte el ProblemDetail del backend en errores por campo.
-  ClientRegistrationFailure _validationFailure(http.Response response) {
+  RegistrationFailure _validationFailure(http.Response response) {
     final body = _decodeJson(response);
     final fieldErrors = _fieldErrors(body);
     final detail = body?['detail'];
@@ -110,7 +111,7 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
         : (detail is String && detail.trim().isNotEmpty
             ? detail.trim()
             : invalidDataMessage);
-    return ClientRegistrationFailure(message, fieldErrors: fieldErrors);
+    return RegistrationFailure(message, fieldErrors: fieldErrors);
   }
 
   /// `errors[{field, message}]` del ProblemDetail; si un campo trae varios

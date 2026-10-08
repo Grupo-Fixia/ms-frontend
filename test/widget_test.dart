@@ -5,7 +5,7 @@ import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
-import 'features/client/registration/fake_repository.dart';
+import 'features/auth/registration/fake_repository.dart';
 
 Future<FakeAuthRepository> _pumpApp(
   WidgetTester tester, {
@@ -13,6 +13,7 @@ Future<FakeAuthRepository> _pumpApp(
   FakeSessionStorage? storage,
   SessionStore? sessionStore,
   bool openLogin = true,
+  FakeAccountRegistrationRepository? technicianRepository,
 }) async {
   tester.view.physicalSize = const Size(1024, 2000);
   tester.view.devicePixelRatio = 1;
@@ -20,7 +21,9 @@ Future<FakeAuthRepository> _pumpApp(
   final repository = authRepository ?? FakeAuthRepository();
   await tester.pumpWidget(
     FixiaApp(
-      clientRegistrationRepository: FakeClientRegistrationRepository(),
+      clientRegistrationRepository: FakeAccountRegistrationRepository(),
+      technicianRegistrationRepository: technicianRepository ??
+          FakeAccountRegistrationRepository(),
       authRepository: repository,
       sessionStorage: storage ?? FakeSessionStorage(),
       sessionStore: sessionStore,
@@ -59,6 +62,66 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-hero-cta')));
     await tester.pumpAndSettle();
     expect(find.text('Crea tu cuenta'), findsOneWidget);
+  });
+
+  testWidgets('"Soy técnico" abre el registro de técnico y se puede cambiar '
+      'a cliente', (tester) async {
+    await _pumpApp(tester, openLogin: false);
+
+    final technicianButton =
+        find.byKey(const ValueKey('home-register-technician'));
+    await tester.ensureVisible(technicianButton);
+    await tester.pumpAndSettle();
+    await tester.tap(technicianButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Crea tu cuenta de técnico'), findsOneWidget);
+
+    final switchRole = find.byKey(const ValueKey('registration-switch-role'));
+    await tester.ensureVisible(switchRole);
+    await tester.tap(switchRole);
+    await tester.pumpAndSettle();
+    expect(find.text('Crea tu cuenta'), findsOneWidget);
+    expect(find.text('Crea tu cuenta de técnico'), findsNothing);
+  });
+
+  testWidgets('el registro de técnico usa su propio repositorio',
+      (tester) async {
+    final technicianRepository = FakeAccountRegistrationRepository();
+    await _pumpApp(
+      tester,
+      openLogin: false,
+      technicianRepository: technicianRepository,
+    );
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.technicianRegistration);
+    await tester.pumpAndSettle();
+
+    Finder field(String name) => find.byKey(ValueKey('registration-$name-field'));
+    await tester.enterText(field('firstName'), 'Luis');
+    await tester.enterText(field('lastName'), 'Gómez');
+    await tester.tap(field('documentType'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cédula de ciudadanía').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(field('documentNumber'), '80123456');
+    await tester.enterText(field('email'), 'luis@fixia.com');
+    await tester.enterText(field('phone'), '3109876543');
+    await tester.enterText(field('password'), 'Segura123');
+    await tester.enterText(field('confirmPassword'), 'Segura123');
+    final consent = find.byKey(const ValueKey('registration-consent-checkbox'));
+    await tester.ensureVisible(consent);
+    await tester.tap(consent);
+    await tester.pump();
+    final submit = find.byKey(const ValueKey('registration-submit'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(technicianRepository.calls, 1);
+    expect(technicianRepository.saved?.email, 'luis@fixia.com');
+    expect(find.text('¡Tu cuenta de técnico fue creada!'), findsOneWidget);
   });
 
   testWidgets('con sesión iniciada, la página de inicio muestra la sesión',

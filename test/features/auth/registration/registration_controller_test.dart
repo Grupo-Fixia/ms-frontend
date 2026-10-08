@@ -1,26 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ms_frontend/features/client/registration/application/register_client.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
-import 'package:ms_frontend/features/client/registration/presentation/client_registration_controller.dart';
+import 'package:ms_frontend/features/auth/registration/application/register_account.dart';
+import 'package:ms_frontend/features/auth/registration/domain/registration_exceptions.dart';
+import 'package:ms_frontend/features/auth/registration/domain/document_type.dart';
+import 'package:ms_frontend/features/auth/registration/presentation/registration_controller.dart';
 
 import 'fake_repository.dart';
 
 final _acceptedAt = DateTime(2026, 10, 6, 12, 30);
 
-ClientRegistrationController _controller(
-  FakeClientRegistrationRepository repository,
+RegistrationController _controller(
+  FakeAccountRegistrationRepository repository,
 ) {
-  return ClientRegistrationController(
-    registerClient: RegisterClient(repository),
+  return RegistrationController(
+    registerAccount: RegisterAccount(repository),
     clock: () => _acceptedAt,
   );
 }
 
 Future<void> _register(
-  ClientRegistrationController controller, {
+  RegistrationController controller, {
   DocumentType? documentType = DocumentType.cc,
 }) {
   return controller.register(
@@ -36,7 +36,7 @@ Future<void> _register(
 
 void main() {
   test('usa la política v1.0 y empieza sin consentimiento', () {
-    final controller = _controller(FakeClientRegistrationRepository());
+    final controller = _controller(FakeAccountRegistrationRepository());
 
     expect(controller.policyVersion, 'v1.0');
     expect(controller.consentAccepted, isFalse);
@@ -45,7 +45,7 @@ void main() {
   });
 
   test('aceptar el consentimiento guarda la fecha; quitarlo la borra', () {
-    final controller = _controller(FakeClientRegistrationRepository());
+    final controller = _controller(FakeAccountRegistrationRepository());
 
     controller.setConsentAccepted(true);
     expect(controller.consentAcceptedAt, _acceptedAt);
@@ -56,7 +56,7 @@ void main() {
 
   test('envía los datos recortados, con versión y fecha del consentimiento',
       () async {
-    final repository = FakeClientRegistrationRepository();
+    final repository = FakeAccountRegistrationRepository();
     final controller = _controller(repository)..setConsentAccepted(true);
 
     await _register(controller);
@@ -75,7 +75,7 @@ void main() {
   });
 
   test('sin consentimiento no envía e informa qué falta', () async {
-    final repository = FakeClientRegistrationRepository();
+    final repository = FakeAccountRegistrationRepository();
     final controller = _controller(repository);
 
     await _register(controller);
@@ -86,7 +86,7 @@ void main() {
   });
 
   test('sin tipo de documento no envía', () async {
-    final repository = FakeClientRegistrationRepository();
+    final repository = FakeAccountRegistrationRepository();
     final controller = _controller(repository)..setConsentAccepted(true);
 
     await _register(controller, documentType: null);
@@ -96,8 +96,8 @@ void main() {
   });
 
   test('guarda el mensaje y los errores por campo del backend', () async {
-    final repository = FakeClientRegistrationRepository(
-      failure: const ClientRegistrationFailure(
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
         'Hay datos que debe corregir',
         fieldErrors: {'email': 'El correo electrónico no es válido'},
       ),
@@ -117,8 +117,8 @@ void main() {
 
   test('marca el conflicto de cuenta existente y se puede descartar',
       () async {
-    final repository = FakeClientRegistrationRepository(
-      failure: const ClientRegistrationFailure(
+    final repository = FakeAccountRegistrationRepository(
+      failure: const RegistrationFailure(
         'Ya existe una cuenta',
         isAccountConflict: true,
       ),
@@ -138,7 +138,7 @@ void main() {
 
   test('ignora un segundo envío mientras el primero está en curso', () async {
     final pending = Completer<void>();
-    final repository = FakeClientRegistrationRepository(pending: pending);
+    final repository = FakeAccountRegistrationRepository(pending: pending);
     final controller = _controller(repository)..setConsentAccepted(true);
 
     final first = _register(controller);

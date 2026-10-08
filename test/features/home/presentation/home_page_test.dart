@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/home/presentation/home_page.dart';
 
@@ -146,5 +147,19 @@ void main() {
         tester.getTopLeft(find.byKey(const ValueKey('home-role-technician')));
     expect(technician.dy, client.dy);
     expect(technician.dx, greaterThan(client.dx));
+  });
+
+  testWidgets('muestra las 6 categorías de servicio del backend',
+      (tester) async {
+    await _pumpHome(tester);
+
+    for (final category in ServiceCategory.values) {
+      expect(
+        find.byKey(ValueKey('home-service-${category.apiValue}')),
+        findsOneWidget,
+        reason: category.apiValue,
+      );
+      expect(find.text(category.label), findsOneWidget);
+    }
   });
 }

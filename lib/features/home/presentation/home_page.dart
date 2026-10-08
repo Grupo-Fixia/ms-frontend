@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/service_category.dart';
 import '../../../core/theme/fixia_theme.dart';
 
 /// Página de inicio pública: presenta Fixia y lleva al registro según el rol
@@ -466,27 +467,25 @@ class _Reason extends StatelessWidget {
   }
 }
 
-/// Oficios de muestra (los mismos del formulario de técnico, aún
-/// provisionales). Es informativo: no es un buscador.
+/// Las categorías de servicio de Fixia (las mismas de ms-users). Es
+/// informativo: no es un buscador.
 class _ServicesSection extends StatelessWidget {
   const _ServicesSection({required this.isWide});
 
   final bool isWide;
 
-  static const _services = [
-    (icon: Icons.electrical_services_outlined, label: 'Electricidad'),
-    (icon: Icons.plumbing_outlined, label: 'Plomería'),
-    (icon: Icons.carpenter_outlined, label: 'Carpintería'),
-    (icon: Icons.format_paint_outlined, label: 'Pintura'),
-    (icon: Icons.key_outlined, label: 'Cerrajería'),
-    (icon: Icons.foundation_outlined, label: 'Albañilería'),
-    (icon: Icons.ac_unit_outlined, label: 'Refrigeración'),
-    (icon: Icons.yard_outlined, label: 'Jardinería'),
-  ];
+  static IconData _icon(ServiceCategory category) => switch (category) {
+        ServiceCategory.plumbing => Icons.plumbing_outlined,
+        ServiceCategory.electrical => Icons.electrical_services_outlined,
+        ServiceCategory.maintenance => Icons.build_outlined,
+        ServiceCategory.locksmithing => Icons.key_outlined,
+        ServiceCategory.painting => Icons.format_paint_outlined,
+        ServiceCategory.carpentry => Icons.carpenter_outlined,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final columns = isWide ? 4 : 2;
+    final columns = isWide ? 3 : 2;
     const gap = 16.0;
     return Column(
       key: const ValueKey('home-services'),
@@ -504,12 +503,13 @@ class _ServicesSection extends StatelessWidget {
               spacing: gap,
               runSpacing: gap,
               children: [
-                for (final service in _services)
+                for (final category in ServiceCategory.values)
                   SizedBox(
+                    key: ValueKey('home-service-${category.apiValue}'),
                     width: tileWidth,
                     child: _ServiceTile(
-                      icon: service.icon,
-                      label: service.label,
+                      icon: _icon(category),
+                      label: category.label,
                     ),
                   ),
               ],
