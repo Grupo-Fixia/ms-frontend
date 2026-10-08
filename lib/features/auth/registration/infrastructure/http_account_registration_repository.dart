@@ -5,22 +5,32 @@ import 'package:http/http.dart' as http;
 
 import '../application/ports/account_registration_repository.dart';
 import '../domain/account_registration.dart';
+import '../domain/account_role.dart';
 import '../domain/registration_exceptions.dart';
 
-/// Registra cuentas de cliente contra `POST /api/users/clients` de ms-users
-/// (GC-253).
+/// Registra cuentas en ms-users según el rol:
+/// - cliente: `POST /api/users/clients` (GC-253).
+/// - técnico: `POST /api/users/technicians` (GC-256); crea la cuenta con rol
+///   PROFESSIONAL y verificación pendiente.
 ///
-/// Contrato (ms-users `ClientRegistrationController`):
+/// Los dos endpoints tienen el mismo contrato (`ClientRegistrationRequest`):
 /// - `201 Created`: cuenta creada.
 /// - `400`: ProblemDetail (RFC 7807) con `errors: [{field, message}]`.
-/// - `409`: ya existe una cuenta con ese correo o documento.
+/// - `409`: ya existe una cuenta (de cualquier rol) con ese correo o documento.
 class HttpAccountRegistrationRepository implements AccountRegistrationRepository {
   HttpAccountRegistrationRepository({
     required http.Client client,
     required Uri baseUrl,
+    AccountRole role = AccountRole.client,
     this.timeout = const Duration(seconds: 15),
   })  : _client = client,
-        _endpoint = baseUrl.resolve('/api/users/clients');
+        _endpoint = baseUrl.resolve(endpointPath(role));
+
+  /// Ruta de ms-users para registrar cada tipo de cuenta.
+  static String endpointPath(AccountRole role) => switch (role) {
+        AccountRole.client => '/api/users/clients',
+        AccountRole.technician => '/api/users/technicians',
+      };
 
   static const connectionErrorMessage =
       'No pudimos conectar con Fixia. Revisa tu conexión e inténtalo de nuevo.';
