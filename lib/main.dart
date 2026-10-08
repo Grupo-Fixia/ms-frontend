@@ -18,7 +18,6 @@ import 'features/auth/registration/application/ports/account_registration_reposi
 import 'features/auth/registration/application/register_account.dart';
 import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
-import 'features/auth/registration/infrastructure/pending_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/home/presentation/home_page.dart';
 
@@ -54,9 +53,11 @@ Future<void> main() async {
         client: httpClient,
         baseUrl: usersApiBaseUrl,
       ),
-      // Se conecta con ms-users en GC-256.
-      technicianRegistrationRepository:
-          const PendingAccountRegistrationRepository(),
+      technicianRegistrationRepository: HttpAccountRegistrationRepository(
+        client: httpClient,
+        baseUrl: usersApiBaseUrl,
+        role: AccountRole.technician,
+      ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
