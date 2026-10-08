@@ -26,7 +26,8 @@ ms-frontend/
 │   │   ├── config/         #   configuración de las APIs (URL base del backend)
 │   │   ├── constants/      #   valores globales (ej. versión de la política de datos)
 │   │   ├── theme/          #   tema según el Brand Board v1.0
-│   │   └── validation/     #   reglas usadas por varias funcionalidades (ej. correo)
+│   │   ├── validation/     #   reglas usadas por varias funcionalidades (ej. correo)
+│   │   └── widgets/        #   widgets usados por varias funcionalidades (ej. pasos del técnico)
 │   └── features/           # Una carpeta por actor y, dentro, una por funcionalidad
 │       ├── auth/           #   común a todos los roles
 │       │   ├── login/      #     inicio y cierre de sesión (GC-236)
@@ -34,7 +35,8 @@ ms-frontend/
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
 │       ├── client/         #   funcionalidades solo del cliente (cuando existan)
-│       └── technician/     #   funcionalidades solo del técnico (ej. perfil, GC-237)
+│       └── technician/     #   funcionalidades solo del técnico
+│           └── profile/    #     perfil profesional (GC-237)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
 │   └── features/auth/registration/...
 └── web/                    # Archivos de la plataforma web (index.html, íconos)
@@ -93,6 +95,7 @@ infrastructure ──► application ──► domain
 - `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend) y `ServiceCategory`, las 6 categorías de servicio que acepta ms-users.
 - `core/config/api_config.dart` define la URL base del backend (`ApiConfig.usersBaseUrl`): se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
+- `core/widgets/` guarda widgets que usan varias funcionalidades; por ejemplo `TechnicianSteps` (crear cuenta → completar perfil → verificación), que muestran el registro y el perfil del técnico.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
 
 ## 6. Compatibilidad con Flutter 3.22

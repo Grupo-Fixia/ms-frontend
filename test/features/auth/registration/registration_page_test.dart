@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
+import 'package:ms_frontend/core/widgets/technician_steps.dart';
 import 'package:ms_frontend/features/auth/registration/application/register_account.dart';
 import 'package:ms_frontend/features/auth/registration/domain/account_role.dart';
 import 'package:ms_frontend/features/auth/registration/domain/document_type.dart';

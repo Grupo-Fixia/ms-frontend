@@ -19,7 +19,13 @@ import 'features/auth/registration/application/register_account.dart';
 import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
+import 'features/auth/login/domain/user_profile.dart';
 import 'features/home/presentation/home_page.dart';
+import 'features/technician/profile/application/get_technician_profile.dart';
+import 'features/technician/profile/application/ports/technician_profile_repository.dart';
+import 'features/technician/profile/application/update_technician_profile.dart';
+import 'features/technician/profile/infrastructure/in_memory_technician_profile_repository.dart';
+import 'features/technician/profile/presentation/technician_profile_page.dart';
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
@@ -58,6 +64,8 @@ Future<void> main() async {
         baseUrl: usersApiBaseUrl,
         role: AccountRole.technician,
       ),
+      // Se conecta con ms-users en GC-264.
+      technicianProfileRepository: InMemoryTechnicianProfileRepository(),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -70,6 +78,7 @@ class FixiaApp extends StatefulWidget {
     super.key,
     required this.clientRegistrationRepository,
     required this.technicianRegistrationRepository,
+    required this.technicianProfileRepository,
     required this.authRepository,
     required this.sessionStorage,
     this.sessionStore,
@@ -77,6 +86,7 @@ class FixiaApp extends StatefulWidget {
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
+  final TechnicianProfileRepository technicianProfileRepository;
   final AuthRepository authRepository;
   final SessionStorage sessionStorage;
 
@@ -104,12 +114,32 @@ class _FixiaAppState extends State<FixiaApp> {
         widget.sessionStorage,
       );
 
-  Widget _sessionPage(BuildContext context) => SessionPage(
-        store: _sessionStore,
-        logoutUser: _logoutUser,
-        onLoggedOut: () => Navigator.of(context)
-            .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false),
+  void _goToLogin(BuildContext context) => Navigator.of(context)
+      .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+
+  /// Destino de la sesión iniciada según el rol: el técnico llega a su perfil
+  /// profesional (completarlo es el paso 2); los demás, a la pantalla de
+  /// sesión.
+  Widget _sessionPage(BuildContext context) {
+    if (_sessionStore.profile?.role == UserRole.professional) {
+      final repository = widget.technicianProfileRepository;
+      return TechnicianProfilePage(
+        getProfile: GetTechnicianProfile(repository),
+        updateProfile: UpdateTechnicianProfile(repository),
+        firstName: _sessionStore.profile?.firstName,
+        onLogout: () async {
+          await _logoutUser();
+          if (context.mounted) _goToLogin(context);
+        },
+        onSessionExpired: () => _goToLogin(context),
       );
+    }
+    return SessionPage(
+      store: _sessionStore,
+      logoutUser: _logoutUser,
+      onLoggedOut: () => _goToLogin(context),
+    );
+  }
 
   Widget _loginPage(BuildContext context) {
     // Con una sesión ya iniciada (por ejemplo, restaurada) no se pide login.

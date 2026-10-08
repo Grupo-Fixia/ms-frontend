@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/technician_steps.dart';
 import '../application/register_account.dart';
 import '../domain/account_role.dart';
 import '../domain/registration_rules.dart';
