@@ -1,7 +1,7 @@
-import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
-import 'package:ms_frontend/features/client/registration/domain/document_type.dart';
+import 'package:ms_frontend/features/auth/registration/domain/account_registration.dart';
+import 'package:ms_frontend/features/auth/registration/domain/document_type.dart';
 
-ClientRegistration validRegistration({
+AccountRegistration validRegistration({
   String firstName = 'Ana',
   String lastName = 'Pérez',
   String documentNumber = '1020304050',
@@ -13,7 +13,7 @@ ClientRegistration validRegistration({
   DateTime? consentAcceptedAt,
   bool withoutConsentDate = false,
 }) {
-  return ClientRegistration(
+  return AccountRegistration(
     firstName: firstName,
     lastName: lastName,
     documentType: DocumentType.cc,

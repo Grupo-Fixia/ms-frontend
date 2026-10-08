@@ -3,23 +3,34 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../application/ports/client_registration_repository.dart';
-import '../domain/client_registration.dart';
-import '../domain/client_registration_exceptions.dart';
+import '../application/ports/account_registration_repository.dart';
+import '../domain/account_registration.dart';
+import '../domain/account_role.dart';
+import '../domain/registration_exceptions.dart';
 
-/// Registra clientes contra `POST /api/users/clients` de ms-users (GC-253).
+/// Registra cuentas en ms-users según el rol:
+/// - cliente: `POST /api/users/clients` (GC-253).
+/// - técnico: `POST /api/users/technicians` (GC-256); crea la cuenta con rol
+///   PROFESSIONAL y verificación pendiente.
 ///
-/// Contrato (ms-users `ClientRegistrationController`):
+/// Los dos endpoints tienen el mismo contrato (`ClientRegistrationRequest`):
 /// - `201 Created`: cuenta creada.
 /// - `400`: ProblemDetail (RFC 7807) con `errors: [{field, message}]`.
-/// - `409`: ya existe una cuenta con ese correo o documento.
-class HttpClientRegistrationRepository implements ClientRegistrationRepository {
-  HttpClientRegistrationRepository({
+/// - `409`: ya existe una cuenta (de cualquier rol) con ese correo o documento.
+class HttpAccountRegistrationRepository implements AccountRegistrationRepository {
+  HttpAccountRegistrationRepository({
     required http.Client client,
     required Uri baseUrl,
+    AccountRole role = AccountRole.client,
     this.timeout = const Duration(seconds: 15),
   })  : _client = client,
-        _endpoint = baseUrl.resolve('/api/users/clients');
+        _endpoint = baseUrl.resolve(endpointPath(role));
+
+  /// Ruta de ms-users para registrar cada tipo de cuenta.
+  static String endpointPath(AccountRole role) => switch (role) {
+        AccountRole.client => '/api/users/clients',
+        AccountRole.technician => '/api/users/technicians',
+      };
 
   static const connectionErrorMessage =
       'No pudimos conectar con Fixia. Revisa tu conexión e inténtalo de nuevo.';
@@ -37,7 +48,7 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
   final Duration timeout;
 
   @override
-  Future<void> register(ClientRegistration registration) async {
+  Future<void> register(AccountRegistration registration) async {
     final http.Response response;
     try {
       response = await _client
@@ -51,9 +62,9 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
           )
           .timeout(timeout);
     } on TimeoutException {
-      throw const ClientRegistrationFailure(connectionErrorMessage);
+      throw const RegistrationFailure(connectionErrorMessage);
     } on http.ClientException {
-      throw const ClientRegistrationFailure(connectionErrorMessage);
+      throw const RegistrationFailure(connectionErrorMessage);
     }
 
     switch (response.statusCode) {
@@ -65,13 +76,13 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
       case 409:
         throw _conflictFailure(response);
       default:
-        throw const ClientRegistrationFailure(unexpectedErrorMessage);
+        throw const RegistrationFailure(unexpectedErrorMessage);
     }
   }
 
   /// Cuerpo exacto que espera `ClientRegistrationRequest` en ms-users.
   /// La fecha del consentimiento la registra el backend al crear la cuenta.
-  Map<String, Object> _toJson(ClientRegistration registration) => {
+  Map<String, Object> _toJson(AccountRegistration registration) => {
         'firstName': registration.firstName.trim(),
         'lastName': registration.lastName.trim(),
         'documentType': registration.documentType.apiValue,
@@ -86,9 +97,9 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
   /// Cuenta existente (409). Hoy ms-users no dice si se repite el correo o el
   /// documento, así que el aviso va en los dos campos. Si el backend llega a
   /// enviar `errors[{field, message}]`, se muestra solo en el campo indicado.
-  ClientRegistrationFailure _conflictFailure(http.Response response) {
+  RegistrationFailure _conflictFailure(http.Response response) {
     final fieldErrors = _fieldErrors(_decodeJson(response));
-    return ClientRegistrationFailure(
+    return RegistrationFailure(
       conflictMessage,
       fieldErrors: fieldErrors.isNotEmpty
           ? fieldErrors
@@ -101,7 +112,7 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
   }
 
   /// Convierte el ProblemDetail del backend en errores por campo.
-  ClientRegistrationFailure _validationFailure(http.Response response) {
+  RegistrationFailure _validationFailure(http.Response response) {
     final body = _decodeJson(response);
     final fieldErrors = _fieldErrors(body);
     final detail = body?['detail'];
@@ -110,7 +121,7 @@ class HttpClientRegistrationRepository implements ClientRegistrationRepository {
         : (detail is String && detail.trim().isNotEmpty
             ? detail.trim()
             : invalidDataMessage);
-    return ClientRegistrationFailure(message, fieldErrors: fieldErrors);
+    return RegistrationFailure(message, fieldErrors: fieldErrors);
   }
 
   /// `errors[{field, message}]` del ProblemDetail; si un campo trae varios

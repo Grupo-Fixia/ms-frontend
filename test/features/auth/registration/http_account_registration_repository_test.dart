@@ -4,20 +4,23 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/infrastructure/http_client_registration_repository.dart';
+import 'package:ms_frontend/features/auth/registration/domain/account_role.dart';
+import 'package:ms_frontend/features/auth/registration/domain/registration_exceptions.dart';
+import 'package:ms_frontend/features/auth/registration/infrastructure/http_account_registration_repository.dart';
 
 import 'fixtures.dart';
 
 final _baseUrl = Uri.parse('http://localhost');
 
-HttpClientRegistrationRepository _repository(
+HttpAccountRegistrationRepository _repository(
   MockClientHandler handler, {
   Duration timeout = const Duration(seconds: 15),
+  AccountRole role = AccountRole.client,
 }) {
-  return HttpClientRegistrationRepository(
+  return HttpAccountRegistrationRepository(
     client: MockClient(handler),
     baseUrl: _baseUrl,
+    role: role,
     timeout: timeout,
   );
 }
@@ -37,7 +40,7 @@ Matcher _failure({
   Map<String, String>? fieldErrors,
   bool? isAccountConflict,
 }) {
-  var matcher = isA<ClientRegistrationFailure>();
+  var matcher = isA<RegistrationFailure>();
   if (isAccountConflict != null) {
     matcher = matcher.having(
       (f) => f.isAccountConflict,
@@ -103,7 +106,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.invalidDataMessage,
+          message: HttpAccountRegistrationRepository.invalidDataMessage,
           fieldErrors: {
             'email': 'El correo electrónico no es válido',
             'phone': 'El teléfono no es válido',
@@ -162,7 +165,7 @@ void main() {
     await expectLater(
       repository.register(validRegistration()),
       throwsA(
-        _failure(message: HttpClientRegistrationRepository.invalidDataMessage),
+        _failure(message: HttpAccountRegistrationRepository.invalidDataMessage),
       ),
     );
   });
@@ -179,12 +182,12 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.conflictMessage,
+          message: HttpAccountRegistrationRepository.conflictMessage,
           isAccountConflict: true,
           fieldErrors: const {
-            'email': HttpClientRegistrationRepository.conflictFieldMessage,
+            'email': HttpAccountRegistrationRepository.conflictFieldMessage,
             'documentNumber':
-                HttpClientRegistrationRepository.conflictFieldMessage,
+                HttpAccountRegistrationRepository.conflictFieldMessage,
           },
         ),
       ),
@@ -220,7 +223,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.unexpectedErrorMessage,
+          message: HttpAccountRegistrationRepository.unexpectedErrorMessage,
           isAccountConflict: false,
         ),
       ),
@@ -236,7 +239,7 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.connectionErrorMessage,
+          message: HttpAccountRegistrationRepository.connectionErrorMessage,
         ),
       ),
     );
@@ -253,9 +256,100 @@ void main() {
       repository.register(validRegistration()),
       throwsA(
         _failure(
-          message: HttpClientRegistrationRepository.connectionErrorMessage,
+          message: HttpAccountRegistrationRepository.connectionErrorMessage,
         ),
       ),
+    );
+  });
+
+  group('registro de técnico (GC-256)', () {
+    test('envía POST /api/users/technicians con el mismo contrato', () async {
+      late http.Request sent;
+      final repository = _repository(
+        (request) async {
+          sent = request;
+          // Respuesta real de ms-users para el técnico.
+          return http.Response(
+            jsonEncode({
+              'id': '1',
+              'technicianId': '2',
+              'email': 'ana@fixia.com',
+              'firstName': 'Ana',
+              'lastName': 'Pérez',
+              'role': 'PROFESSIONAL',
+              'verificationStatus': 'PENDING',
+            }),
+            201,
+          );
+        },
+        role: AccountRole.technician,
+      );
+
+      await repository.register(validRegistration());
+
+      expect(sent.method, 'POST');
+      expect(sent.url.toString(), 'http://localhost/api/users/technicians');
+      expect(jsonDecode(sent.body), {
+        'firstName': 'Ana',
+        'lastName': 'Pérez',
+        'documentType': 'CC',
+        'documentNumber': '1020304050',
+        'email': 'ana@fixia.com',
+        'phone': '3001234567',
+        'password': 'Segura123',
+        'policyVersion': 'v1.0',
+        'consentAccepted': true,
+      });
+    });
+
+    test('409: la cuenta ya existe (en cualquier rol)', () async {
+      final repository = _repository(
+        (_) async => _problem(409, {
+          'title': 'Conflicto',
+          'status': 409,
+          'detail': 'Ya existe una cuenta con ese correo o documento',
+        }),
+        role: AccountRole.technician,
+      );
+
+      await expectLater(
+        repository.register(validRegistration()),
+        throwsA(
+          _failure(
+            message: HttpAccountRegistrationRepository.conflictMessage,
+            isAccountConflict: true,
+          ),
+        ),
+      );
+    });
+
+    test('400: muestra los errores por campo del backend', () async {
+      final repository = _repository(
+        (_) async => _problem(400, {
+          'title': 'Datos inválidos',
+          'status': 400,
+          'errors': [
+            {'field': 'phone', 'message': 'El teléfono no es válido'},
+          ],
+        }),
+        role: AccountRole.technician,
+      );
+
+      await expectLater(
+        repository.register(validRegistration()),
+        throwsA(_failure(fieldErrors: {'phone': 'El teléfono no es válido'})),
+      );
+    });
+  });
+
+  test('cada rol tiene su ruta en ms-users', () {
+    expect(
+      HttpAccountRegistrationRepository.endpointPath(AccountRole.client),
+      '/api/users/clients',
+    );
+    expect(
+      HttpAccountRegistrationRepository.endpointPath(AccountRole.technician),
+      '/api/users/technicians',
     );
   });
 }

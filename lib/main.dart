@@ -14,10 +14,11 @@ import 'features/auth/login/infrastructure/http_auth_repository.dart';
 import 'features/auth/login/infrastructure/shared_preferences_session_storage.dart';
 import 'features/auth/login/presentation/login_page.dart';
 import 'features/auth/login/presentation/session_page.dart';
-import 'features/client/registration/application/ports/client_registration_repository.dart';
-import 'features/client/registration/application/register_client.dart';
-import 'features/client/registration/infrastructure/http_client_registration_repository.dart';
-import 'features/client/registration/presentation/client_registration_page.dart';
+import 'features/auth/registration/application/ports/account_registration_repository.dart';
+import 'features/auth/registration/application/register_account.dart';
+import 'features/auth/registration/domain/account_role.dart';
+import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
+import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/home/presentation/home_page.dart';
 
 /// Rutas de la aplicación.
@@ -26,6 +27,7 @@ abstract final class AppRoutes {
   static const login = '/login';
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
+  static const technicianRegistration = '/registro-tecnico';
 }
 
 Future<void> main() async {
@@ -47,9 +49,14 @@ Future<void> main() async {
 
   runApp(
     FixiaApp(
-      clientRegistrationRepository: HttpClientRegistrationRepository(
+      clientRegistrationRepository: HttpAccountRegistrationRepository(
         client: httpClient,
         baseUrl: usersApiBaseUrl,
+      ),
+      technicianRegistrationRepository: HttpAccountRegistrationRepository(
+        client: httpClient,
+        baseUrl: usersApiBaseUrl,
+        role: AccountRole.technician,
       ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
@@ -62,12 +69,14 @@ class FixiaApp extends StatefulWidget {
   const FixiaApp({
     super.key,
     required this.clientRegistrationRepository,
+    required this.technicianRegistrationRepository,
     required this.authRepository,
     required this.sessionStorage,
     this.sessionStore,
   });
 
-  final ClientRegistrationRepository clientRegistrationRepository;
+  final AccountRegistrationRepository clientRegistrationRepository;
+  final AccountRegistrationRepository technicianRegistrationRepository;
   final AuthRepository authRepository;
   final SessionStorage sessionStorage;
 
@@ -133,6 +142,8 @@ class _FixiaAppState extends State<FixiaApp> {
             : HomePage(
                 onRegisterClient: () => Navigator.of(context)
                     .pushNamed(AppRoutes.clientRegistration),
+                onRegisterTechnician: () => Navigator.of(context)
+                    .pushNamed(AppRoutes.technicianRegistration),
                 onLogin: () =>
                     Navigator.of(context).pushNamed(AppRoutes.login),
               ),
@@ -144,11 +155,22 @@ class _FixiaAppState extends State<FixiaApp> {
                   ? _sessionPage(context)
                   : _loginPage(context),
             ),
-        AppRoutes.clientRegistration: (context) => ClientRegistrationPage(
-              registerClient:
-                  RegisterClient(widget.clientRegistrationRepository),
+        AppRoutes.clientRegistration: (context) => RegistrationPage(
+              registerAccount:
+                  RegisterAccount(widget.clientRegistrationRepository),
               onGoToLogin: () =>
                   Navigator.of(context).pushReplacementNamed(AppRoutes.login),
+              onSwitchRole: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.technicianRegistration),
+            ),
+        AppRoutes.technicianRegistration: (context) => RegistrationPage(
+              role: AccountRole.technician,
+              registerAccount:
+                  RegisterAccount(widget.technicianRegistrationRepository),
+              onGoToLogin: () =>
+                  Navigator.of(context).pushReplacementNamed(AppRoutes.login),
+              onSwitchRole: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.clientRegistration),
             ),
       },
     );

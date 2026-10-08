@@ -29,21 +29,20 @@ ms-frontend/
 │   │   └── validation/     #   reglas usadas por varias funcionalidades (ej. correo)
 │   └── features/           # Una carpeta por actor y, dentro, una por funcionalidad
 │       ├── auth/           #   común a todos los roles
-│       │   └── login/      #     inicio y cierre de sesión (GC-236)
+│       │   ├── login/      #     inicio y cierre de sesión (GC-236)
+│       │   └── registration/   # registro de cliente y de técnico (GC-234, GC-235)
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
-│       ├── client/         #   funcionalidades del cliente
-│       │   └── registration/   # registro de cliente (GC-234)
-│       └── technician/     #   funcionalidades del técnico
-│           └── registration/   # registro de técnico (GC-235)
+│       ├── client/         #   funcionalidades solo del cliente (cuando existan)
+│       └── technician/     #   funcionalidades solo del técnico (ej. perfil, GC-237)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
-│   └── features/client/registration/...
+│   └── features/auth/registration/...
 └── web/                    # Archivos de la plataforma web (index.html, íconos)
 ```
 
 ### ¿Dónde va una funcionalidad nueva?
 
-1. **¿La usan varios roles?** (login, perfil común, notificaciones) → `features/auth/` o una carpeta común con nombre del dominio.
+1. **¿La usan varios roles?** (login, registro, perfil común, notificaciones) → `features/auth/` o una carpeta común con nombre del dominio. Ejemplo: cliente y técnico se registran con los mismos datos, así que comparten `features/auth/registration/` y solo cambian los textos y el endpoint según el rol (`AccountRole`).
 2. **¿Es de un solo actor?** → `features/client/<funcionalidad>/` o `features/technician/<funcionalidad>/`.
 3. **¿Es infraestructura transversal sin pantalla propia?** (tema, cliente HTTP, constantes) → `core/`.
 
@@ -79,19 +78,19 @@ infrastructure ──► application ──► domain
 
 | Qué | Regla | Ejemplo |
 |---|---|---|
-| Carpetas y archivos | `snake_case`, en inglés | `client_registration_page.dart` |
-| Archivos de una funcionalidad | prefijo con el nombre de la funcionalidad | `client_registration_controller.dart` |
-| Clases | `PascalCase` | `ClientRegistrationPage` |
-| Casos de uso | verbo + objeto | `RegisterClient`, `LoginUser` |
-| Puertos | sustantivo + `Repository` | `ClientRegistrationRepository` |
-| Implementaciones HTTP | `Http` + puerto | `HttpClientRegistrationRepository` |
-| Tests | mismo nombre + `_test.dart`, misma ruta bajo `test/` | `client_registration_page_test.dart` |
+| Carpetas y archivos | `snake_case`, en inglés | `registration_page.dart` |
+| Archivos de una funcionalidad | prefijo con el nombre de la funcionalidad | `registration_controller.dart` |
+| Clases | `PascalCase` | `RegistrationPage` |
+| Casos de uso | verbo + objeto | `RegisterAccount`, `LoginUser` |
+| Puertos | sustantivo + `Repository` | `AccountRegistrationRepository` |
+| Implementaciones HTTP | `Http` + puerto | `HttpAccountRegistrationRepository` |
+| Tests | mismo nombre + `_test.dart`, misma ruta bajo `test/` | `registration_page_test.dart` |
 | Textos de la interfaz | en español, tono del Brand Board ("Claro y directo") | `'Crea tu cuenta'` |
 
 ## 5. Código compartido (`core/`)
 
 - `core/theme/fixia_theme.dart` es **el único tema** de la app (Brand Board v1.0). No se definen colores ni tipografías sueltos en las páginas: se usan `FixiaColors`, `FixiaTheme` y `FixiaDecorations`.
-- `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend).
+- `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend) y `ServiceCategory`, las 6 categorías de servicio que acepta ms-users.
 - `core/config/api_config.dart` define la URL base del backend (`ApiConfig.usersBaseUrl`): se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
@@ -120,9 +119,15 @@ Al leer respuestas del backend, decodificar siempre como UTF-8 (`utf8.decode(res
 Desde la raíz de `ms-frontend`, con Flutter 3.22.0:
 
 ```bash
-flutter analyze        # debe decir: No issues found!
-flutter test           # debe decir: All tests passed!
+flutter analyze                 # debe decir: No issues found!
+flutter test --coverage         # debe decir: All tests passed!
+tool/check_coverage.sh          # cobertura de líneas >= 80 % (Quality Gate de la wiki)
 flutter build web --release
 ```
+
+El workflow `ci` de GitHub Actions corre esos mismos pasos (analyze, pruebas y
+cobertura) en cada PR y push a `develop` y `Qa`; si alguno falla, el PR queda
+con el check en rojo y no se construye ni despliega la imagen de QA. El reporte
+`coverage/lcov.info` queda como artefacto del workflow.
 
 Y seguir las convenciones de ramas, commits y PRs de la wiki (`05-git-control-versiones/`).

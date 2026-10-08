@@ -2,32 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
-import '../application/register_client.dart';
-import '../domain/client_registration_rules.dart';
+import '../application/register_account.dart';
+import '../domain/account_role.dart';
+import '../domain/registration_rules.dart';
 import '../domain/document_type.dart';
-import 'client_registration_controller.dart';
+import 'registration_controller.dart';
 import 'widgets/data_consent_field.dart';
+import 'widgets/technician_registration_extras.dart';
 
-/// Formulario de registro de cliente (GC-252, historia GC-234).
-class ClientRegistrationPage extends StatefulWidget {
-  const ClientRegistrationPage({
+/// Formulario de registro de cuenta: cliente (GC-252, historia GC-234) o
+/// técnico (GC-255, historia GC-235). Los datos y las validaciones son los
+/// mismos; cambian los textos según [role].
+class RegistrationPage extends StatefulWidget {
+  const RegistrationPage({
     super.key,
-    required this.registerClient,
+    required this.registerAccount,
+    this.role = AccountRole.client,
     this.onGoToLogin,
+    this.onSwitchRole,
   });
 
-  final RegisterClient registerClient;
+  final RegisterAccount registerAccount;
+
+  /// Tipo de cuenta que se crea.
+  final AccountRole role;
 
   /// Navega al inicio de sesión. Si es `null` el enlace no se muestra.
   final VoidCallback? onGoToLogin;
 
+  /// Lleva al registro del otro rol. Si es `null` el enlace no se muestra.
+  final VoidCallback? onSwitchRole;
+
   @override
-  State<ClientRegistrationPage> createState() => _ClientRegistrationPageState();
+  State<RegistrationPage> createState() => _RegistrationPageState();
 }
 
-class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
+class _RegistrationPageState extends State<RegistrationPage> {
   /// Ancho a partir del cual nombres y apellidos van en la misma fila.
   static const _twoColumnBreakpoint = 480.0;
+
+  /// Ancho a partir del cual las razones del técnico van al lado del
+  /// formulario (en pantallas más angostas van arriba, en versión corta).
+  static const benefitsSideBreakpoint = 900.0;
 
   final _formKey = GlobalKey<FormState>();
   final _firstName = TextEditingController();
@@ -42,7 +58,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
 
   final _scrollController = ScrollController();
 
-  late final ClientRegistrationController _controller;
+  late final RegistrationController _controller;
   DocumentType? _documentType;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -50,8 +66,8 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
   @override
   void initState() {
     super.initState();
-    _controller = ClientRegistrationController(
-      registerClient: widget.registerClient,
+    _controller = RegistrationController(
+      registerAccount: widget.registerAccount,
     )..addListener(_refresh);
   }
 
@@ -107,7 +123,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
   }
 
   bool get _documentAllowsLetters =>
-      ClientRegistrationRules.documentAllowsLetters(_documentType);
+      RegistrationRules.documentAllowsLetters(_documentType);
 
   void _onDocumentTypeChanged(DocumentType? type) {
     _controller.clearFieldError('documentType');
@@ -154,7 +170,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     Iterable<String>? autofillHints,
   }) {
     return Padding(
-      key: ValueKey('client-$field-field'),
+      key: ValueKey('registration-$field-field'),
       padding: const EdgeInsets.only(bottom: 14),
       child: TextFormField(
         key: fieldKey,
@@ -190,32 +206,68 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final card = DecoratedBox(
+      decoration: FixiaDecorations.card,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: _controller.isRegistered
+            ? _RegistrationSuccess(
+                role: widget.role,
+                email: _email.text.trim(),
+                onGoToLogin: widget.onGoToLogin,
+              )
+            : _buildForm(context),
+      ),
+    );
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: DecoratedBox(
-                decoration: FixiaDecorations.card,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 32,
-                  ),
-                  child: _controller.isRegistered
-                      ? _RegistrationSuccess(
-                          email: _email.text.trim(),
-                          onGoToLogin: widget.onGoToLogin,
-                        )
-                      : _buildForm(context),
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Center(
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: _layout(
+                card,
+                isWide: constraints.maxWidth >= benefitsSideBreakpoint,
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// El cliente ve solo el formulario; el técnico, además, las razones para
+  /// unirse (al lado en pantalla ancha, arriba en celular).
+  Widget _layout(Widget card, {required bool isWide}) {
+    if (widget.role == AccountRole.client) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: card,
+      );
+    }
+    if (isWide) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1040),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(flex: 4, child: TechnicianBenefits()),
+            const SizedBox(width: 28),
+            Expanded(flex: 6, child: card),
+          ],
+        ),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TechnicianBenefits(compact: true),
+          const SizedBox(height: 16),
+          card,
+        ],
       ),
     );
   }
@@ -228,7 +280,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _Header(),
+            _Header(role: widget.role),
             const SizedBox(height: 28),
             if (_controller.errorMessage != null &&
                 !_controller.isAccountConflict) ...[
@@ -247,9 +299,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     label: 'Nombres',
                     icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
-                    maxLength: ClientRegistrationRules.nameMaxLength,
+                    maxLength: RegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.givenName],
-                    validator: ClientRegistrationRules.firstName,
+                    validator: RegistrationRules.firstName,
                   ),
                   _textField(
                     field: 'lastName',
@@ -257,9 +309,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                     label: 'Apellidos',
                     icon: Icons.person_outline,
                     capitalization: TextCapitalization.words,
-                    maxLength: ClientRegistrationRules.nameMaxLength,
+                    maxLength: RegistrationRules.nameMaxLength,
                     autofillHints: const [AutofillHints.familyName],
-                    validator: ClientRegistrationRules.lastName,
+                    validator: RegistrationRules.lastName,
                   ),
                 ];
                 if (constraints.maxWidth < _twoColumnBreakpoint) {
@@ -278,7 +330,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: DropdownButtonFormField<DocumentType>(
-                key: const ValueKey('client-documentType-field'),
+                key: const ValueKey('registration-documentType-field'),
                 value: _documentType,
                 isExpanded: true,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -314,9 +366,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                       : RegExp('[0-9]'),
                 ),
               ],
-              maxLength: ClientRegistrationRules.documentMaxLength,
+              maxLength: RegistrationRules.documentMaxLength,
               validator: (value) =>
-                  ClientRegistrationRules.documentNumber(value, _documentType),
+                  RegistrationRules.documentNumber(value, _documentType),
             ),
             _textField(
               field: 'email',
@@ -324,9 +376,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               label: 'Correo electrónico',
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
-              maxLength: ClientRegistrationRules.emailMaxLength,
+              maxLength: RegistrationRules.emailMaxLength,
               autofillHints: const [AutofillHints.email],
-              validator: ClientRegistrationRules.email,
+              validator: RegistrationRules.email,
             ),
             _textField(
               field: 'phone',
@@ -339,7 +391,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               ],
               maxLength: 16,
               autofillHints: const [AutofillHints.telephoneNumber],
-              validator: ClientRegistrationRules.phone,
+              validator: RegistrationRules.phone,
             ),
             _textField(
               field: 'password',
@@ -348,7 +400,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
               icon: Icons.lock_outline,
               obscureText: _obscurePassword,
               onChanged: (_) => _revalidateConfirmPassword(),
-              maxLength: ClientRegistrationRules.passwordMaxLength,
+              maxLength: RegistrationRules.passwordMaxLength,
               helperText: 'Mínimo 8 caracteres, con letras y números.',
               autofillHints: const [AutofillHints.newPassword],
               suffixIcon: _VisibilityToggle(
@@ -357,7 +409,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                 onPressed: () =>
                     setState(() => _obscurePassword = !_obscurePassword),
               ),
-              validator: ClientRegistrationRules.password,
+              validator: RegistrationRules.password,
             ),
             _textField(
               field: 'confirmPassword',
@@ -373,8 +425,8 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                   () => _obscureConfirmPassword = !_obscureConfirmPassword,
                 ),
               ),
-              maxLength: ClientRegistrationRules.passwordMaxLength,
-              validator: (value) => ClientRegistrationRules.confirmPassword(
+              maxLength: RegistrationRules.passwordMaxLength,
+              validator: (value) => RegistrationRules.confirmPassword(
                 value,
                 _password.text,
               ),
@@ -388,7 +440,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
             ),
             const SizedBox(height: 24),
             FilledButton(
-              key: const ValueKey('client-registration-submit'),
+              key: const ValueKey('registration-submit'),
               onPressed: _controller.isLocked ? null : _submit,
               child: _controller.isSubmitting
                   ? const SizedBox.square(
@@ -413,6 +465,30 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                 ],
               ),
             ],
+            if (widget.onSwitchRole != null)
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    widget.role == AccountRole.client
+                        ? '¿Ofreces servicios técnicos?'
+                        : '¿Buscas un técnico?',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  TextButton(
+                    key: const ValueKey('registration-switch-role'),
+                    onPressed: _controller.isSubmitting
+                        ? null
+                        : widget.onSwitchRole,
+                    child: Text(
+                      widget.role == AccountRole.client
+                          ? 'Regístrate como técnico'
+                          : 'Regístrate como cliente',
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -421,7 +497,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header();
+  const _Header({required this.role});
+
+  final AccountRole role;
 
   @override
   Widget build(BuildContext context) {
@@ -434,18 +512,35 @@ class _Header extends StatelessWidget {
           semanticLabel: 'Fixia',
         ),
         const SizedBox(height: 24),
+        if (role == AccountRole.technician) ...[
+          const TechnicianBadge(),
+          const SizedBox(height: 12),
+        ],
         Text(
-          'Crea tu cuenta',
+          switch (role) {
+            AccountRole.client => 'Crea tu cuenta',
+            AccountRole.technician => 'Crea tu cuenta de técnico',
+          },
           style: theme.textTheme.headlineSmall,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
-          'Regístrate como cliente y conecta con técnicos verificados.',
+          switch (role) {
+            AccountRole.client =>
+              'Regístrate como cliente y conecta con técnicos verificados.',
+            AccountRole.technician =>
+              'Regístrate para ofrecer tus servicios y conseguir clientes '
+                  'cerca de ti.',
+          },
           style: theme.textTheme.bodyLarge
               ?.copyWith(color: FixiaColors.textSecondary),
           textAlign: TextAlign.center,
         ),
+        if (role == AccountRole.technician) ...[
+          const SizedBox(height: 24),
+          const TechnicianSteps(),
+        ],
       ],
     );
   }
@@ -453,8 +548,13 @@ class _Header extends StatelessWidget {
 
 /// Resultado de la acción y siguiente paso (RNF-016).
 class _RegistrationSuccess extends StatelessWidget {
-  const _RegistrationSuccess({required this.email, this.onGoToLogin});
+  const _RegistrationSuccess({
+    required this.role,
+    required this.email,
+    this.onGoToLogin,
+  });
 
+  final AccountRole role;
   final String email;
   final VoidCallback? onGoToLogin;
 
@@ -462,7 +562,7 @@ class _RegistrationSuccess extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
-      key: const ValueKey('client-registration-success'),
+      key: const ValueKey('registration-success'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -473,13 +573,22 @@ class _RegistrationSuccess extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          '¡Tu cuenta fue creada!',
+          switch (role) {
+            AccountRole.client => '¡Tu cuenta fue creada!',
+            AccountRole.technician => '¡Tu cuenta de técnico fue creada!',
+          },
           style: theme.textTheme.headlineSmall,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
-          'Ya puedes iniciar sesión con $email.',
+          switch (role) {
+            AccountRole.client => 'Ya puedes iniciar sesión con $email.',
+            // El técnico queda con verificación pendiente (ms-users, GC-254).
+            AccountRole.technician =>
+              'Inicia sesión con $email para completar tu perfil profesional. '
+                  'Tu cuenta queda pendiente de verificación.',
+          },
           style: theme.textTheme.bodyLarge
               ?.copyWith(color: FixiaColors.textSecondary),
           textAlign: TextAlign.center,
@@ -533,7 +642,7 @@ class _ErrorBanner extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       child: Container(
-        key: const ValueKey('client-registration-error'),
+        key: const ValueKey('registration-error'),
         padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
         decoration: BoxDecoration(
           color: const Color(0xFFFDECEA),

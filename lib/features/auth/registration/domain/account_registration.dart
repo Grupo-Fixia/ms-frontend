@@ -1,8 +1,9 @@
 import 'document_type.dart';
 
-/// Datos que diligencia un cliente para crear su cuenta (GC-234, RF-001).
-class ClientRegistration {
-  const ClientRegistration({
+/// Datos para crear una cuenta en Fixia. Son los mismos para cliente
+/// (GC-234, RF-001) y técnico (GC-235, RF-002).
+class AccountRegistration {
+  const AccountRegistration({
     required this.firstName,
     required this.lastName,
     required this.documentType,
@@ -40,5 +41,5 @@ class ClientRegistration {
 
   /// Nunca expone la contraseña (ni datos personales) en logs.
   @override
-  String toString() => 'ClientRegistration';
+  String toString() => 'AccountRegistration';
 }
