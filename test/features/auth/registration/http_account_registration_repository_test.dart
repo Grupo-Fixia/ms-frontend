@@ -184,10 +184,9 @@ void main() {
         _failure(
           message: HttpAccountRegistrationRepository.conflictMessage,
           isAccountConflict: true,
+          // Solo en el correo: el documento queda sin error.
           fieldErrors: const {
             'email': HttpAccountRegistrationRepository.conflictFieldMessage,
-            'documentNumber':
-                HttpAccountRegistrationRepository.conflictFieldMessage,
           },
         ),
       ),

@@ -32,7 +32,8 @@ class RegistrationController extends ChangeNotifier {
   bool get isRegistered => _isRegistered;
   String? get errorMessage => _errorMessage;
 
-  /// Ya existe una cuenta con ese correo o documento (se avisa con un diálogo).
+  /// Ya existe una cuenta con ese correo o documento (409); el aviso va debajo
+  /// del correo.
   bool get isAccountConflict => _isAccountConflict;
 
   /// El usuario cerró el aviso de error.
