@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/auth/login/application/session_store.dart';
 import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
 import 'package:ms_frontend/features/auth/login/domain/user_profile.dart';
+import 'package:ms_frontend/features/technician/profile/domain/technician_profile_exceptions.dart';
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
@@ -90,6 +91,51 @@ void main() {
     expect(find.text('Crea tu cuenta de técnico'), findsNothing);
   });
 
+  testWidgets('al crear la cuenta de técnico inicia sesión y pasa al paso 2',
+      (tester) async {
+    final authRepository = FakeAuthRepository(profile: _technicianProfile);
+    await _pumpApp(tester, openLogin: false, authRepository: authRepository);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.technicianRegistration);
+    await tester.pumpAndSettle();
+    await _fillTechnicianForm(tester);
+    final submit = find.byKey(const ValueKey('registration-submit'));
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(authRepository.loginCalls, 1);
+    expect(authRepository.lastEmail, 'luis@fixia.com');
+    expect(authRepository.lastPassword, 'Segura123');
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('technician-profile-title')))
+          .data,
+      'Completa tu perfil profesional',
+    );
+  });
+
+  testWidgets('si la sesión del técnico vence, vuelve al login',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, _technicianProfile);
+    await _pumpApp(
+      tester,
+      sessionStore: store,
+      profileRepository: FakeTechnicianProfileRepository(
+        profile: emptyProfile,
+        fetchFailure: const TechnicianProfileFailure(
+          'Tu sesión expiró',
+          isSessionExpired: true,
+        ),
+      ),
+    );
+
+    expect(store.isAuthenticated, isFalse);
+    expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+  });
+
   testWidgets('el registro de técnico usa su propio repositorio',
       (tester) async {
     final technicianRepository = FakeAccountRegistrationRepository();
@@ -127,7 +173,8 @@ void main() {
 
     expect(technicianRepository.calls, 1);
     expect(technicianRepository.saved?.email, 'luis@fixia.com');
-    expect(find.text('¡Tu cuenta de técnico fue creada!'), findsOneWidget);
+    // Tras crear la cuenta inicia sesión sola y sale del registro.
+    expect(find.byKey(const ValueKey('registration-success')), findsNothing);
   });
 
   testWidgets('un técnico con sesión llega a completar su perfil (paso 2)',
@@ -312,3 +359,22 @@ const _technicianProfile = UserProfile(
   lastName: 'Gómez',
   role: UserRole.professional,
 );
+
+Future<void> _fillTechnicianForm(WidgetTester tester) async {
+  Finder field(String name) => find.byKey(ValueKey('registration-$name-field'));
+  await tester.enterText(field('firstName'), 'Luis');
+  await tester.enterText(field('lastName'), 'Gómez');
+  await tester.tap(field('documentType'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Cédula de ciudadanía').last);
+  await tester.pumpAndSettle();
+  await tester.enterText(field('documentNumber'), '80123456');
+  await tester.enterText(field('email'), 'luis@fixia.com');
+  await tester.enterText(field('phone'), '3109876543');
+  await tester.enterText(field('password'), 'Segura123');
+  await tester.enterText(field('confirmPassword'), 'Segura123');
+  final consent = find.byKey(const ValueKey('registration-consent-checkbox'));
+  await tester.ensureVisible(consent);
+  await tester.tap(consent);
+  await tester.pump();
+}

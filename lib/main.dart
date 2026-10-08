@@ -8,6 +8,7 @@ import 'features/auth/login/application/login_user.dart';
 import 'features/auth/login/application/logout_user.dart';
 import 'features/auth/login/application/ports/auth_repository.dart';
 import 'features/auth/login/application/ports/session_storage.dart';
+import 'features/auth/login/application/refresh_session.dart';
 import 'features/auth/login/application/restore_session.dart';
 import 'features/auth/login/application/session_store.dart';
 import 'features/auth/login/infrastructure/http_auth_repository.dart';
@@ -24,7 +25,7 @@ import 'features/home/presentation/home_page.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
 import 'features/technician/profile/application/ports/technician_profile_repository.dart';
 import 'features/technician/profile/application/update_technician_profile.dart';
-import 'features/technician/profile/infrastructure/in_memory_technician_profile_repository.dart';
+import 'features/technician/profile/infrastructure/http_technician_profile_repository.dart';
 import 'features/technician/profile/presentation/technician_profile_page.dart';
 
 /// Rutas de la aplicación.
@@ -64,8 +65,16 @@ Future<void> main() async {
         baseUrl: usersApiBaseUrl,
         role: AccountRole.technician,
       ),
-      // Se conecta con ms-users en GC-264.
-      technicianProfileRepository: InMemoryTechnicianProfileRepository(),
+      technicianProfileRepository: HttpTechnicianProfileRepository(
+        client: httpClient,
+        baseUrl: usersApiBaseUrl,
+        accessToken: () => sessionStore.session?.accessToken,
+        renewSession: RefreshSession(
+          authRepository,
+          sessionStore,
+          sessionStorage,
+        ).call,
+      ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -114,6 +123,29 @@ class _FixiaAppState extends State<FixiaApp> {
         widget.sessionStorage,
       );
 
+  /// Inicia sesión con la cuenta recién creada y lleva al destino de la
+  /// sesión (para el técnico, completar su perfil).
+  Future<bool> _signInAfterRegistration(
+    BuildContext context,
+    String email,
+    String password,
+  ) async {
+    try {
+      await LoginUser(
+        widget.authRepository,
+        _sessionStore,
+        widget.sessionStorage,
+      )(email: email, password: password);
+    } catch (_) {
+      return false;
+    }
+    if (context.mounted) {
+      Navigator.of(context)
+          .pushNamedAndRemoveUntil(AppRoutes.session, (_) => false);
+    }
+    return true;
+  }
+
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
 
@@ -131,7 +163,10 @@ class _FixiaAppState extends State<FixiaApp> {
           await _logoutUser();
           if (context.mounted) _goToLogin(context);
         },
-        onSessionExpired: () => _goToLogin(context),
+        onSessionExpired: () {
+          _sessionStore.clear();
+          _goToLogin(context);
+        },
       );
     }
     return SessionPage(
@@ -195,6 +230,9 @@ class _FixiaAppState extends State<FixiaApp> {
             ),
         AppRoutes.technicianRegistration: (context) => RegistrationPage(
               role: AccountRole.technician,
+              // Paso 1 → paso 2 sin volver a escribir la contraseña.
+              onAutoLogin: (email, password) =>
+                  _signInAfterRegistration(context, email, password),
               registerAccount:
                   RegisterAccount(widget.technicianRegistrationRepository),
               onGoToLogin: () =>

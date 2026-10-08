@@ -236,6 +236,31 @@ void main() {
       expect(find.text('Tu perfil profesional'), findsOneWidget);
     });
 
+    testWidgets('pendiente: dice que la solicitud está en revisión',
+        (tester) async {
+      await _pump(
+        tester,
+        FakeTechnicianProfileRepository(profile: completeProfile()),
+      );
+
+      expect(_key('profile-verification-card'), findsOneWidget);
+      expect(find.text('Tu solicitud está en revisión'), findsOneWidget);
+      expect(_key('technician-steps'), findsOneWidget);
+    });
+
+    testWidgets('vencida: pide renovar la verificación', (tester) async {
+      await _pump(
+        tester,
+        FakeTechnicianProfileRepository(
+          profile: completeProfile(status: VerificationStatus.expired),
+        ),
+      );
+
+      expect(find.text('Verificación vencida'), findsOneWidget);
+      expect(find.text('Tu verificación venció'), findsOneWidget);
+      expect(_key('technician-steps'), findsNothing);
+    });
+
     testWidgets('un técnico verificado no ve los pasos', (tester) async {
       await _pump(
         tester,
@@ -245,6 +270,7 @@ void main() {
       );
 
       expect(find.text('Verificado'), findsOneWidget);
+      expect(find.text('Tu cuenta de técnico está aprobada'), findsOneWidget);
       expect(_key('technician-steps'), findsNothing);
     });
 
@@ -257,6 +283,7 @@ void main() {
       );
 
       expect(find.text('Verificación rechazada'), findsOneWidget);
+      expect(find.text('Tu solicitud no fue aprobada'), findsOneWidget);
     });
 
     testWidgets('editar llena el formulario y cancelar vuelve al resumen',

@@ -4,8 +4,6 @@ import 'package:ms_frontend/features/technician/profile/application/get_technici
 import 'package:ms_frontend/features/technician/profile/application/update_technician_profile.dart';
 import 'package:ms_frontend/features/technician/profile/domain/professional_profile_update.dart';
 import 'package:ms_frontend/features/technician/profile/domain/technician_profile_exceptions.dart';
-import 'package:ms_frontend/features/technician/profile/domain/verification_status.dart';
-import 'package:ms_frontend/features/technician/profile/infrastructure/in_memory_technician_profile_repository.dart';
 
 import 'fake_repository.dart';
 import 'fixtures.dart';
@@ -56,35 +54,5 @@ void main() {
       ),
     );
     expect(repository.updateCalls, 0);
-  });
-
-  group('InMemoryTechnicianProfileRepository (temporal hasta GC-264)', () {
-    test('arranca vacío y pendiente de verificación', () async {
-      final repository = InMemoryTechnicianProfileRepository();
-
-      final profile = await repository.fetchProfile();
-
-      expect(profile.isComplete, isFalse);
-      expect(profile.verificationStatus, VerificationStatus.pending);
-    });
-
-    test('guarda lo que se actualiza', () async {
-      final now = DateTime(2026, 10, 8, 12);
-      final repository = InMemoryTechnicianProfileRepository(clock: () => now);
-
-      await repository.updateProfile(
-        const ProfessionalProfileUpdate(
-          professionalDescription: 'Pintor',
-          yearsOfExperience: 4,
-          categories: {ServiceCategory.painting},
-        ),
-      );
-      final profile = await repository.fetchProfile();
-
-      expect(profile.isComplete, isTrue);
-      expect(profile.yearsOfExperience, 4);
-      expect(profile.updatedAt, now);
-      expect(profile.verificationStatus, VerificationStatus.pending);
-    });
   });
 }
