@@ -43,6 +43,8 @@ class _TechnicianRegistrationPageState
   DocumentType? _documentType;
   TechnicianProfession? _profession;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  bool _showRequiredErrors = false;
 
   @override
   void initState() {
@@ -76,6 +78,7 @@ class _TechnicianRegistrationPageState
   }
 
   Future<void> _submit() async {
+    setState(() => _showRequiredErrors = true);
     if (!_formKey.currentState!.validate()) return;
 
     await _controller.register(
@@ -101,8 +104,15 @@ class _TechnicianRegistrationPageState
   FormFieldValidator<String> _validator(
     String field,
     FormFieldValidator<String> local,
-  ) =>
-      (value) => _controller.fieldError(field) ?? local(value);
+  ) {
+    return (value) {
+      final fieldError = _controller.fieldError(field);
+      if (fieldError != null) return fieldError;
+      final isEmpty = value == null || value.trim().isEmpty;
+      if (isEmpty && !_showRequiredErrors) return null;
+      return local(value);
+    };
+  }
 
   Widget _textField({
     required String field,
@@ -124,6 +134,7 @@ class _TechnicianRegistrationPageState
         key: ValueKey('technician-$field-field'),
         controller: controller,
         enabled: !_controller.isLocked,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         keyboardType: keyboardType,
         textCapitalization: capitalization,
         maxLength: maxLength,
@@ -179,7 +190,7 @@ class _TechnicianRegistrationPageState
   Widget _buildForm(BuildContext context) {
     return Form(
       key: _formKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      autovalidateMode: AutovalidateMode.disabled,
       child: AutofillGroup(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -214,8 +225,9 @@ class _TechnicianRegistrationPageState
                 onChanged: _controller.isLocked
                     ? null
                     : (value) => setState(() => _profession = value),
-                validator: (value) =>
-                    value == null ? 'Selecciona tu profesión.' : null,
+                validator: (value) => value == null && _showRequiredErrors
+                    ? 'Selecciona tu profesión.'
+                    : null,
               ),
             ),
             LayoutBuilder(
@@ -277,7 +289,9 @@ class _TechnicianRegistrationPageState
                       },
                 validator: (value) =>
                     _controller.fieldError('documentType') ??
-                    (value == null ? 'Selecciona tu tipo de documento.' : null),
+                    (value == null && _showRequiredErrors
+                        ? 'Selecciona tu tipo de documento.'
+                        : null),
               ),
             ),
             _textField(
@@ -322,6 +336,7 @@ class _TechnicianRegistrationPageState
               helperText: 'Mínimo 8 caracteres, con letras y números.',
               autofillHints: const [AutofillHints.newPassword],
               suffixIcon: IconButton(
+                key: const ValueKey('technician-password-visibility'),
                 tooltip: _obscurePassword
                     ? 'Mostrar contraseña'
                     : 'Ocultar contraseña',
@@ -340,8 +355,25 @@ class _TechnicianRegistrationPageState
               controller: _confirmPassword,
               label: 'Confirmar contraseña',
               icon: Icons.lock_outline,
-              obscureText: _obscurePassword,
+              obscureText: _obscureConfirmPassword,
               maxLength: ClientRegistrationRules.passwordMaxLength,
+              suffixIcon: IconButton(
+                key: const ValueKey(
+                  'technician-confirm-password-visibility',
+                ),
+                tooltip: _obscureConfirmPassword
+                    ? 'Mostrar confirmación'
+                    : 'Ocultar confirmación',
+                icon: Icon(
+                  _obscureConfirmPassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () => setState(
+                  () => _obscureConfirmPassword =
+                      !_obscureConfirmPassword,
+                ),
+              ),
               validator: (value) => ClientRegistrationRules.confirmPassword(
                 value,
                 _password.text,
@@ -353,6 +385,9 @@ class _TechnicianRegistrationPageState
               policyVersion: _controller.policyVersion,
               enabled: !_controller.isLocked,
               checkboxKey: const ValueKey('technician-consent-checkbox'),
+              autovalidateMode: _showRequiredErrors
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
               onChanged: _controller.setConsentAccepted,
             ),
             const SizedBox(height: 24),

@@ -12,6 +12,7 @@ class DataConsentField extends StatelessWidget {
     required this.enabled,
     required this.onChanged,
     this.checkboxKey = const ValueKey('client-consent-checkbox'),
+    this.autovalidateMode = AutovalidateMode.onUserInteraction,
   });
 
   final bool value;
@@ -19,13 +20,14 @@ class DataConsentField extends StatelessWidget {
   final bool enabled;
   final ValueChanged<bool> onChanged;
   final Key checkboxKey;
+  final AutovalidateMode autovalidateMode;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return FormField<bool>(
       initialValue: value,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+      autovalidateMode: autovalidateMode,
       validator: (accepted) => accepted == true
           ? null
           : 'Debes aceptar el tratamiento de datos para crear la cuenta.',

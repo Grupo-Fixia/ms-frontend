@@ -153,6 +153,73 @@ void main() {
     expect(repository.calls, 0);
   });
 
+  testWidgets('no muestra errores requeridos mientras se llena el formulario',
+      (tester) async {
+    await _pump(tester, FakeTechnicianRegistrationRepository());
+
+    await tester.enterText(_field('firstName'), 'Ana');
+    await tester.pump();
+
+    expect(find.text('Ingresa tu apellido.'), findsNothing);
+    expect(find.text('Selecciona tu profesión.'), findsNothing);
+    expect(find.text('Selecciona tu tipo de documento.'), findsNothing);
+    expect(find.text('Ingresa tu número de documento.'), findsNothing);
+    expect(find.text('Ingresa tu correo electrónico.'), findsNothing);
+    expect(find.text('Ingresa tu teléfono.'), findsNothing);
+    expect(find.text('Crea una contraseña.'), findsNothing);
+    expect(find.text('Confirma tu contraseña.'), findsNothing);
+    expect(
+      find.text('Debes aceptar el tratamiento de datos para crear la cuenta.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('muestra formato de contraseña en tiempo real', (tester) async {
+    await _pump(tester, FakeTechnicianRegistrationRepository());
+
+    await tester.enterText(_field('password'), 'abc');
+    await tester.pump();
+
+    expect(
+      find.text('Usa entre 8 y 20 caracteres, con letras y números.'),
+      findsOneWidget,
+    );
+    expect(find.text('Ingresa tu apellido.'), findsNothing);
+  });
+
+  testWidgets('cada campo de contraseña tiene visibilidad independiente',
+      (tester) async {
+    await _pump(tester, FakeTechnicianRegistrationRepository());
+
+    EditableText editable(String field) => tester.widget<EditableText>(
+          find.descendant(
+            of: _field(field),
+            matching: find.byType(EditableText),
+          ),
+        );
+
+    expect(editable('password').obscureText, isTrue);
+    expect(editable('confirmPassword').obscureText, isTrue);
+
+    await tester.tap(
+      find.byKey(const ValueKey('technician-password-visibility')),
+    );
+    await tester.pump();
+
+    expect(editable('password').obscureText, isFalse);
+    expect(editable('confirmPassword').obscureText, isTrue);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('technician-confirm-password-visibility'),
+      ),
+    );
+    await tester.pump();
+
+    expect(editable('password').obscureText, isFalse);
+    expect(editable('confirmPassword').obscureText, isFalse);
+  });
+
   testWidgets('con formulario vacío no envía y marca campos obligatorios', (
     tester,
   ) async {
@@ -169,6 +236,28 @@ void main() {
     expect(
       find.text('Debes aceptar el tratamiento de datos para crear la cuenta.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('limpia el error de consentimiento cuando se acepta', (
+    tester,
+  ) async {
+    await _pump(tester, FakeTechnicianRegistrationRepository());
+
+    await _submit(tester);
+    expect(
+      find.text('Debes aceptar el tratamiento de datos para crear la cuenta.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('technician-consent-checkbox')),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('Debes aceptar el tratamiento de datos para crear la cuenta.'),
+      findsNothing,
     );
   });
 
