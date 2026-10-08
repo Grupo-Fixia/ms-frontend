@@ -115,6 +115,27 @@ void main() {
     controller.clearFieldError('phone');
   });
 
+  test('marca el conflicto de cuenta existente y se puede descartar',
+      () async {
+    final repository = FakeClientRegistrationRepository(
+      failure: const ClientRegistrationFailure(
+        'Ya existe una cuenta',
+        isAccountConflict: true,
+      ),
+    );
+    final controller = _controller(repository)..setConsentAccepted(true);
+
+    await _register(controller);
+
+    expect(controller.isAccountConflict, isTrue);
+    expect(controller.errorMessage, 'Ya existe una cuenta');
+
+    controller.dismissError();
+    expect(controller.isAccountConflict, isFalse);
+    expect(controller.errorMessage, isNull);
+    controller.dismissError();
+  });
+
   test('ignora un segundo envío mientras el primero está en curso', () async {
     final pending = Completer<void>();
     final repository = FakeClientRegistrationRepository(pending: pending);

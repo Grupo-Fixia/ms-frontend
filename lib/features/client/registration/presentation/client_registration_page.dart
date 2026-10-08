@@ -42,6 +42,8 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
 
   final _confirmPasswordKey = GlobalKey<FormFieldState<String>>();
 
+  final _scrollController = ScrollController();
+
   late final ClientRegistrationController _controller;
   DocumentType? _documentType;
   bool _obscurePassword = true;
@@ -71,6 +73,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     ]) {
       field.dispose();
     }
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -92,13 +95,17 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
     );
     if (!mounted) return;
 
-    final message = _controller.errorMessage;
-    if (message == null) return;
+    if (_controller.errorMessage == null) return;
     // Muestra debajo de cada campo los errores que devolvió el backend.
     _formKey.currentState!.validate();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (_scrollController.hasClients) {
+      // El aviso y los campos con error quedan arriba: se sube para que se vean.
+      await _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   bool get _documentAllowsLetters =>
@@ -189,6 +196,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
+            controller: _scrollController,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
@@ -224,6 +232,14 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
           children: [
             const _Header(),
             const SizedBox(height: 28),
+            if (_controller.errorMessage != null &&
+                !_controller.isAccountConflict) ...[
+              _ErrorBanner(
+                message: _controller.errorMessage!,
+                onClose: _controller.dismissError,
+              ),
+              const SizedBox(height: 20),
+            ],
             LayoutBuilder(
               builder: (context, constraints) {
                 final names = [
@@ -509,6 +525,49 @@ class _VisibilityToggle extends StatelessWidget {
         obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
       ),
       onPressed: onPressed,
+    );
+  }
+}
+
+/// Aviso de error visible arriba del formulario.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onClose});
+
+  final String message;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        key: const ValueKey('client-registration-error'),
+        padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDECEA),
+          borderRadius: BorderRadius.circular(FixiaRadii.input),
+          border: Border.all(color: theme.colorScheme.error),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, color: theme.colorScheme.error),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: FixiaColors.textPrimary),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Cerrar aviso',
+              icon: const Icon(Icons.close),
+              onPressed: onClose,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -22,6 +22,7 @@ class ClientRegistrationController extends ChangeNotifier {
   bool _isSubmitting = false;
   bool _isRegistered = false;
   String? _errorMessage;
+  bool _isAccountConflict = false;
   Map<String, String> _fieldErrors = const {};
 
   String get policyVersion => dataPolicyVersion;
@@ -30,6 +31,17 @@ class ClientRegistrationController extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   bool get isRegistered => _isRegistered;
   String? get errorMessage => _errorMessage;
+
+  /// Ya existe una cuenta con ese correo o documento (se avisa con un diálogo).
+  bool get isAccountConflict => _isAccountConflict;
+
+  /// El usuario cerró el aviso de error.
+  void dismissError() {
+    if (_errorMessage == null && !_isAccountConflict) return;
+    _errorMessage = null;
+    _isAccountConflict = false;
+    notifyListeners();
+  }
 
   /// Evita el doble envío y bloquea el formulario tras crear la cuenta.
   bool get isLocked => _isSubmitting || _isRegistered;
@@ -63,6 +75,7 @@ class ClientRegistrationController extends ChangeNotifier {
     if (isLocked) return;
     _isSubmitting = true;
     _errorMessage = null;
+    _isAccountConflict = false;
     _fieldErrors = const {};
     notifyListeners();
 
@@ -91,6 +104,7 @@ class ClientRegistrationController extends ChangeNotifier {
     } on ClientRegistrationFailure catch (failure) {
       _errorMessage = failure.message;
       _fieldErrors = failure.fieldErrors;
+      _isAccountConflict = failure.isAccountConflict;
     } finally {
       _isSubmitting = false;
       notifyListeners();

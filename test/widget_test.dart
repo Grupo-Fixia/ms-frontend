@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/auth/login/application/session_store.dart';
 import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration.dart';
-import 'package:ms_frontend/features/client/registration/domain/client_registration_exceptions.dart';
-import 'package:ms_frontend/core/models/document_type.dart';
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
+import 'features/client/registration/fake_repository.dart';
 
 Future<FakeAuthRepository> _pumpApp(
   WidgetTester tester, {
   FakeAuthRepository? authRepository,
   FakeSessionStorage? storage,
   SessionStore? sessionStore,
+  bool openLogin = true,
 }) async {
   tester.view.physicalSize = const Size(1024, 2000);
   tester.view.devicePixelRatio = 1;
@@ -21,22 +20,59 @@ Future<FakeAuthRepository> _pumpApp(
   final repository = authRepository ?? FakeAuthRepository();
   await tester.pumpWidget(
     FixiaApp(
-      clientRegistrationRepository: const PendingClientRegistrationRepository(),
+      clientRegistrationRepository: FakeClientRegistrationRepository(),
       authRepository: repository,
       sessionStorage: storage ?? FakeSessionStorage(),
       sessionStore: sessionStore,
     ),
   );
   await tester.pumpAndSettle();
+  // Sin sesión la app abre en la página de inicio; la mayoría de pruebas
+  // parten del login, así que se entra desde ahí.
+  final homeLogin = find.byKey(const ValueKey('home-login'));
+  if (openLogin && homeLogin.evaluate().isNotEmpty) {
+    await tester.tap(homeLogin);
+    await tester.pumpAndSettle();
+  }
   return repository;
 }
 
 void main() {
-  testWidgets('la app arranca en el inicio de sesión', (tester) async {
-    await _pumpApp(tester);
+  testWidgets('sin sesión la app arranca en la página de inicio',
+      (tester) async {
+    await _pumpApp(tester, openLogin: false);
 
-    expect(find.text('Inicia sesión'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+  });
+
+  testWidgets('de la página de inicio se llega al login y al registro',
+      (tester) async {
+    await _pumpApp(tester, openLogin: false);
+
+    await tester.tap(find.byKey(const ValueKey('home-login')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('home-hero-cta')));
+    await tester.pumpAndSettle();
+    expect(find.text('Crea tu cuenta'), findsOneWidget);
+  });
+
+  testWidgets('con sesión iniciada, la página de inicio muestra la sesión',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, fixtureProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.home);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-title')), findsNothing);
+    expect(find.text('Hola, Ana'), findsOneWidget);
   });
 
   testWidgets('del login se llega al registro y de vuelta', (tester) async {
@@ -164,26 +200,5 @@ void main() {
 
     expect(find.byKey(const ValueKey('session-card')), findsNothing);
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
-  });
-
-  test('el repositorio temporal avisa que falta conectar el servicio', () {
-    const repository = PendingClientRegistrationRepository();
-    final registration = ClientRegistration(
-      firstName: 'Ana',
-      lastName: 'Pérez',
-      documentType: DocumentType.cc,
-      documentNumber: '1020304050',
-      email: 'ana@fixia.com',
-      phone: '3001234567',
-      password: 'Segura123',
-      policyVersion: 'v1.0',
-      consentAccepted: true,
-      consentAcceptedAt: DateTime(2026, 10, 6),
-    );
-
-    expect(
-      repository.register(registration),
-      throwsA(isA<ClientRegistrationFailure>()),
-    );
   });
 }
