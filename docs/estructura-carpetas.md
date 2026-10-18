@@ -114,7 +114,7 @@ Al leer respuestas del backend, decodificar siempre como UTF-8 (`utf8.decode(res
 ## 7. Sesión y seguridad
 
 - El access token y el perfil viven **solo en memoria** (`SessionStore`).
-- Con "Mantener sesión iniciada", el refresh token se guarda en el navegador (`localStorage`, vía `shared_preferences`) para restaurar la sesión al reabrir la app. Es un riesgo conocido: un script malicioso en la página (XSS) podría leerlo. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión. Sin esa opción no se guarda nada.
+- El refresh token se guarda en el navegador con `BrowserSessionStorage` (GC-394): siempre en `sessionStorage`, para que la sesión sobreviva a recargar la página y se borre al cerrar la pestaña, y con "Mantener sesión iniciada" también en `localStorage`, para restaurarla al reabrir el navegador. Al renovarlo se reemplaza en el mismo alcance y al cerrar sesión se borran ambos. Es un riesgo conocido: un script malicioso en la página (XSS) podría leerlo. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión.
 - Al cerrar sesión se revocan los tokens en ms-users; si el access token ya venció (dura 15 minutos), primero se renueva para poder revocar el refresh token.
 - Las llamadas con sesión (por ejemplo, el perfil del técnico) reciben el access token desde `main.dart` y, si el backend responde 401, renuevan la sesión una sola vez con `RefreshSession` y reintentan. Si tampoco sirve, la app vuelve al inicio de sesión. Así ninguna funcionalidad importa el `SessionStore` de otra.
 - Al crear una cuenta de técnico se inicia sesión automáticamente con los datos recién escritos (pasa directo a completar el perfil); la contraseña no se guarda.
