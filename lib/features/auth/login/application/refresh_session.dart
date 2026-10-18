@@ -5,8 +5,8 @@ import 'session_store.dart';
 /// Caso de uso: renovar la sesión cuando el access token venció (dura 15
 /// minutos) para reintentar la llamada que falló con 401.
 ///
-/// El refresh token es de un solo uso: se reemplaza en la sesión y, si el
-/// usuario pidió "Mantener sesión iniciada", también en el almacenamiento.
+/// El refresh token es de un solo uso: se reemplaza en la sesión y en el
+/// almacenamiento, en el mismo alcance que eligió el usuario al iniciar sesión.
 /// Devuelve `true` si la sesión quedó renovada; nunca lanza.
 class RefreshSession {
   const RefreshSession(this._repository, this._store, this._storage);
@@ -31,10 +31,7 @@ class RefreshSession {
 
   Future<void> _replaceStoredToken(String refreshToken) async {
     try {
-      final stored = await _storage.readRefreshToken();
-      if (stored != null && stored.isNotEmpty) {
-        await _storage.saveRefreshToken(refreshToken);
-      }
+      await _storage.replaceRefreshToken(refreshToken);
     } catch (_) {
       // Si el navegador no deja guardar, la sesión en memoria igual sirve.
     }

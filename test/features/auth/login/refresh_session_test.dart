@@ -32,7 +32,7 @@ void main() {
     expect(store.profile, same(fixtureProfile));
   });
 
-  test('con "mantener sesión" guarda el nuevo refresh token', () async {
+  test('reemplaza el refresh token guardado por el nuevo', () async {
     final storage = FakeSessionStorage(refreshToken: 'refresh-token');
     final store = SessionStore()..start(fixtureSession, fixtureProfile);
 
@@ -41,13 +41,15 @@ void main() {
     expect(storage.refreshToken, fixtureRefreshedSession.refreshToken);
   });
 
-  test('sin "mantener sesión" no guarda nada', () async {
-    final storage = FakeSessionStorage();
+  test('no cambia el alcance que eligió el usuario (GC-394)', () async {
+    final storage =
+        FakeSessionStorage(refreshToken: 'refresh-token', persisted: false);
     final store = SessionStore()..start(fixtureSession, fixtureProfile);
 
     await RefreshSession(FakeAuthRepository(), store, storage)();
 
-    expect(storage.refreshToken, isNull);
+    expect(storage.refreshToken, fixtureRefreshedSession.refreshToken);
+    expect(storage.persisted, isFalse);
   });
 
   test('si el almacenamiento falla la sesión igual se renueva', () async {

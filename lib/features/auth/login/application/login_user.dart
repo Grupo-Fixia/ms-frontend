@@ -9,8 +9,10 @@ import 'session_store.dart';
 /// sesión. Si el perfil no se puede leer no queda sesión a medias: se
 /// intenta cerrar la que se acaba de abrir.
 ///
-/// Con `rememberSession` guarda el refresh token para restaurar la sesión al
-/// reabrir la app; sin él se descarta cualquier token guardado antes.
+/// El refresh token siempre se guarda en la pestaña para que la sesión
+/// sobreviva a recargar la página (GC-394). Con `rememberSession` también se
+/// guarda para restaurarla al reabrir el navegador; sin él se descarta
+/// cualquier token persistente guardado antes.
 class LoginUser {
   const LoginUser(this._repository, this._store, this._storage);
 
@@ -44,11 +46,7 @@ class LoginUser {
   /// `Exception`.
   Future<void> _persist(String refreshToken, bool remember) async {
     try {
-      if (remember) {
-        await _storage.saveRefreshToken(refreshToken);
-      } else {
-        await _storage.clear();
-      }
+      await _storage.saveRefreshToken(refreshToken, persist: remember);
     } catch (_) {
       // La sesión en memoria ya está iniciada.
     }

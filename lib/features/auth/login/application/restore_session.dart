@@ -3,8 +3,10 @@ import 'ports/auth_repository.dart';
 import 'ports/session_storage.dart';
 import 'session_store.dart';
 
-/// Caso de uso: restaurar la sesión al abrir la app (opción "Mantener sesión
-/// iniciada").
+/// Caso de uso: restaurar la sesión al abrir o recargar la app (GC-394).
+///
+/// Usa el refresh token de la pestaña (recarga con F5) o, si no hay, el que se
+/// guardó con "Mantener sesión iniciada".
 ///
 /// Canjea el refresh token guardado por una sesión nueva y guarda de inmediato
 /// el refresh token que lo reemplaza, porque el anterior queda revocado.
@@ -27,7 +29,7 @@ class RestoreSession {
 
     try {
       final session = await _repository.refresh(stored);
-      await _storage.saveRefreshToken(session.refreshToken);
+      await _storage.replaceRefreshToken(session.refreshToken);
       final profile = await _repository.fetchProfile(session.accessToken);
       _store.start(session, profile);
       return true;

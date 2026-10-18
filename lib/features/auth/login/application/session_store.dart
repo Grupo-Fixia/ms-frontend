@@ -3,7 +3,9 @@ import 'package:flutter/foundation.dart';
 import '../domain/auth_session.dart';
 import '../domain/user_profile.dart';
 
-/// Sesión activa de la app. Solo en memoria: al recargar la página se pierde.
+/// Sesión activa de la app, en memoria. Es el punto único que consultan la
+/// navegación y las pantallas autenticadas. Al recargar la página se
+/// reconstruye con `RestoreSession` a partir del token guardado (GC-394).
 class SessionStore extends ChangeNotifier {
   AuthSession? _session;
   UserProfile? _profile;
