@@ -35,7 +35,8 @@ ms-frontend/
 │       │   └── registration/   # registro de cliente y de técnico (GC-234, GC-235)
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
-│       ├── client/         #   funcionalidades solo del cliente (cuando existan)
+│       ├── client/         #   funcionalidades solo del cliente
+│       │   └── service_requests/   # publicar y consultar solicitudes (GC-296)
 │       └── technician/     #   funcionalidades solo del técnico
 │           ├── profile/    #     perfil profesional (GC-237)
 │           └── specialties/    # especialidades y servicios (GC-294)
@@ -95,7 +96,7 @@ infrastructure ──► application ──► domain
 
 - `core/theme/fixia_theme.dart` es **el único tema** de la app (Brand Board v1.0). No se definen colores ni tipografías sueltos en las páginas: se usan `FixiaColors`, `FixiaTheme` y `FixiaDecorations`.
 - `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend) y `ServiceCategory`, las 6 categorías de servicio que acepta ms-users.
-- `core/config/api_config.dart` define la URL base del backend (`ApiConfig.usersBaseUrl`): se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik. Ninguna funcionalidad escribe URLs del backend a mano.
+- `core/config/api_config.dart` define las URL base del backend: `ApiConfig.usersBaseUrl` se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik; `ApiConfig.servicesBaseUrl` (ms-services) usa por defecto ese mismo origen, porque el gateway enruta por prefijo (`/api/users`, `/api/services`), y se puede cambiar con `SERVICES_API_BASE_URL`. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
 - `core/http/authorized_http.dart` (`AuthorizedHttp`) envía las llamadas con sesión: pone el access token y, ante un 401, renueva la sesión una sola vez y reintenta. Cada repositorio traduce el resto de respuestas a sus propios errores.
 - `core/widgets/` guarda widgets que usan varias funcionalidades; por ejemplo `TechnicianSteps` (crear cuenta → completar perfil → verificación), que muestran el registro y el perfil del técnico.
