@@ -37,6 +37,7 @@ ms-frontend/
 │       │   └── presentation/
 │       ├── client/         #   funcionalidades solo del cliente (cuando existan)
 │       └── technician/     #   funcionalidades solo del técnico
+│           ├── availability/   # disponibilidad y zona de atención (GC-295)
 │           ├── profile/    #     perfil profesional (GC-237)
 │           └── specialties/    # especialidades y servicios (GC-294)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
