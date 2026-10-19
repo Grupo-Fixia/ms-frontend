@@ -79,6 +79,7 @@ void main() {
         () async {
       final options = await _repository((_) async => _json(200, [
             {'code': 'GARDENING', 'name': 'Jardinería'},
+            {'code': 7, 'name': 'Código que no es texto'},
             {'code': 'PAINTING', 'name': '  '},
             'basura',
           ])).fetchCatalog();

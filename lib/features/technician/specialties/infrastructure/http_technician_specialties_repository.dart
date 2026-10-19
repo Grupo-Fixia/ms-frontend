@@ -61,7 +61,8 @@ class HttpTechnicianSpecialtiesRepository
     final options = <ServiceCategoryOption>[];
     for (final item in decoded) {
       if (item is! Map) continue;
-      final category = ServiceCategory.fromApi(item['code'] as String?);
+      final code = item['code'];
+      final category = code is String ? ServiceCategory.fromApi(code) : null;
       if (category == null) continue; // Categoría que el frontend no conoce.
       final name = item['name'];
       options.add(
