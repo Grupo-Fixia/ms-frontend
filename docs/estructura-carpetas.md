@@ -95,7 +95,7 @@ infrastructure ──► application ──► domain
 ## 5. Código compartido (`core/`)
 
 - `core/theme/fixia_theme.dart` es **el único tema** de la app (Brand Board v1.0). No se definen colores ni tipografías sueltos en las páginas: se usan `FixiaColors`, `FixiaTheme` y `FixiaDecorations`.
-- `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend) y `ServiceCategory`, las 6 categorías de servicio que acepta ms-users.
+- `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend), `ServiceCategory`, las 6 categorías de servicio que acepta ms-users, y `ServiceRequestStatus`, los estados de una solicitud en ms-services (los usan las solicitudes del cliente y las postulaciones del técnico).
 - `core/config/api_config.dart` define las URL base del backend: `ApiConfig.usersBaseUrl` se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik; `ApiConfig.servicesBaseUrl` (ms-services) usa por defecto ese mismo origen, porque el gateway enruta por prefijo (`/api/users`, `/api/services`), y se puede cambiar con `SERVICES_API_BASE_URL`. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
 - `core/http/authorized_http.dart` (`AuthorizedHttp`) envía las llamadas con sesión: pone el access token y, ante un 401, renueva la sesión una sola vez y reintenta. Cada repositorio traduce el resto de respuestas a sus propios errores.

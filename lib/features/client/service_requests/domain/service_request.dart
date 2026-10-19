@@ -1,30 +1,7 @@
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/constants/service_request_status.dart';
 
-/// Estado de una solicitud de servicio (`ServiceRequestStatus` de
-/// ms-services).
-enum ServiceRequestStatus {
-  published('PUBLISHED', 'Publicada'),
-  providerSelected('PROVIDER_SELECTED', 'Prestador seleccionado'),
-  contracted('CONTRACTED', 'Contratada'),
-  cancelled('CANCELLED', 'Cancelada'),
-  expired('EXPIRED', 'Vencida');
-
-  const ServiceRequestStatus(this.apiValue, this.label);
-
-  /// Valor exacto que usa el backend.
-  final String apiValue;
-
-  /// Texto que ve el usuario.
-  final String label;
-
-  /// Devuelve `null` si el backend envía un estado que el frontend no conoce.
-  static ServiceRequestStatus? fromApi(String? value) {
-    for (final status in values) {
-      if (status.apiValue == value) return status;
-    }
-    return null;
-  }
-}
+export '../../../../core/constants/service_request_status.dart';
 
 /// Ubicación que ven los técnicos: ciudad, zona y, opcionalmente,
 /// coordenadas aproximadas (el backend las redondea a dos decimales).
