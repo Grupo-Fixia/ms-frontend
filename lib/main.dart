@@ -21,12 +21,23 @@ import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
+import 'features/client/dashboard/presentation/client_dashboard_page.dart';
+import 'features/client/profile/domain/client_profile_update.dart';
+import 'features/client/profile/presentation/client_profile_page.dart';
+import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
+import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
+import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
 import 'features/technician/profile/application/ports/technician_profile_repository.dart';
 import 'features/technician/profile/application/update_technician_profile.dart';
+import 'features/technician/profile/domain/technician_profile.dart';
+import 'features/technician/profile/domain/technician_profile_exceptions.dart';
 import 'features/technician/profile/infrastructure/http_technician_profile_repository.dart';
 import 'features/technician/profile/presentation/technician_profile_page.dart';
+import 'features/technician/profile/infrastructure/demo_technician_profile_repository.dart';
+import 'features/technician/specialties/presentation/technician_specialties_page.dart';
+import 'features/technician/profile/domain/verification_status.dart';
 
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
@@ -35,6 +46,15 @@ abstract final class AppRoutes {
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
   static const technicianRegistration = '/registro-tecnico';
+  static const clientDashboard = '/demo/inicio-cliente';
+  static const technicianDashboard = '/demo/inicio-tecnico';
+  static const clientProfileDemo = '/demo/perfil-cliente';
+  static const clientServiceRequestDemo = '/demo/publicar-problema';
+  static const technicianSpecialtiesDemo = '/demo/especialidades-tecnico';
+  static const technicianOpportunitiesDemo = '/demo/solicitudes-tecnico';
+  static const technicianProfileDemo = '/demo/perfil-tecnico';
+  static const clientProfile = '/cliente/perfil';
+  static const technicianProfile = '/tecnico/perfil';
 }
 
 Future<void> main() async {
@@ -108,8 +128,7 @@ class FixiaApp extends StatefulWidget {
 }
 
 class _FixiaAppState extends State<FixiaApp> {
-  late final SessionStore _sessionStore =
-      widget.sessionStore ?? SessionStore();
+  late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
 
   @override
   void dispose() {
@@ -140,8 +159,10 @@ class _FixiaAppState extends State<FixiaApp> {
       return false;
     }
     if (context.mounted) {
-      Navigator.of(context)
-          .pushNamedAndRemoveUntil(AppRoutes.session, (_) => false);
+      final route = _sessionStore.profile?.role == UserRole.professional
+          ? AppRoutes.technicianProfile
+          : AppRoutes.home;
+      Navigator.of(context).pushNamedAndRemoveUntil(route, (_) => false);
     }
     return true;
   }
@@ -149,30 +170,113 @@ class _FixiaAppState extends State<FixiaApp> {
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
 
-  /// Destino de la sesión iniciada según el rol: el técnico llega a su perfil
-  /// profesional (completarlo es el paso 2); los demás, a la pantalla de
-  /// sesión.
+  /// Abre el inicio correspondiente al rol de la cuenta autenticada.
   Widget _sessionPage(BuildContext context) {
-    if (_sessionStore.profile?.role == UserRole.professional) {
-      final repository = widget.technicianProfileRepository;
-      return TechnicianProfilePage(
-        getProfile: GetTechnicianProfile(repository),
-        updateProfile: UpdateTechnicianProfile(repository),
-        firstName: _sessionStore.profile?.firstName,
-        onLogout: () async {
-          await _logoutUser();
-          if (context.mounted) _goToLogin(context);
-        },
-        onSessionExpired: () {
-          _sessionStore.clear();
-          _goToLogin(context);
-        },
-      );
+    final profile = _sessionStore.profile;
+    if (!_sessionStore.isAuthenticated || profile == null) {
+      return _loginPage(context);
     }
+    if (profile.role == UserRole.client) {
+      return _clientDashboardPage(context);
+    }
+    if (profile.role == UserRole.professional) {
+      return _technicianDashboardPage(context);
+    }
+
     return SessionPage(
       store: _sessionStore,
       logoutUser: _logoutUser,
       onLoggedOut: () => _goToLogin(context),
+    );
+  }
+
+  Future<void> _logoutAndGoToLogin(BuildContext context) async {
+    await _logoutUser();
+    if (context.mounted) _goToLogin(context);
+  }
+
+  Widget _clientDashboardPage(BuildContext context) {
+    final profile = _sessionStore.profile!;
+    return ClientDashboardPage(
+      firstName: profile.firstName,
+      onPublishProblem: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientServiceRequestDemo),
+      onOpenProfile: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientProfile),
+      onOpenSettings: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientProfile),
+      onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  Widget _technicianDashboardPage(BuildContext context) {
+    final profile = _sessionStore.profile!;
+    return _TechnicianDashboardLoader(
+      getProfile: GetTechnicianProfile(widget.technicianProfileRepository),
+      firstName: profile.firstName,
+      onOpenSettings: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
+      onOpenOpportunities: () => Navigator.of(context)
+          .pushNamed(AppRoutes.technicianOpportunitiesDemo),
+      onOpenSpecialties: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianSpecialtiesDemo),
+      onLogout: () => _logoutAndGoToLogin(context),
+      onSessionExpired: () {
+        _sessionStore.clear();
+        _goToLogin(context);
+      },
+    );
+  }
+
+  Widget _technicianProfilePage(BuildContext context) {
+    final profile = _sessionStore.profile;
+    if (!_sessionStore.isAuthenticated ||
+        profile == null ||
+        profile.role != UserRole.professional) {
+      return _loginPage(context);
+    }
+    final repository = widget.technicianProfileRepository;
+    return TechnicianProfilePage(
+      getProfile: GetTechnicianProfile(repository),
+      updateProfile: UpdateTechnicianProfile(repository),
+      firstName: profile.firstName,
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenOpportunities: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianOpportunitiesDemo),
+      onLogout: () => _logoutAndGoToLogin(context),
+      onSessionExpired: () {
+        _sessionStore.clear();
+        _goToLogin(context);
+      },
+    );
+  }
+
+  Widget _clientProfilePage(BuildContext context) {
+    final profile = _sessionStore.profile;
+    if (!_sessionStore.isAuthenticated ||
+        profile == null ||
+        profile.role != UserRole.client) {
+      return _loginPage(context);
+    }
+    return ClientProfilePage(
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: profile.email,
+      phone: profile.phone,
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
+      onSaved: (ClientProfileUpdate update) {
+        _sessionStore.updateProfile(
+          profile.copyWith(
+            firstName: update.firstName,
+            lastName: update.lastName,
+            phone: update.phone,
+          ),
+        );
+      },
     );
   }
 
@@ -185,8 +289,10 @@ class _FixiaAppState extends State<FixiaApp> {
         _sessionStore,
         widget.sessionStorage,
       ),
-      onLoggedIn: () =>
-          Navigator.of(context).pushReplacementNamed(AppRoutes.session),
+      onLoggedIn: () => Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.home,
+        (_) => false,
+      ),
       onGoToRegistration: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.clientRegistration),
     );
@@ -198,10 +304,9 @@ class _FixiaAppState extends State<FixiaApp> {
       title: 'Fixia',
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
-      initialRoute:
-          _sessionStore.isAuthenticated ? AppRoutes.session : AppRoutes.home,
+      initialRoute: AppRoutes.home,
       routes: {
-        // Con sesión iniciada la página de inicio lleva directo a la cuenta.
+        // El inicio autenticado se selecciona según el rol de la cuenta.
         AppRoutes.home: (context) => _sessionStore.isAuthenticated
             ? _sessionPage(context)
             : HomePage(
@@ -209,8 +314,7 @@ class _FixiaAppState extends State<FixiaApp> {
                     .pushNamed(AppRoutes.clientRegistration),
                 onRegisterTechnician: () => Navigator.of(context)
                     .pushNamed(AppRoutes.technicianRegistration),
-                onLogin: () =>
-                    Navigator.of(context).pushNamed(AppRoutes.login),
+                onLogin: () => Navigator.of(context).pushNamed(AppRoutes.login),
               ),
         AppRoutes.login: _loginPage,
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
@@ -220,6 +324,7 @@ class _FixiaAppState extends State<FixiaApp> {
                   ? _sessionPage(context)
                   : _loginPage(context),
             ),
+        AppRoutes.technicianProfile: _technicianProfilePage,
         AppRoutes.clientRegistration: (context) => RegistrationPage(
               registerAccount:
                   RegisterAccount(widget.clientRegistrationRepository),
@@ -240,6 +345,208 @@ class _FixiaAppState extends State<FixiaApp> {
               onSwitchRole: () => Navigator.of(context)
                   .pushReplacementNamed(AppRoutes.clientRegistration),
             ),
+        AppRoutes.clientDashboard: (context) =>
+            _sessionStore.profile?.role == UserRole.client
+                ? _clientDashboardPage(context)
+                : ClientDashboardPage(
+                    onPublishProblem: () => Navigator.of(context)
+                        .pushNamed(AppRoutes.clientServiceRequestDemo),
+                    onOpenProfile: () => Navigator.of(context)
+                        .pushNamed(AppRoutes.clientProfileDemo),
+                    onOpenSettings: () => Navigator.of(context)
+                        .pushNamed(AppRoutes.clientProfileDemo),
+                  ),
+        AppRoutes.technicianDashboard: (context) =>
+            _sessionStore.profile?.role == UserRole.professional
+                ? _technicianDashboardPage(context)
+                : TechnicianDashboardPage(
+                    onOpenSettings: () => Navigator.of(context)
+                        .pushNamed(AppRoutes.technicianProfileDemo),
+                    onOpenOpportunities: () => Navigator.of(context)
+                        .pushNamed(AppRoutes.technicianOpportunitiesDemo),
+                    onOpenSpecialties: () => Navigator.of(context)
+                        .pushNamed(AppRoutes.technicianSpecialtiesDemo),
+                  ),
+        AppRoutes.clientProfileDemo: (context) => ClientProfilePage(
+              firstName: 'Ana',
+              lastName: 'Pérez',
+              email: 'ana@fixia.com',
+              phone: '+573001112233',
+              onBack: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.clientDashboard),
+              onOpenHome: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.clientDashboard),
+            ),
+        AppRoutes.clientProfile: _clientProfilePage,
+        AppRoutes.clientServiceRequestDemo: (context) => ServiceRequestPage(
+              onBack: () => Navigator.of(context).maybePop(),
+              onOpenHome: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.clientDashboard),
+              onOpenProfile: () => Navigator.of(context).pushReplacementNamed(
+                _sessionStore.profile?.role == UserRole.client
+                    ? AppRoutes.clientProfile
+                    : AppRoutes.clientProfileDemo,
+              ),
+            ),
+        AppRoutes.technicianSpecialtiesDemo: (context) =>
+            TechnicianSpecialtiesPage(
+              onCancel: () => Navigator.of(context).maybePop(),
+              onOpenHome: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.technicianDashboard),
+              onOpenOpportunities: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.technicianOpportunitiesDemo),
+              onOpenProfile: () => Navigator.of(context).pushReplacementNamed(
+                _sessionStore.profile?.role == UserRole.professional
+                    ? AppRoutes.technicianProfile
+                    : AppRoutes.technicianProfileDemo,
+              ),
+            ),
+        AppRoutes.technicianOpportunitiesDemo: (context) =>
+            TechnicianOpportunitiesPage(
+              onBack: () => Navigator.of(context).maybePop(),
+              onOpenHome: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.technicianDashboard),
+              onOpenSpecialties: () => Navigator.of(context)
+                  .pushReplacementNamed(AppRoutes.technicianSpecialtiesDemo),
+              onOpenProfile: () => Navigator.of(context).pushReplacementNamed(
+                _sessionStore.profile?.role == UserRole.professional
+                    ? AppRoutes.technicianProfile
+                    : AppRoutes.technicianProfileDemo,
+              ),
+            ),
+        AppRoutes.technicianProfileDemo: (context) {
+          final repository = DemoTechnicianProfileRepository();
+          return TechnicianProfilePage(
+            getProfile: GetTechnicianProfile(repository),
+            updateProfile: UpdateTechnicianProfile(repository),
+            firstName: 'Carlos',
+            onBack: () => Navigator.of(context).maybePop(),
+            onOpenHome: () => Navigator.of(context)
+                .pushReplacementNamed(AppRoutes.technicianDashboard),
+            onOpenOpportunities: () => Navigator.of(context)
+                .pushReplacementNamed(AppRoutes.technicianOpportunitiesDemo),
+          );
+        },
+      },
+    );
+  }
+}
+
+class _TechnicianDashboardLoader extends StatefulWidget {
+  const _TechnicianDashboardLoader({
+    required this.getProfile,
+    required this.firstName,
+    required this.onOpenSettings,
+    required this.onOpenOpportunities,
+    required this.onOpenSpecialties,
+    required this.onLogout,
+    required this.onSessionExpired,
+  });
+
+  final GetTechnicianProfile getProfile;
+  final String firstName;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenOpportunities;
+  final VoidCallback onOpenSpecialties;
+  final VoidCallback onLogout;
+  final VoidCallback onSessionExpired;
+
+  @override
+  State<_TechnicianDashboardLoader> createState() =>
+      _TechnicianDashboardLoaderState();
+}
+
+class _TechnicianDashboardLoaderState
+    extends State<_TechnicianDashboardLoader> {
+  late Future<TechnicianProfile> _profileFuture;
+  bool _sessionExpiryHandled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = widget.getProfile();
+  }
+
+  void _retry() {
+    setState(() {
+      _sessionExpiryHandled = false;
+      _profileFuture = widget.getProfile();
+    });
+  }
+
+  void _handleExpiredSession() {
+    if (_sessionExpiryHandled) return;
+    _sessionExpiryHandled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onSessionExpired();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<TechnicianProfile>(
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          final error = snapshot.error;
+          if (error is TechnicianProfileFailure && error.isSessionExpired) {
+            _handleExpiredSession();
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final message = error is TechnicianProfileFailure
+              ? error.message
+              : 'No pudimos cargar tu inicio. Inténtalo de nuevo.';
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 360),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.cloud_off_outlined,
+                          size: 48,
+                          color: FixiaColors.textSecondary,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(message, textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _retry,
+                          child: const Text('Reintentar'),
+                        ),
+                        TextButton(
+                          onPressed: widget.onLogout,
+                          child: const Text('Cerrar sesión'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        final verificationStatus =
+            snapshot.data?.verificationStatus ?? VerificationStatus.pending;
+        return TechnicianDashboardPage(
+          firstName: widget.firstName,
+          verificationStatus: verificationStatus,
+          onOpenSettings: widget.onOpenSettings,
+          onOpenOpportunities: widget.onOpenOpportunities,
+          onOpenSpecialties: widget.onOpenSpecialties,
+          onLogout: widget.onLogout,
+        );
       },
     );
   }

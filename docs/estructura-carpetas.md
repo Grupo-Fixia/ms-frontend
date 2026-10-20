@@ -34,9 +34,13 @@ ms-frontend/
 │       │   └── registration/   # registro de cliente y de técnico (GC-234, GC-235)
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
-│       ├── client/         #   funcionalidades solo del cliente (cuando existan)
+│       ├── client/         #   funcionalidades solo del cliente
+│       │   ├── profile/    #     consulta y edición visual del perfil (GC-319)
+│       │   └── service_request/ # publicación local de solicitud (GC-334)
 │       └── technician/     #   funcionalidades solo del técnico
-│           └── profile/    #     perfil profesional (GC-237)
+│           ├── profile/    #     perfil profesional (GC-237)
+│           ├── specialties/ # selección local de especialidades (GC-324)
+│           └── opportunities/ # catálogo local de solicitudes (GC-339)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
 │   └── features/auth/registration/...
 └── web/                    # Archivos de la plataforma web (index.html, íconos)
@@ -62,6 +66,35 @@ registration/
 └── presentation/      # Páginas, controladores (ChangeNotifier) y widgets propios.
     └── widgets/
 ```
+
+El perfil de cliente (GC-319) usa los datos ya presentes en la sesión
+autenticada. Nombre, apellido y teléfono pueden editarse en la interfaz; el
+correo se muestra como solo lectura. Hasta que se conecte el caso de uso de
+actualización, los cambios se conservan únicamente en memoria durante la
+sesión y la pantalla lo indica explícitamente.
+
+Después del inicio de sesión o de restaurar una sesión, la aplicación abre el
+dashboard del rol (`CLIENT` o `PROFESSIONAL`); la pantalla de confirmación de
+sesión no forma parte del flujo normal. El inicio del técnico consulta su
+perfil profesional para mostrar el estado de verificación actual. Su perfil se
+consulta y actualiza con el backend. Las solicitudes, trabajos, billeteras y
+acciones que todavía no tienen integración continúan usando datos locales de
+demostración.
+
+Las pantallas de demostración GC-334, GC-324 y GC-339 trabajan únicamente con
+estado en memoria y datos locales. Sus rutas (`/demo/publicar-problema`,
+`/demo/especialidades-tecnico` y `/demo/solicitudes-tecnico`) no requieren
+autenticación ni llaman al backend. La pantalla de publicación protege la
+dirección exacta y muestra solo una ubicación aproximada; las imágenes y el
+envío son simulados. El catálogo técnico y sus filtros/postulaciones usan
+fixtures locales. La selección GC-324 incluye categorías y subservicios de
+ejemplo, separada del perfil profesional autenticado que utiliza repositorio.
+Estas vistas reutilizan `MobileFeatureShell` y la barra inferior de Fixia para
+mantener el ancho de teléfono en navegador y conservar la navegación reconocible
+de cada rol. El perfil profesional autenticado conserva su repositorio real;
+la ruta `/demo/perfil-tecnico` usa un repositorio en memoria para visualizar
+el perfil ya completado, validar edición local y probar la navegación sin
+iniciar sesión.
 
 **Regla de dependencia** (las flechas indican "puede importar"):
 

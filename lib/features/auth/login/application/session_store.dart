@@ -18,6 +18,12 @@ class SessionStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  void updateProfile(UserProfile profile) {
+    if (_profile == null || profile.id != _profile!.id) return;
+    _profile = profile;
+    notifyListeners();
+  }
+
   void clear() {
     if (_session == null && _profile == null) return;
     _session = null;

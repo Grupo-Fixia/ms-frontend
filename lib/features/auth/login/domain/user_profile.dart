@@ -26,6 +26,7 @@ class UserProfile {
     required this.firstName,
     required this.lastName,
     required this.role,
+    this.phone,
   });
 
   final String id;
@@ -33,6 +34,24 @@ class UserProfile {
   final String firstName;
   final String lastName;
   final UserRole? role;
+  final String? phone;
 
   String get fullName => '$firstName $lastName'.trim();
+
+  UserProfile copyWith({
+    String? email,
+    String? firstName,
+    String? lastName,
+    UserRole? role,
+    String? phone,
+  }) {
+    return UserProfile(
+      id: id,
+      email: email ?? this.email,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      role: role ?? this.role,
+      phone: phone ?? this.phone,
+    );
+  }
 }
