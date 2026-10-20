@@ -1,3 +1,4 @@
+import '../../domain/applicant.dart';
 import '../../domain/service_request.dart';
 
 /// Puerto de salida: solicitudes de servicio del cliente autenticado
@@ -13,4 +14,12 @@ abstract interface class ServiceRequestRepository {
   Future<List<ServiceRequest>> listMine();
 
   Future<ServiceRequest> getMine(String id);
+
+  /// Postulantes de una solicitud del cliente, en orden de llegada (GC-351).
+  Future<List<Applicant>> listApplicants(String requestId);
+
+  /// Elige al prestador de la postulación [applicationId] (GC-351). Devuelve
+  /// la solicitud en `providerSelected`; las demás postulaciones quedan
+  /// rechazadas.
+  Future<ServiceRequest> selectProvider(String requestId, String applicationId);
 }

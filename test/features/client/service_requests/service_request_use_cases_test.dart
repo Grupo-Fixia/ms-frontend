@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/features/client/service_requests/application/ports/service_request_repository.dart';
 import 'package:ms_frontend/features/client/service_requests/application/service_request_use_cases.dart';
+import 'package:ms_frontend/features/client/service_requests/domain/applicant.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/service_request.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/service_request_exceptions.dart';
 
@@ -19,6 +20,7 @@ ServiceRequest _published(NewServiceRequest request) => ServiceRequest(
 class _FakeRepository implements ServiceRequestRepository {
   NewServiceRequest? published;
   String? requestedId;
+  (String, String)? selection;
 
   @override
   Future<ServiceRequest> publish(NewServiceRequest request) async {
@@ -28,6 +30,27 @@ class _FakeRepository implements ServiceRequestRepository {
 
   @override
   Future<List<ServiceRequest>> listMine() async => const [];
+
+  @override
+  Future<List<Applicant>> listApplicants(String requestId) async {
+    requestedId = requestId;
+    return const [
+      Applicant(
+        id: 'app-1',
+        providerId: 'tec-1',
+        status: ApplicationStatus.applied,
+      ),
+    ];
+  }
+
+  @override
+  Future<ServiceRequest> selectProvider(
+    String requestId,
+    String applicationId,
+  ) async {
+    selection = (requestId, applicationId);
+    return getMine(requestId);
+  }
 
   @override
   Future<ServiceRequest> getMine(String id) async {
@@ -129,5 +152,36 @@ void main() {
     expect(await ListMyServiceRequests(repository)(), isEmpty);
     await GetMyServiceRequest(repository)('req-9');
     expect(repository.requestedId, 'req-9');
+  });
+
+  test('consulta los postulantes de una solicitud', () async {
+    final repository = _FakeRepository();
+
+    final applicants = await ListApplicants(repository)('req-1');
+
+    expect(repository.requestedId, 'req-1');
+    expect(applicants.single.providerId, 'tec-1');
+  });
+
+  test('selecciona al prestador con los ids sin espacios', () async {
+    final repository = _FakeRepository();
+
+    await SelectProvider(repository)(' req-1 ', ' app-1 ');
+
+    expect(repository.selection, ('req-1', 'app-1'));
+  });
+
+  test('sin postulación elegida no envía nada', () async {
+    final repository = _FakeRepository();
+
+    await expectLater(
+      SelectProvider(repository)('req-1', ' '),
+      throwsA(isA<ServiceRequestFailure>().having(
+        (f) => f.fieldErrors.keys,
+        'fieldErrors',
+        ['applicationId'],
+      )),
+    );
+    expect(repository.selection, isNull);
   });
 }
