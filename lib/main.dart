@@ -24,6 +24,7 @@ import 'features/auth/login/domain/user_profile.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/domain/client_profile_update.dart';
 import 'features/client/profile/presentation/client_profile_page.dart';
+import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
@@ -44,6 +45,7 @@ abstract final class AppRoutes {
   static const technicianRegistration = '/registro-tecnico';
   static const clientDashboard = '/demo/inicio-cliente';
   static const technicianDashboard = '/demo/inicio-tecnico';
+  static const clientServiceRequest = '/cliente/publicar-problema';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
@@ -203,9 +205,21 @@ class _FixiaAppState extends State<FixiaApp> {
     final profile = _sessionStore.profile!;
     return ClientDashboardPage(
       firstName: profile.firstName,
+      onPublishProblem: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
       onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  Widget _clientServiceRequestPage(BuildContext context) {
+    return ServiceRequestPage(
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
+      onOpenProfile: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientProfile),
     );
   }
 
@@ -224,6 +238,8 @@ class _FixiaAppState extends State<FixiaApp> {
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
+      onOpenPublish: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.clientServiceRequest),
       onSaved: (ClientProfileUpdate update) {
         _sessionStore.updateProfile(
           profile.copyWith(
@@ -344,6 +360,8 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.technicianDashboard:
             _forRole(UserRole.professional, _technicianDashboardPage),
         AppRoutes.clientProfile: _forRole(UserRole.client, _clientProfilePage),
+        AppRoutes.clientServiceRequest:
+            _forRole(UserRole.client, _clientServiceRequestPage),
       },
     );
   }
