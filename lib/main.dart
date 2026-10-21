@@ -27,6 +27,7 @@ import 'features/client/profile/presentation/client_profile_page.dart';
 import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
+import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
 import 'features/technician/profile/application/ports/technician_profile_repository.dart';
 import 'features/technician/profile/application/update_technician_profile.dart';
@@ -46,6 +47,7 @@ abstract final class AppRoutes {
   static const clientDashboard = '/demo/inicio-cliente';
   static const technicianDashboard = '/demo/inicio-tecnico';
   static const clientServiceRequest = '/cliente/publicar-problema';
+  static const technicianOpportunities = '/tecnico/solicitudes';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
@@ -259,11 +261,23 @@ class _FixiaAppState extends State<FixiaApp> {
       firstName: profile.firstName,
       onOpenSettings: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
+      onOpenOpportunities: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
         _goToLogin(context);
       },
+    );
+  }
+
+  Widget _technicianOpportunitiesPage(BuildContext context) {
+    return TechnicianOpportunitiesPage(
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenProfile: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianProfile),
     );
   }
 
@@ -282,6 +296,8 @@ class _FixiaAppState extends State<FixiaApp> {
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenOpportunities: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianOpportunities),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -362,6 +378,8 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.clientProfile: _forRole(UserRole.client, _clientProfilePage),
         AppRoutes.clientServiceRequest:
             _forRole(UserRole.client, _clientServiceRequestPage),
+        AppRoutes.technicianOpportunities:
+            _forRole(UserRole.professional, _technicianOpportunitiesPage),
       },
     );
   }
@@ -398,6 +416,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.getProfile,
     required this.firstName,
     required this.onOpenSettings,
+    required this.onOpenOpportunities,
     required this.onLogout,
     required this.onSessionExpired,
   });
@@ -405,6 +424,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final GetTechnicianProfile getProfile;
   final String firstName;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenOpportunities;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -500,6 +520,7 @@ class _TechnicianDashboardLoaderState
           firstName: widget.firstName,
           verificationStatus: verificationStatus,
           onOpenSettings: widget.onOpenSettings,
+          onOpenOpportunities: widget.onOpenOpportunities,
           onLogout: widget.onLogout,
         );
       },
