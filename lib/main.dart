@@ -29,6 +29,11 @@ import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
+import 'features/technician/availability/application/availability_use_cases.dart';
+import 'features/technician/availability/application/ports/technician_availability_repository.dart';
+import 'features/technician/availability/infrastructure/demo_technician_availability_repository.dart';
+import 'features/technician/availability/infrastructure/http_technician_availability_repository.dart';
+import 'features/technician/availability/presentation/technician_availability_page.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
@@ -57,6 +62,7 @@ abstract final class AppRoutes {
   static const clientServiceRequest = '/cliente/publicar-problema';
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianSpecialties = '/tecnico/especialidades';
+  static const technicianAvailability = '/tecnico/disponibilidad';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
@@ -113,6 +119,18 @@ Future<void> main() async {
           ).call,
         ),
       ),
+      technicianAvailabilityRepository: HttpTechnicianAvailabilityRepository(
+        client: httpClient,
+        baseUrl: usersApiBaseUrl,
+        authorizedHttp: AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).call,
+        ),
+      ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -129,6 +147,7 @@ class FixiaApp extends StatefulWidget {
     required this.authRepository,
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
+    this.technicianAvailabilityRepository,
     this.sessionStore,
   });
 
@@ -141,6 +160,10 @@ class FixiaApp extends StatefulWidget {
   /// Repositorio de especialidades del técnico con sesión. Si es `null` se usa
   /// uno en memoria.
   final TechnicianSpecialtiesRepository? technicianSpecialtiesRepository;
+
+  /// Repositorio de disponibilidad y zona con sesión. Si es `null` se usa uno
+  /// en memoria.
+  final TechnicianAvailabilityRepository? technicianAvailabilityRepository;
 
   /// Sesión de la app. Si es `null` se crea una vacía. Llega con la sesión ya
   /// iniciada cuando se restauró desde el almacenamiento.
@@ -155,6 +178,30 @@ class _FixiaAppState extends State<FixiaApp> {
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
+  late final TechnicianAvailabilityRepository _availabilityRepository =
+      widget.technicianAvailabilityRepository ??
+          DemoTechnicianAvailabilityRepository();
+
+  Widget _technicianAvailabilityPage(BuildContext context) {
+    final repository = _availabilityRepository;
+    return TechnicianAvailabilityPage(
+      getAvailability: GetWeeklyAvailability(repository),
+      replaceAvailability: ReplaceWeeklyAvailability(repository),
+      getCoverageZone: GetCoverageZone(repository),
+      updateCoverageZone: UpdateCoverageZone(repository),
+      onSessionExpired: () {
+        _sessionStore.clear();
+        _goToLogin(context);
+      },
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenOpportunities: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianOpportunities),
+      onOpenProfile: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianProfile),
+    );
+  }
 
   Widget _technicianSpecialtiesPage(BuildContext context) {
     final repository = _specialtiesRepository;
@@ -314,6 +361,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
+      onOpenAvailability: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianAvailability),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -435,6 +484,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _forRole(UserRole.professional, _technicianOpportunitiesPage),
         AppRoutes.technicianSpecialties:
             _forRole(UserRole.professional, _technicianSpecialtiesPage),
+        AppRoutes.technicianAvailability:
+            _forRole(UserRole.professional, _technicianAvailabilityPage),
       },
     );
   }
@@ -473,6 +524,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenSettings,
     required this.onOpenOpportunities,
     required this.onOpenSpecialties,
+    required this.onOpenAvailability,
     required this.onLogout,
     required this.onSessionExpired,
   });
@@ -482,6 +534,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
   final VoidCallback onOpenSpecialties;
+  final VoidCallback onOpenAvailability;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -579,6 +632,7 @@ class _TechnicianDashboardLoaderState
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenSpecialties: widget.onOpenSpecialties,
+          onOpenAvailability: widget.onOpenAvailability,
           onLogout: widget.onLogout,
         );
       },
