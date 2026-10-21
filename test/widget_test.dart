@@ -55,6 +55,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-title')), findsOneWidget);
     expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(find.byKey(const ValueKey('home-preview-availability')), findsNothing);
   });
 
   testWidgets('desde el dashboard técnico abre el perfil demo y puede navegar',
@@ -85,6 +86,19 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('desde el dashboard demo se abre disponibilidad sin autenticación', (tester) async {
+    await _pumpApp(tester, openLogin: false);
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(AppRoutes.technicianDashboard);
+    await tester.pumpAndSettle();
+    final availabilityButton = find.byKey(const ValueKey('technician-open-availability'));
+    await tester.ensureVisible(availabilityButton);
+    await tester.tap(availabilityButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Disponibilidad y zona'), findsOneWidget);
+    expect(find.text('Tus preferencias se guardan localmente en esta demostración.'), findsOneWidget);
+  });
   testWidgets('de la página de inicio se llega al login y al registro',
       (tester) async {
     await _pumpApp(tester, openLogin: false);
@@ -305,6 +319,8 @@ void main() {
       find.byKey(const ValueKey('client-profile-phone')),
       '+573001112233',
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('client-profile-save')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('client-profile-save')));
     await tester.pumpAndSettle();
 

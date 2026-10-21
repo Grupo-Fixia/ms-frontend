@@ -252,6 +252,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
         MobileNavigationItem(
           icon: Icons.add_rounded,
           label: 'Publicar',
+          isAction: true,
           selected: true,
           onPressed: () {},
         ),

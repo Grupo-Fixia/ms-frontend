@@ -105,9 +105,8 @@ class MobileFeatureShell extends StatelessWidget {
                 color: FixiaColors.white,
                 borderRadius:
                     isWide ? BorderRadius.circular(28) : BorderRadius.zero,
-                border: isWide
-                    ? Border.all(color: const Color(0xFFDCE5F0))
-                    : null,
+                border:
+                    isWide ? Border.all(color: const Color(0xFFDCE5F0)) : null,
                 boxShadow: isWide
                     ? const [
                         BoxShadow(
@@ -151,12 +150,16 @@ class MobileNavigationItem {
     required this.label,
     required this.onPressed,
     this.selected = false,
+    this.isAction = false,
+    this.itemKey,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
   final bool selected;
+  final bool isAction;
+  final Key? itemKey;
 }
 
 class MobileNavigationBar extends StatelessWidget {
@@ -169,8 +172,9 @@ class MobileNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasAction = items.any((item) => item.isAction);
     return Container(
-      height: 64,
+      height: hasAction ? 76 : 64,
       decoration: const BoxDecoration(
         color: FixiaColors.white,
         border: Border(top: BorderSide(color: FixiaColors.supportBackground)),
@@ -180,19 +184,53 @@ class MobileNavigationBar extends StatelessWidget {
           for (final item in items)
             Expanded(
               child: InkWell(
-                key: ValueKey('mobile-nav-${item.label.toLowerCase()}'),
+                key: item.itemKey ??
+                    ValueKey('mobile-nav-${item.label.toLowerCase()}'),
                 onTap: item.onPressed,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      item.icon,
-                      size: 21,
-                      color: item.selected
-                          ? FixiaColors.secondary
-                          : const Color(0xFF9AAABD),
+                    SizedBox(
+                      height: hasAction ? 44 : 24,
+                      child: Center(
+                        child: item.isAction
+                            ? Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: item.selected
+                                      ? FixiaColors.white
+                                      : FixiaColors.secondary,
+                                  shape: BoxShape.circle,
+                                  border: item.selected
+                                      ? Border.all(
+                                          color: FixiaColors.secondary,
+                                          width: 2.5)
+                                      : null,
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x30006DFD),
+                                      blurRadius: 12,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(item.icon,
+                                    size: 26,
+                                    color: item.selected
+                                        ? FixiaColors.secondary
+                                        : FixiaColors.white),
+                              )
+                            : Icon(
+                                item.icon,
+                                size: 22,
+                                color: item.selected
+                                    ? FixiaColors.secondary
+                                    : const Color(0xFF9AAABD),
+                              ),
+                      ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       item.label,
                       maxLines: 1,

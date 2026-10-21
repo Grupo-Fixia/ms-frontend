@@ -18,6 +18,7 @@ class TechnicianDashboardPage extends StatelessWidget {
     this.onRequestWithdrawal,
     this.onApplyToOpportunity,
     this.onAvailabilityChanged,
+    this.onOpenAvailability,
   });
 
   final String? firstName;
@@ -31,6 +32,7 @@ class TechnicianDashboardPage extends StatelessWidget {
   final VoidCallback? onRequestWithdrawal;
   final ValueChanged<String>? onApplyToOpportunity;
   final ValueChanged<bool>? onAvailabilityChanged;
+  final VoidCallback? onOpenAvailability;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +61,7 @@ class TechnicianDashboardPage extends StatelessWidget {
                 const SizedBox(height: 14),
                 _AvailabilityCard(
                   onAvailabilityChanged: onAvailabilityChanged,
+                  onOpenAvailability: onOpenAvailability,
                 ),
                 const SizedBox(height: 10),
                 Align(
@@ -313,9 +316,10 @@ class _TechnicianStat extends StatelessWidget {
 }
 
 class _AvailabilityCard extends StatefulWidget {
-  const _AvailabilityCard({required this.onAvailabilityChanged});
+  const _AvailabilityCard({required this.onAvailabilityChanged, this.onOpenAvailability});
 
   final ValueChanged<bool>? onAvailabilityChanged;
+  final VoidCallback? onOpenAvailability;
 
   @override
   State<_AvailabilityCard> createState() => _AvailabilityCardState();
@@ -325,74 +329,60 @@ class _AvailabilityCardState extends State<_AvailabilityCard> {
   bool _isAvailable = true;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: FixiaColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE3EAF4)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1001255D),
-            blurRadius: 10,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: const BoxDecoration(
-              color: Color(0x2600B79E),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.circle,
-              color: FixiaColors.accent,
-              size: 12,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: FixiaColors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE3EAF4)),
+          boxShadow: const [BoxShadow(color: Color(0x1001255D), blurRadius: 10, offset: Offset(0, 3))],
+        ),
+        child: Column(
+          children: [
+            Row(
               children: [
-                Text(
-                  _isAvailable ? 'Disponible para trabajos' : 'No disponible',
-                  style: const TextStyle(
-                    color: FixiaColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: const BoxDecoration(color: Color(0x2600B79E), shape: BoxShape.circle),
+                  child: const Icon(Icons.circle, color: FixiaColors.accent, size: 12),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_isAvailable ? 'Disponible para trabajos' : 'No disponible', style: const TextStyle(color: FixiaColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text(_isAvailable ? 'Recibes solicitudes nuevas' : 'No recibirás solicitudes nuevas', style: Theme.of(context).textTheme.bodySmall),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _isAvailable
-                      ? 'Recibes solicitudes nuevas'
-                      : 'No recibirás solicitudes nuevas',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Switch(
+                  key: const ValueKey('technician-availability-switch'),
+                  value: _isAvailable,
+                  activeColor: FixiaColors.secondary,
+                  onChanged: (value) {
+                    setState(() => _isAvailable = value);
+                    widget.onAvailabilityChanged?.call(value);
+                  },
                 ),
               ],
             ),
-          ),
-          Switch(
-            key: const ValueKey('technician-availability-switch'),
-            value: _isAvailable,
-            activeColor: FixiaColors.secondary,
-            onChanged: (value) {
-              setState(() => _isAvailable = value);
-              widget.onAvailabilityChanged?.call(value);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const ValueKey('technician-open-availability'),
+                onPressed: widget.onOpenAvailability,
+                icon: const Icon(Icons.edit_calendar_rounded, size: 17),
+                label: const Text('Horario y zona de atención'),
+                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              ),
+            ),
+          ],
+        ),
+      );
 }
-
 class _NewOpportunitiesBadge extends StatelessWidget {
   const _NewOpportunitiesBadge();
 

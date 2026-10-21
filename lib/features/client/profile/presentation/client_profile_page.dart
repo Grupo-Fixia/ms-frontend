@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../home/presentation/widgets/dashboard_components.dart';
 import '../domain/client_profile_rules.dart';
 import '../domain/client_profile_update.dart';
 
@@ -15,6 +16,7 @@ class ClientProfilePage extends StatefulWidget {
     this.onSaved,
     this.onBack,
     this.onOpenHome,
+    this.onOpenPublish,
   });
 
   final String firstName;
@@ -24,6 +26,7 @@ class ClientProfilePage extends StatefulWidget {
   final ValueChanged<ClientProfileUpdate>? onSaved;
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
+  final VoidCallback? onOpenPublish;
 
   @override
   State<ClientProfilePage> createState() => _ClientProfilePageState();
@@ -90,106 +93,89 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: FixiaColors.neutralBackground,
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: SizedBox(
-                width: double.infinity,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ProfileHero(
-                      firstName: _firstName,
-                      lastName: _lastName,
-                      onBack: widget.onBack ??
-                          () => Navigator.of(context).maybePop(),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Transform.translate(
-                            offset: const Offset(0, -18),
-                            child: const _ProfileStats(),
-                          ),
-                          const SizedBox(height: 2),
-                          _SectionTitle(
-                            title: 'Información personal',
-                            trailing: IconButton(
-                              key: const ValueKey('client-profile-edit'),
-                              tooltip: _isEditing
-                                  ? 'Cancelar edición'
-                                  : 'Editar perfil',
-                              onPressed: _toggleEditing,
-                              icon: Icon(
-                                _isEditing
-                                    ? Icons.close_rounded
-                                    : Icons.edit_outlined,
-                              ),
-                              color: FixiaColors.secondary,
-                            ),
-                          ),
-                          if (_isEditing)
-                            DecoratedBox(
-                              decoration: FixiaDecorations.card,
-                              child: Padding(
-                                padding: const EdgeInsets.all(18),
-                                child: _editForm(Theme.of(context)),
-                              ),
-                            )
-                          else
-                            _profileSummary(),
-                          if (_isEditing) ...[
-                            const SizedBox(height: 10),
-                            OutlinedButton(
-                              key: const ValueKey('client-profile-cancel'),
-                              onPressed: _cancelEditing,
-                              child: const Text('Cancelar'),
-                            ),
-                          ],
-                          if (_justSavedLocally) ...[
-                            const SizedBox(height: 12),
-                            const _LocalSaveNotice(),
-                          ],
-                          const SizedBox(height: 22),
-                          const _SectionTitle(
-                            title: 'Métodos de pago',
-                            trailing: _DemoDataTag(),
-                          ),
-                          const _PaymentMethodsCard(),
-                          const SizedBox(height: 20),
-                          _WalletSummary(
-                            onWithdraw: () => _showDemoActionMessage(context),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+    return DashboardShell(
+      contentPadding: EdgeInsets.zero,
+      bottomNavigationBar: _ProfileNavigationBar(
+        onHome: widget.onOpenHome ?? () => _showDemoActionMessage(context),
+        onHistory: () => _showDemoActionMessage(context),
+        onPublish:
+            widget.onOpenPublish ?? () => _showDemoActionMessage(context),
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 70,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: _ProfileNavigationBar(
-                onHome:
-                    widget.onOpenHome ?? () => _showDemoActionMessage(context),
-                onHistory: () => _showDemoActionMessage(context),
-                onPublish: () => _showDemoActionMessage(context),
-              ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProfileHero(
+                  firstName: _firstName,
+                  lastName: _lastName,
+                  onBack:
+                      widget.onBack ?? () => Navigator.of(context).maybePop(),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Transform.translate(
+                        offset: const Offset(0, -18),
+                        child: const _ProfileStats(),
+                      ),
+                      const SizedBox(height: 2),
+                      _SectionTitle(
+                        title: 'Información personal',
+                        trailing: IconButton(
+                          key: const ValueKey('client-profile-edit'),
+                          tooltip:
+                              _isEditing ? 'Cancelar edición' : 'Editar perfil',
+                          onPressed: _toggleEditing,
+                          icon: Icon(
+                            _isEditing
+                                ? Icons.close_rounded
+                                : Icons.edit_outlined,
+                          ),
+                          color: FixiaColors.secondary,
+                        ),
+                      ),
+                      if (_isEditing)
+                        DecoratedBox(
+                          decoration: FixiaDecorations.card,
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: _editForm(Theme.of(context)),
+                          ),
+                        )
+                      else
+                        _profileSummary(),
+                      if (_isEditing) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton(
+                          key: const ValueKey('client-profile-cancel'),
+                          onPressed: _cancelEditing,
+                          child: const Text('Cancelar'),
+                        ),
+                      ],
+                      if (_justSavedLocally) ...[
+                        const SizedBox(height: 12),
+                        const _LocalSaveNotice(),
+                      ],
+                      const SizedBox(height: 22),
+                      const _SectionTitle(
+                        title: 'Métodos de pago',
+                        trailing: _DemoDataTag(),
+                      ),
+                      const _PaymentMethodsCard(),
+                      const SizedBox(height: 20),
+                      _WalletSummary(
+                        onWithdraw: () => _showDemoActionMessage(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -785,89 +771,35 @@ class _ProfileNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 70,
-      decoration: const BoxDecoration(
-        color: FixiaColors.white,
-        border: Border(top: BorderSide(color: FixiaColors.supportBackground)),
-      ),
-      child: Row(
-        children: [
-          _ProfileNavItem(
-            keyName: 'client-profile-nav-home',
-            icon: Icons.home_outlined,
-            onPressed: onHome,
-          ),
-          _ProfileNavItem(
-            keyName: 'client-profile-nav-history',
-            icon: Icons.history_rounded,
-            onPressed: onHistory,
-          ),
-          Expanded(
-            child: Center(
-              child: InkWell(
-                key: const ValueKey('client-profile-nav-publish'),
-                onTap: onPublish,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: const BoxDecoration(
-                    color: FixiaColors.secondary,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x30006DFD),
-                        blurRadius: 12,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.add_rounded,
-                    color: FixiaColors.white,
-                    size: 32,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const _ProfileNavItem(
-            keyName: 'client-profile-nav-profile',
-            icon: Icons.person_rounded,
-            selected: true,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileNavItem extends StatelessWidget {
-  const _ProfileNavItem({
-    required this.keyName,
-    required this.icon,
-    this.onPressed,
-    this.selected = false,
-  });
-
-  final String keyName;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        key: ValueKey(keyName),
-        onTap: onPressed,
-        child: Icon(
-          icon,
-          color: selected ? FixiaColors.secondary : const Color(0xFF9AAABD),
-          size: 25,
+    return MobileNavigationBar(
+      items: [
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-profile-nav-home'),
+          icon: Icons.home_outlined,
+          label: 'Inicio',
+          onPressed: onHome,
         ),
-      ),
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-profile-nav-history'),
+          icon: Icons.history_rounded,
+          label: 'Historial',
+          onPressed: onHistory,
+        ),
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-profile-nav-publish'),
+          icon: Icons.add_rounded,
+          label: 'Publicar',
+          isAction: true,
+          onPressed: onPublish,
+        ),
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-profile-nav-profile'),
+          icon: Icons.person_rounded,
+          label: 'Perfil',
+          selected: true,
+          onPressed: () {},
+        ),
+      ],
     );
   }
 }

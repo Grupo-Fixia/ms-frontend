@@ -805,124 +805,35 @@ class _ClientNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 82,
-      decoration: const BoxDecoration(
-        color: FixiaColors.white,
-        border: Border(top: BorderSide(color: FixiaColors.supportBackground)),
-      ),
-      child: Row(
-        children: [
-          const _NavigationItem(
-            icon: Icons.home_rounded,
-            label: 'Inicio',
-            selected: true,
-            onPressed: _noop,
-          ),
-          _NavigationItem(
-            icon: Icons.history_rounded,
-            label: 'Historial',
-            onPressed: onOpenHistory,
-          ),
-          _NavigationItem(
-            icon: Icons.add_rounded,
-            label: 'Publicar',
-            isAction: true,
-            onPressed: onPublishProblem,
-          ),
-          _NavigationItem(
-            icon: Icons.person_outline_rounded,
-            label: 'Perfil',
-            onPressed: onOpenProfile,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavigationItem extends StatelessWidget {
-  const _NavigationItem({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    this.selected = false,
-    this.isAction = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool selected;
-  final bool isAction;
-
-  @override
-  Widget build(BuildContext context) {
-    if (isAction) {
-      return Expanded(
-        child: GestureDetector(
-          key: const ValueKey('client-publish-problem'),
-          onTap: onPressed ?? _noop,
-          behavior: HitTestBehavior.opaque,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: const BoxDecoration(
-                  color: FixiaColors.secondary,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x30006DFD),
-                      blurRadius: 12,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(icon, color: FixiaColors.white, size: 28),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: FixiaColors.textSecondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+    return MobileNavigationBar(
+      items: [
+        const MobileNavigationItem(
+          itemKey: ValueKey('client-nav-inicio'),
+          icon: Icons.home_rounded,
+          label: 'Inicio',
+          selected: true,
+          onPressed: _noop,
         ),
-      );
-    }
-    return Expanded(
-      child: InkWell(
-        key: ValueKey('client-nav-${label.toLowerCase()}'),
-        onTap: onPressed ?? _noop,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: selected ? FixiaColors.secondary : const Color(0xFF9AAABD),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? FixiaColors.secondary
-                    : FixiaColors.textSecondary,
-                fontSize: 11,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ],
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-nav-historial'),
+          icon: Icons.history_rounded,
+          label: 'Historial',
+          onPressed: onOpenHistory ?? _noop,
         ),
-      ),
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-publish-problem'),
+          icon: Icons.add_rounded,
+          label: 'Publicar',
+          isAction: true,
+          onPressed: onPublishProblem ?? _noop,
+        ),
+        MobileNavigationItem(
+          itemKey: const ValueKey('client-nav-perfil'),
+          icon: Icons.person_outline_rounded,
+          label: 'Perfil',
+          onPressed: onOpenProfile ?? _noop,
+        ),
+      ],
     );
   }
 }

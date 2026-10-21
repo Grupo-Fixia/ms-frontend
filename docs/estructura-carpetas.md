@@ -40,6 +40,7 @@ ms-frontend/
 │       └── technician/     #   funcionalidades solo del técnico
 │           ├── profile/    #     perfil profesional (GC-237)
 │           ├── specialties/ # selección local de especialidades (GC-324)
+│           ├── availability/ # disponibilidad y cobertura local (GC-329)
 │           └── opportunities/ # catálogo local de solicitudes (GC-339)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
 │   └── features/auth/registration/...
@@ -89,6 +90,14 @@ dirección exacta y muestra solo una ubicación aproximada; las imágenes y el
 envío son simulados. El catálogo técnico y sus filtros/postulaciones usan
 fixtures locales. La selección GC-324 incluye categorías y subservicios de
 ejemplo, separada del perfil profesional autenticado que utiliza repositorio.
+La disponibilidad y zona de atención del técnico (GC-329) se presenta en
+`features/technician/availability/`: las entidades de horario y cobertura no
+dependen de Flutter, el puerto de aplicación se implementa con un repositorio
+mock local y la pantalla adapta controles táctiles al ancho de teléfono. La
+ruta `/demo/disponibilidad-tecnico` se abre desde “Horario y zona de atención”
+en la pantalla principal del técnico de demostración, no desde la página general
+de inicio. No requiere sesión ni invoca servicios remotos. El mapa es una
+ilustración local, no un mapa conectado.
 Estas vistas reutilizan `MobileFeatureShell` y la barra inferior de Fixia para
 mantener el ancho de teléfono en navegador y conservar la navegación reconocible
 de cada rol. El perfil profesional autenticado conserva su repositorio real;

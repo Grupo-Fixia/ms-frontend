@@ -225,9 +225,17 @@ class _SpecialtyCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(16)),
+    );
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
+        shape: shape,
+        collapsedShape: shape,
+        clipBehavior: Clip.antiAlias,
         key: ValueKey('technician-specialty-${category.apiValue}'),
         initiallyExpanded: enabled,
         leading: Checkbox(
