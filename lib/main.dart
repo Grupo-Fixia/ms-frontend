@@ -22,6 +22,8 @@ import 'features/auth/registration/infrastructure/http_account_registration_repo
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
+import 'features/client/profile/domain/client_profile_update.dart';
+import 'features/client/profile/presentation/client_profile_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
@@ -42,6 +44,7 @@ abstract final class AppRoutes {
   static const technicianRegistration = '/registro-tecnico';
   static const clientDashboard = '/demo/inicio-cliente';
   static const technicianDashboard = '/demo/inicio-tecnico';
+  static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
 
@@ -200,7 +203,36 @@ class _FixiaAppState extends State<FixiaApp> {
     final profile = _sessionStore.profile!;
     return ClientDashboardPage(
       firstName: profile.firstName,
+      onOpenProfile: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientProfile),
       onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  Widget _clientProfilePage(BuildContext context) {
+    final profile = _sessionStore.profile;
+    if (!_sessionStore.isAuthenticated ||
+        profile == null ||
+        profile.role != UserRole.client) {
+      return _loginPage(context);
+    }
+    return ClientProfilePage(
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: profile.email,
+      phone: profile.phone,
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
+      onSaved: (ClientProfileUpdate update) {
+        _sessionStore.updateProfile(
+          profile.copyWith(
+            firstName: update.firstName,
+            lastName: update.lastName,
+            phone: update.phone,
+          ),
+        );
+      },
     );
   }
 
@@ -311,6 +343,7 @@ class _FixiaAppState extends State<FixiaApp> {
             _forRole(UserRole.client, _clientDashboardPage),
         AppRoutes.technicianDashboard:
             _forRole(UserRole.professional, _technicianDashboardPage),
+        AppRoutes.clientProfile: _forRole(UserRole.client, _clientProfilePage),
       },
     );
   }

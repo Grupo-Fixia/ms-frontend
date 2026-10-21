@@ -318,6 +318,53 @@ void main() {
     expect(find.text('Hola, Ana'), findsOneWidget);
   });
 
+  testWidgets('el perfil del cliente usa y actualiza la sesión autenticada',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, fixtureProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    await tester.tap(find.byKey(const ValueKey('client-nav-perfil')));
+    await tester.pumpAndSettle();
+    expect(find.text('ana@fixia.com'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('client-profile-edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('client-profile-first-name')),
+      'Lucía',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('client-profile-last-name')),
+      'Gómez',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('client-profile-phone')),
+      '+573001112233',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('client-profile-save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('client-profile-save')));
+    await tester.pumpAndSettle();
+
+    expect(store.profile?.firstName, 'Lucía');
+    expect(store.profile?.lastName, 'Gómez');
+    expect(find.byKey(const ValueKey('client-profile-saved-local')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('client-profile-nav-home')));
+    await tester.pumpAndSettle();
+    expect(find.text('Hola, Lucía'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('client-nav-perfil')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('client-profile-full-name')))
+          .data,
+      'Lucía Gómez',
+    );
+  });
+
   testWidgets('del login se llega al registro y de vuelta', (tester) async {
     await _pumpApp(tester);
 
