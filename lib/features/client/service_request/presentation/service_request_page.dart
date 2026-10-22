@@ -13,9 +13,15 @@ class ServiceRequestPage extends StatefulWidget {
     this.onOpenHome,
     this.onOpenHistory,
     this.onOpenProfile,
+    this.publish,
   });
 
   final ValueChanged<ServiceRequestDraft>? onSubmitted;
+
+  /// Publica la solicitud en el servidor (GC-335). Si es `null`, la
+  /// confirmación es solo de demostración. Si falla, lanza una excepción con
+  /// el mensaje para el usuario.
+  final Future<void> Function(ServiceRequestDraft draft)? publish;
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
   final VoidCallback? onOpenHistory;
@@ -31,11 +37,20 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
   ServiceCategory? _category;
   DateTime? _expectedAt;
   final List<int> _photos = [];
+  String _city = '';
+  String _zone = '';
+  bool _submitting = false;
+
+  bool get _publishes => widget.publish != null;
+
+  bool get _hasLocation => _city.isNotEmpty && _zone.isNotEmpty;
 
   bool get _canSubmit =>
+      !_submitting &&
       _category != null &&
       _descriptionController.text.trim().isNotEmpty &&
-      _expectedAt != null;
+      _expectedAt != null &&
+      (!_publishes || _hasLocation);
 
   @override
   void dispose() {
@@ -92,7 +107,28 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
       description: _descriptionController.text.trim(),
       expectedAt: _expectedAt!,
       photoCount: _photos.length,
+      city: _city,
+      zone: _zone,
     );
+    final publish = widget.publish;
+    if (publish != null) {
+      setState(() => _submitting = true);
+      try {
+        await publish(draft);
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _submitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            key: const ValueKey('client-request-error'),
+            content: Text('$error'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _submitting = false);
+    }
     widget.onSubmitted?.call(draft);
     await showDialog<void>(
       context: context,
@@ -103,9 +139,11 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
           color: FixiaColors.accent,
           size: 42,
         ),
-        title: const Text('Solicitud lista'),
-        content: const Text(
-          'Esta es una confirmación de demostración. No se envió información a ningún servidor.',
+        title: Text(publish != null ? 'Solicitud publicada' : 'Solicitud lista'),
+        content: Text(
+          publish != null
+              ? 'Los técnicos compatibles de tu zona ya pueden verla y postularse.'
+              : 'Esta es una confirmación de demostración. No se envió información a ningún servidor.',
         ),
         actions: [
           FilledButton(
@@ -189,7 +227,14 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
                   ),
                   const SizedBox(height: 8),
                   _LocationPrivacyCard(
-                    onChangeLocation: () => _showLocationDemo(context),
+                    location: !_publishes
+                        ? 'Chapinero, Bogotá'
+                        : _hasLocation
+                            ? '$_zone, $_city'
+                            : null,
+                    onChangeLocation: _publishes
+                        ? _pickLocation
+                        : () => _showLocationDemo(context),
                   ),
                   const SizedBox(height: 18),
                   OutlinedButton.icon(
@@ -225,7 +270,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
                     key: const ValueKey('client-request-submit'),
                     onPressed: _canSubmit ? _submit : null,
                     icon: const Icon(Icons.send_rounded),
-                    label: const Text('Enviar solicitud'),
+                    label: Text(_submitting ? 'Enviando…' : 'Enviar solicitud'),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -287,6 +332,21 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
     return '$date · $time';
   }
 
+  /// Ciudad y zona (barrio o localidad) que verán los técnicos. La
+  /// dirección exacta no se pide aquí: se comparte solo al contratar.
+  Future<void> _pickLocation() async {
+    final picked = await showDialog<({String city, String zone})>(
+      context: context,
+      builder: (context) => _LocationDialog(city: _city, zone: _zone),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _city = picked.city;
+        _zone = picked.zone;
+      });
+    }
+  }
+
   void _showLocationDemo(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -298,9 +358,92 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
   }
 }
 
-class _LocationPrivacyCard extends StatelessWidget {
-  const _LocationPrivacyCard({required this.onChangeLocation});
+/// Pide ciudad y barrio. Los campos viven con el diálogo: así no se
+/// descartan mientras se anima su cierre.
+class _LocationDialog extends StatefulWidget {
+  const _LocationDialog({required this.city, required this.zone});
 
+  final String city;
+  final String zone;
+
+  @override
+  State<_LocationDialog> createState() => _LocationDialogState();
+}
+
+class _LocationDialogState extends State<_LocationDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final _city = TextEditingController(text: widget.city);
+  late final _zone = TextEditingController(text: widget.zone);
+
+  @override
+  void dispose() {
+    _city.dispose();
+    _zone.dispose();
+    super.dispose();
+  }
+
+  String? _required(String? value, String label) =>
+      value == null || value.trim().isEmpty ? 'Escribe $label.' : null;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const ValueKey('client-request-location-dialog'),
+      title: const Text('Ubicación aproximada'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              key: const ValueKey('client-request-city'),
+              controller: _city,
+              maxLength: 80,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Ciudad'),
+              validator: (value) => _required(value, 'la ciudad'),
+            ),
+            TextFormField(
+              key: const ValueKey('client-request-zone'),
+              controller: _zone,
+              maxLength: 80,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Barrio o localidad',
+              ),
+              validator: (value) => _required(value, 'el barrio o localidad'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          key: const ValueKey('client-request-location-save'),
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.of(context).pop(
+              (city: _city.text.trim(), zone: _zone.text.trim()),
+            );
+          },
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _LocationPrivacyCard extends StatelessWidget {
+  const _LocationPrivacyCard({
+    required this.location,
+    required this.onChangeLocation,
+  });
+
+  /// `null` si todavía no se eligió.
+  final String? location;
   final VoidCallback onChangeLocation;
 
   @override
@@ -315,23 +458,29 @@ class _LocationPrivacyCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.location_on_outlined, color: FixiaColors.secondary),
-              SizedBox(width: 10),
+              const Icon(Icons.location_on_outlined,
+                  color: FixiaColors.secondary),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Ubicación aproximada',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      location == null
+                          ? 'Ubicación aproximada *'
+                          : 'Ubicación aproximada',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Chapinero, Bogotá · Tu dirección exacta se protege.',
-                      style: TextStyle(fontSize: 12),
+                      location == null
+                          ? 'Elige tu ciudad y barrio. Tu dirección exacta se protege.'
+                          : '$location · Tu dirección exacta se protege.',
+                      key: const ValueKey('client-request-location-label'),
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ],
                 ),
@@ -344,7 +493,9 @@ class _LocationPrivacyCard extends StatelessWidget {
               key: const ValueKey('client-request-change-location'),
               onPressed: onChangeLocation,
               icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
-              label: const Text('Cambiar ubicación'),
+              label: Text(
+                location == null ? 'Elegir ubicación' : 'Cambiar ubicación',
+              ),
             ),
           ),
         ],
