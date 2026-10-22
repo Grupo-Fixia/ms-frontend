@@ -22,6 +22,7 @@ ms-frontend/
 ├── docs/                   # Documentación del frontend (este archivo)
 ├── lib/
 │   ├── main.dart           # Punto de entrada: tema, rutas e inyección de dependencias
+│   ├── backend_integrations.dart  # repositorios HTTP que conectan las pantallas con el backend
 │   ├── core/               # Código compartido por TODAS las funcionalidades
 │   │   ├── config/         #   configuración de las APIs (URL base del backend)
 │   │   ├── http/           #   llamadas autenticadas (token + renovación ante 401)
@@ -35,11 +36,18 @@ ms-frontend/
 │       │   └── registration/   # registro de cliente y de técnico (GC-234, GC-235)
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
+│       ├── quotations/     #   cotizaciones: las envía el técnico y las responde el cliente (GC-300, GC-301)
+│       ├── contracts/      #   contratación al aceptar una cotización (GC-301)
 │       ├── client/         #   funcionalidades solo del cliente
-│       │   └── service_requests/   # publicar y consultar solicitudes (GC-296)
+│       │   ├── dashboard/  #     inicio del cliente (GC-312)
+│       │   ├── profile/    #     perfil del cliente (GC-293)
+│       │   ├── service_request/    # formulario para publicar un problema (GC-296)
+│       │   └── service_requests/   # publicar y consultar solicitudes, postulantes (GC-296, GC-299)
 │       └── technician/     #   funcionalidades solo del técnico
 │           ├── applications/   # postulaciones a solicitudes (GC-298)
 │           ├── availability/   # disponibilidad y zona de atención (GC-295)
+│           ├── dashboard/  #     inicio del técnico (GC-313)
+│           ├── opportunities/  # solicitudes compatibles (GC-297)
 │           ├── profile/    #     perfil profesional (GC-237)
 │           └── specialties/    # especialidades y servicios (GC-294)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
@@ -52,6 +60,7 @@ ms-frontend/
 1. **¿La usan varios roles?** (login, registro, perfil común, notificaciones) → `features/auth/` o una carpeta común con nombre del dominio. Ejemplo: cliente y técnico se registran con los mismos datos, así que comparten `features/auth/registration/` y solo cambian los textos y el endpoint según el rol (`AccountRole`).
 2. **¿Es de un solo actor?** → `features/client/<funcionalidad>/` o `features/technician/<funcionalidad>/`.
 3. **¿Es infraestructura transversal sin pantalla propia?** (tema, cliente HTTP, constantes) → `core/`.
+4. **¿Es de dos actores que la ven de lados distintos?** (cotizaciones, contratación) → una carpeta con el nombre del dominio en `features/`, como `features/quotations/`: el técnico envía la cotización y el cliente la acepta o la rechaza con los mismos modelos.
 
 ## 3. Capas dentro de cada funcionalidad
 
@@ -101,6 +110,7 @@ infrastructure ──► application ──► domain
 - `core/config/api_config.dart` define las URL base del backend: `ApiConfig.usersBaseUrl` se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik; `ApiConfig.servicesBaseUrl` (ms-services) usa por defecto ese mismo origen, porque el gateway enruta por prefijo (`/api/users`, `/api/services`), y se puede cambiar con `SERVICES_API_BASE_URL`. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
 - `core/http/authorized_http.dart` (`AuthorizedHttp`) envía las llamadas con sesión: pone el access token y, ante un 401, renueva la sesión y reintenta una vez. Si varias peticiones reciben 401 a la vez hace una sola renovación y todas la esperan, y si una petición salió con un token que ya se renovó, reintenta sin volver a renovar. La app usa una sola instancia. Cada repositorio traduce el resto de respuestas a sus propios errores.
+- `lib/backend_integrations.dart` (`BackendIntegrations`) arma los repositorios HTTP del perfil del cliente, las solicitudes, las oportunidades y las postulaciones con un solo `AuthorizedHttp`, y `main.dart` los entrega a las pantallas. Las pantallas reciben funciones (`saveProfile`, `publish`, `loadOpportunities`, `applyTo`): si no las reciben, funcionan con datos de demostración, que es lo que usan sus pruebas de widgets.
 - `core/widgets/` guarda widgets que usan varias funcionalidades; por ejemplo `TechnicianSteps` (crear cuenta → completar perfil → verificación), que muestran el registro y el perfil del técnico.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
 
@@ -120,7 +130,9 @@ Al leer respuestas del backend, decodificar siempre como UTF-8 (`utf8.decode(res
 ## 7. Sesión y seguridad
 
 - El access token y el perfil viven **solo en memoria** (`SessionStore`).
-- El refresh token se guarda en el navegador con `BrowserSessionStorage` (GC-394): siempre en `sessionStorage`, para que la sesión sobreviva a recargar la página y se borre al cerrar la pestaña, y con "Mantener sesión iniciada" también en `localStorage`, para restaurarla al reabrir el navegador. Al renovarlo se reemplaza en el mismo alcance y al cerrar sesión se borran ambos. Al restaurar se lee primero el de `localStorage`, que comparten todas las pestañas y siempre es el más nuevo; si un token falla, solo se borra si otra pestaña no lo reemplazó ya. Es un riesgo conocido: un script malicioso en la página (XSS) podría leerlo. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión.
+- La sesión es **una sola en todo el navegador** (GC-394): el refresh token se guarda en `localStorage`, que comparten las pestañas, y cada pestaña guarda además una copia en `sessionStorage` para recargar (F5). Una pestaña nueva entra con la sesión ya iniciada: la raíz (`/`) muestra la bienvenida y "Iniciar sesión" lleva directo al inicio de la cuenta.
+- Sin "Mantener sesión iniciada", la sesión dura mientras quede abierta alguna pestaña de Fixia (`OpenTabs`: cada pestaña deja una señal de vida que renueva cada 15 s y borra al cerrarse; vence a los 90 s si el navegador se cuelga), y una cookie de sesión con solo el id de la sesión (nunca el token) la invalida al cerrar el navegador. Con "Mantener sesión iniciada" sobrevive a cerrar el navegador.
+- Si en una pestaña se cierra sesión, las demás van al login; si se entra con otra cuenta, las demás pasan a esa cuenta (`FollowSharedSession`). Es un riesgo conocido: un script malicioso en la página (XSS) podría leer el refresh token. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión.
 - `sessionStorage` y `localStorage` se piden en cada operación, no al arrancar: si el navegador los bloquea, la app abre igual y la sesión vive solo en memoria.
 - Al cerrar sesión se revocan los tokens en ms-users; si el access token ya venció (dura 15 minutos), primero se renueva para poder revocar el refresh token.
 - Las llamadas con sesión (por ejemplo, el perfil del técnico) reciben el access token desde `main.dart` y, si el backend responde 401, renuevan la sesión una sola vez con `RefreshSession` y reintentan. Si varias llamadas piden renovar a la vez, se hace una sola renovación y todas esperan su resultado (el refresh token es de un solo uso). Si no hay red al renovar, se informa como problema de conexión y el usuario no sale de su sesión (`RefreshSession.renew` lanza `BackendUnreachableException`). Si se cierra sesión mientras se renueva, primero se espera la renovación para revocar el token nuevo, y una renovación que termina después de cerrar sesión se descarta. Si tampoco sirve, la app vuelve al inicio de sesión. Así ninguna funcionalidad importa el `SessionStore` de otra.
