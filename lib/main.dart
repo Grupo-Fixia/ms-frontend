@@ -30,6 +30,10 @@ import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
+import 'features/technician/applications/application/application_use_cases.dart';
+import 'features/technician/applications/infrastructure/http_application_repository.dart';
+import 'features/technician/opportunities/application/list_compatible_opportunities.dart';
+import 'features/technician/opportunities/infrastructure/http_opportunity_repository.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
@@ -87,6 +91,20 @@ Future<void> main() async {
   final sessionStore = SessionStore();
   await RestoreSession(authRepository, sessionStore, sessionStorage)();
 
+  // ms-services con sesión real, salvo que se pida el modo local
+  // (`--dart-define=USE_MOCK_APPLICATIONS=true`).
+  final servicesApiBaseUrl = Uri.parse(ApiConfig.servicesBaseUrl);
+  final servicesAuthorizedHttp = ApiConfig.useMockApplications
+      ? null
+      : AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).call,
+        );
+
   runApp(
     FixiaApp(
       clientRegistrationRepository: HttpAccountRegistrationRepository(
@@ -123,6 +141,24 @@ Future<void> main() async {
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
+      listOpportunities: servicesAuthorizedHttp == null
+          ? null
+          : ListCompatibleOpportunities(
+              HttpOpportunityRepository(
+                client: httpClient,
+                baseUrl: servicesApiBaseUrl,
+                authorizedHttp: servicesAuthorizedHttp,
+              ),
+            ),
+      applyToServiceRequest: servicesAuthorizedHttp == null
+          ? null
+          : ApplyToServiceRequest(
+              HttpApplicationRepository(
+                client: httpClient,
+                baseUrl: servicesApiBaseUrl,
+                authorizedHttp: servicesAuthorizedHttp,
+              ),
+            ),
     ),
   );
 }
@@ -136,8 +172,15 @@ class FixiaApp extends StatefulWidget {
     required this.authRepository,
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
+    this.listOpportunities,
+    this.applyToServiceRequest,
     this.sessionStore,
   });
+
+  /// Solicitudes compatibles y postulación reales (ms-services). Si son
+  /// `null` la pantalla de oportunidades usa datos locales de demostración.
+  final ListCompatibleOpportunities? listOpportunities;
+  final ApplyToServiceRequest? applyToServiceRequest;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -188,6 +231,7 @@ class _FixiaAppState extends State<FixiaApp> {
     }
     _wasAuthenticated = authenticated;
   }
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -382,6 +426,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
       onOpenOpportunities: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onApplyToOpportunity: (_) =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -394,6 +440,12 @@ class _FixiaAppState extends State<FixiaApp> {
 
   Widget _technicianOpportunitiesPage(BuildContext context) {
     return TechnicianOpportunitiesPage(
+      listOpportunities: widget.listOpportunities,
+      applyToServiceRequest: widget.applyToServiceRequest,
+      onSessionExpired: () {
+        _sessionStore.clear();
+        _goToLogin(context);
+      },
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
@@ -547,6 +599,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.firstName,
     required this.onOpenSettings,
     required this.onOpenOpportunities,
+    required this.onApplyToOpportunity,
     required this.onOpenSpecialties,
     required this.onLogout,
     required this.onSessionExpired,
@@ -556,6 +609,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final String firstName;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
+  final ValueChanged<String> onApplyToOpportunity;
   final VoidCallback onOpenSpecialties;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
@@ -651,8 +705,10 @@ class _TechnicianDashboardLoaderState
         return TechnicianDashboardPage(
           firstName: widget.firstName,
           verificationStatus: verificationStatus,
+          allowDemoApply: true,
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
+          onApplyToOpportunity: widget.onApplyToOpportunity,
           onOpenSpecialties: widget.onOpenSpecialties,
           onLogout: widget.onLogout,
         );
