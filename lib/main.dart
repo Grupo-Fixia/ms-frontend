@@ -31,7 +31,6 @@ import 'features/technician/profile/domain/technician_profile.dart';
 import 'features/technician/profile/domain/technician_profile_exceptions.dart';
 import 'features/technician/profile/infrastructure/http_technician_profile_repository.dart';
 import 'features/technician/profile/presentation/technician_profile_page.dart';
-import 'features/technician/profile/infrastructure/demo_technician_profile_repository.dart';
 import 'features/technician/profile/domain/verification_status.dart';
 
 /// Rutas de la aplicación.
@@ -43,7 +42,6 @@ abstract final class AppRoutes {
   static const technicianRegistration = '/registro-tecnico';
   static const clientDashboard = '/demo/inicio-cliente';
   static const technicianDashboard = '/demo/inicio-tecnico';
-  static const technicianProfileDemo = '/demo/perfil-tecnico';
   static const technicianProfile = '/tecnico/perfil';
 }
 
@@ -161,6 +159,17 @@ class _FixiaAppState extends State<FixiaApp> {
 
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+
+  /// Solo deja ver la pantalla al rol indicado. Sin sesión redirige al login
+  /// y con otro rol, al inicio de su propia cuenta.
+  WidgetBuilder _forRole(UserRole role, WidgetBuilder builder) => (context) {
+        final current = _sessionStore.profile?.role;
+        if (!_sessionStore.isAuthenticated || current == null) {
+          return const _RedirectTo(AppRoutes.login);
+        }
+        if (current != role) return const _RedirectTo(AppRoutes.home);
+        return builder(context);
+      };
 
   /// Abre el inicio correspondiente al rol de la cuenta autenticada.
   Widget _sessionPage(BuildContext context) {
@@ -298,31 +307,39 @@ class _FixiaAppState extends State<FixiaApp> {
               onSwitchRole: () => Navigator.of(context)
                   .pushReplacementNamed(AppRoutes.clientRegistration),
             ),
-        AppRoutes.clientDashboard: (context) =>
-            _sessionStore.profile?.role == UserRole.client
-                ? _clientDashboardPage(context)
-                : const ClientDashboardPage(),
-        AppRoutes.technicianDashboard: (context) =>
-            _sessionStore.profile?.role == UserRole.professional
-                ? _technicianDashboardPage(context)
-                : TechnicianDashboardPage(
-                    onOpenSettings: () => Navigator.of(context)
-                        .pushNamed(AppRoutes.technicianProfileDemo),
-                  ),
-        AppRoutes.technicianProfileDemo: (context) {
-          final repository = DemoTechnicianProfileRepository();
-          return TechnicianProfilePage(
-            getProfile: GetTechnicianProfile(repository),
-            updateProfile: UpdateTechnicianProfile(repository),
-            firstName: 'Carlos',
-            onBack: () => Navigator.of(context).maybePop(),
-            onOpenHome: () => Navigator.of(context)
-                .pushReplacementNamed(AppRoutes.technicianDashboard),
-          );
-        },
+        AppRoutes.clientDashboard:
+            _forRole(UserRole.client, _clientDashboardPage),
+        AppRoutes.technicianDashboard:
+            _forRole(UserRole.professional, _technicianDashboardPage),
       },
     );
   }
+}
+
+/// Reemplaza la ruta actual por [route] apenas se dibuja el primer cuadro.
+class _RedirectTo extends StatefulWidget {
+  const _RedirectTo(this.route);
+
+  final String route;
+
+  @override
+  State<_RedirectTo> createState() => _RedirectToState();
+}
+
+class _RedirectToState extends State<_RedirectTo> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil(widget.route, (_) => false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: SizedBox.shrink());
 }
 
 class _TechnicianDashboardLoader extends StatefulWidget {

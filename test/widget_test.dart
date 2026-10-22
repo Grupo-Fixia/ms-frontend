@@ -55,33 +55,71 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-title')), findsOneWidget);
     expect(find.byKey(const ValueKey('login-submit')), findsNothing);
-    expect(find.byKey(const ValueKey('home-preview-availability')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('home-preview-availability')), findsNothing);
   });
 
-  testWidgets('desde el dashboard técnico abre el perfil demo y puede navegar',
+  testWidgets('sin sesión las rutas de cliente y técnico llevan al login',
       (tester) async {
-    await _pumpApp(tester, openLogin: false);
+    for (final route in [
+      AppRoutes.clientDashboard,
+      AppRoutes.technicianDashboard,
+    ]) {
+      await _pumpApp(tester, openLogin: false);
+      tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(route);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+      expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+          findsNothing);
+    }
+  });
+
+  testWidgets('un técnico no puede abrir la ruta del cliente', (tester) async {
+    final store = SessionStore()..start(fixtureSession, _technicianProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.clientDashboard);
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('client-dashboard-greeting')), findsNothing);
+    expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsOneWidget);
+  });
+
+  testWidgets('un cliente no puede abrir la ruta del técnico', (tester) async {
+    final store = SessionStore()..start(fixtureSession, fixtureProfile);
+    await _pumpApp(tester, sessionStore: store);
 
     tester
         .state<NavigatorState>(find.byType(Navigator))
         .pushNamed(AppRoutes.technicianDashboard);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('technician-nav-perfil')));
-    await tester.pumpAndSettle();
-    expect(find.text('Perfil profesional'), findsOneWidget);
-    expect(find.byKey(const ValueKey('technician-profile-summary')),
-        findsOneWidget);
-    expect(find.text('Hola, Carlos'), findsOneWidget);
-    expect(find.text('Tu solicitud está en revisión'), findsOneWidget);
-    expect(find.byKey(const ValueKey('mobile-nav-perfil')), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('mobile-nav-inicio')));
-    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
         findsOneWidget);
   });
 
+  testWidgets('con sesión de técnico, su ruta abre el dashboard',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, _technicianProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.technicianDashboard);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsOneWidget);
+  });
 
   testWidgets('de la página de inicio se llega al login y al registro',
       (tester) async {
