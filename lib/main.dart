@@ -39,7 +39,6 @@ import 'features/client/profile/presentation/client_profile_page.dart';
 import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
-import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/applications/application/application_use_cases.dart';
 import 'features/technician/applications/infrastructure/http_application_repository.dart';
 import 'features/technician/opportunities/application/list_compatible_opportunities.dart';
