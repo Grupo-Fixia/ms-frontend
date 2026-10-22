@@ -6,4 +6,12 @@ abstract final class ApiConfig {
     'USERS_API_BASE_URL',
     defaultValue: 'http://localhost',
   );
+
+  /// URL base de ms-services (`/api/services/...`). Por defecto es la misma
+  /// de ms-users, porque el gateway enruta ambos por prefijo desde el mismo
+  /// origen; se puede cambiar con `SERVICES_API_BASE_URL`.
+  static const servicesBaseUrl = String.fromEnvironment(
+    'SERVICES_API_BASE_URL',
+    defaultValue: usersBaseUrl,
+  );
 }

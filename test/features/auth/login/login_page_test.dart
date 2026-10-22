@@ -103,9 +103,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(storage.refreshToken, fixtureSession.refreshToken);
+    expect(storage.persisted, isTrue);
   });
 
-  testWidgets('sin marcar la casilla no se guarda ningún token',
+  testWidgets('sin marcar la casilla el token se guarda solo en la pestaña',
       (tester) async {
     final storage = FakeSessionStorage();
     await _pump(tester, FakeAuthRepository(), storage: storage);
@@ -114,7 +115,8 @@ void main() {
     await _submit(tester);
     await tester.pumpAndSettle();
 
-    expect(storage.refreshToken, isNull);
+    expect(storage.refreshToken, fixtureSession.refreshToken);
+    expect(storage.persisted, isFalse);
   });
 
   testWidgets('la casilla se bloquea mientras se envía', (tester) async {

@@ -24,6 +24,7 @@ ms-frontend/
 │   ├── main.dart           # Punto de entrada: tema, rutas e inyección de dependencias
 │   ├── core/               # Código compartido por TODAS las funcionalidades
 │   │   ├── config/         #   configuración de las APIs (URL base del backend)
+│   │   ├── http/           #   llamadas autenticadas (token + renovación ante 401)
 │   │   ├── constants/      #   valores globales (ej. versión de la política de datos)
 │   │   ├── theme/          #   tema según el Brand Board v1.0
 │   │   ├── validation/     #   reglas usadas por varias funcionalidades (ej. correo)
@@ -34,9 +35,13 @@ ms-frontend/
 │       │   └── registration/   # registro de cliente y de técnico (GC-234, GC-235)
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
-│       ├── client/         #   funcionalidades solo del cliente (cuando existan)
+│       ├── client/         #   funcionalidades solo del cliente
+│       │   └── service_requests/   # publicar y consultar solicitudes (GC-296)
 │       └── technician/     #   funcionalidades solo del técnico
-│           └── profile/    #     perfil profesional (GC-237)
+│           ├── applications/   # postulaciones a solicitudes (GC-298)
+│           ├── availability/   # disponibilidad y zona de atención (GC-295)
+│           ├── profile/    #     perfil profesional (GC-237)
+│           └── specialties/    # especialidades y servicios (GC-294)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
 │   └── features/auth/registration/...
 └── web/                    # Archivos de la plataforma web (index.html, íconos)
@@ -92,9 +97,10 @@ infrastructure ──► application ──► domain
 ## 5. Código compartido (`core/`)
 
 - `core/theme/fixia_theme.dart` es **el único tema** de la app (Brand Board v1.0). No se definen colores ni tipografías sueltos en las páginas: se usan `FixiaColors`, `FixiaTheme` y `FixiaDecorations`.
-- `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend) y `ServiceCategory`, las 6 categorías de servicio que acepta ms-users.
-- `core/config/api_config.dart` define la URL base del backend (`ApiConfig.usersBaseUrl`): se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik. Ninguna funcionalidad escribe URLs del backend a mano.
+- `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend), `ServiceCategory`, las 6 categorías de servicio que acepta ms-users, `ServiceRequestStatus`, los estados de una solicitud en ms-services, y `ApplicationStatus`, los de una postulación (los usan las solicitudes y postulantes del cliente y las postulaciones del técnico).
+- `core/config/api_config.dart` define las URL base del backend: `ApiConfig.usersBaseUrl` se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik; `ApiConfig.servicesBaseUrl` (ms-services) usa por defecto ese mismo origen, porque el gateway enruta por prefijo (`/api/users`, `/api/services`), y se puede cambiar con `SERVICES_API_BASE_URL`. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
+- `core/http/authorized_http.dart` (`AuthorizedHttp`) envía las llamadas con sesión: pone el access token y, ante un 401, renueva la sesión y reintenta una vez. Si varias peticiones reciben 401 a la vez hace una sola renovación y todas la esperan, y si una petición salió con un token que ya se renovó, reintenta sin volver a renovar. La app usa una sola instancia. Cada repositorio traduce el resto de respuestas a sus propios errores.
 - `core/widgets/` guarda widgets que usan varias funcionalidades; por ejemplo `TechnicianSteps` (crear cuenta → completar perfil → verificación), que muestran el registro y el perfil del técnico.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
 
@@ -114,9 +120,10 @@ Al leer respuestas del backend, decodificar siempre como UTF-8 (`utf8.decode(res
 ## 7. Sesión y seguridad
 
 - El access token y el perfil viven **solo en memoria** (`SessionStore`).
-- Con "Mantener sesión iniciada", el refresh token se guarda en el navegador (`localStorage`, vía `shared_preferences`) para restaurar la sesión al reabrir la app. Es un riesgo conocido: un script malicioso en la página (XSS) podría leerlo. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión. Sin esa opción no se guarda nada.
+- El refresh token se guarda en el navegador con `BrowserSessionStorage` (GC-394): siempre en `sessionStorage`, para que la sesión sobreviva a recargar la página y se borre al cerrar la pestaña, y con "Mantener sesión iniciada" también en `localStorage`, para restaurarla al reabrir el navegador. Al renovarlo se reemplaza en el mismo alcance y al cerrar sesión se borran ambos. Al restaurar se lee primero el de `localStorage`, que comparten todas las pestañas y siempre es el más nuevo; si un token falla, solo se borra si otra pestaña no lo reemplazó ya. Es un riesgo conocido: un script malicioso en la página (XSS) podría leerlo. Se mitiga porque el backend lo invalida en cada uso (rotación) y al cerrar sesión.
+- `sessionStorage` y `localStorage` se piden en cada operación, no al arrancar: si el navegador los bloquea, la app abre igual y la sesión vive solo en memoria.
 - Al cerrar sesión se revocan los tokens en ms-users; si el access token ya venció (dura 15 minutos), primero se renueva para poder revocar el refresh token.
-- Las llamadas con sesión (por ejemplo, el perfil del técnico) reciben el access token desde `main.dart` y, si el backend responde 401, renuevan la sesión una sola vez con `RefreshSession` y reintentan. Si tampoco sirve, la app vuelve al inicio de sesión. Así ninguna funcionalidad importa el `SessionStore` de otra.
+- Las llamadas con sesión (por ejemplo, el perfil del técnico) reciben el access token desde `main.dart` y, si el backend responde 401, renuevan la sesión una sola vez con `RefreshSession` y reintentan. Si varias llamadas piden renovar a la vez, se hace una sola renovación y todas esperan su resultado (el refresh token es de un solo uso). Si no hay red al renovar, se informa como problema de conexión y el usuario no sale de su sesión (`RefreshSession.renew` lanza `BackendUnreachableException`). Si se cierra sesión mientras se renueva, primero se espera la renovación para revocar el token nuevo, y una renovación que termina después de cerrar sesión se descarta. Si tampoco sirve, la app vuelve al inicio de sesión. Así ninguna funcionalidad importa el `SessionStore` de otra.
 - Al crear una cuenta de técnico se inicia sesión automáticamente con los datos recién escritos (pasa directo a completar el perfil); la contraseña no se guarda.
 
 ## 8. Antes de abrir un PR
