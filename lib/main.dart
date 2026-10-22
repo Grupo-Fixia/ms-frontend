@@ -233,6 +233,7 @@ class _FixiaAppState extends State<FixiaApp> {
     }
     _wasAuthenticated = authenticated;
   }
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -427,6 +428,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
       onOpenOpportunities: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onApplyToOpportunity: (_) =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -603,6 +606,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.firstName,
     required this.onOpenSettings,
     required this.onOpenOpportunities,
+    required this.onApplyToOpportunity,
     required this.onOpenSpecialties,
     required this.onLogout,
     required this.onSessionExpired,
@@ -612,6 +616,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final String firstName;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
+  final ValueChanged<String> onApplyToOpportunity;
   final VoidCallback onOpenSpecialties;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
@@ -702,13 +707,17 @@ class _TechnicianDashboardLoaderState
             ),
           );
         }
-        final verificationStatus =
-            snapshot.data?.verificationStatus ?? VerificationStatus.pending;
+        // Con postulaciones simuladas no hay backend que valide RF-014, así que
+        // se habilita el botón para poder probar el flujo.
+        final verificationStatus = ApiConfig.useMockApplications
+            ? VerificationStatus.valid
+            : snapshot.data?.verificationStatus ?? VerificationStatus.pending;
         return TechnicianDashboardPage(
           firstName: widget.firstName,
           verificationStatus: verificationStatus,
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
+          onApplyToOpportunity: widget.onApplyToOpportunity,
           onOpenSpecialties: widget.onOpenSpecialties,
           onLogout: widget.onLogout,
         );
