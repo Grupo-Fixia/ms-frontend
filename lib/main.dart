@@ -30,14 +30,11 @@ import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
-<<<<<<< HEAD
 import 'features/technician/availability/application/availability_use_cases.dart';
 import 'features/technician/availability/application/ports/technician_availability_repository.dart';
 import 'features/technician/availability/infrastructure/demo_technician_availability_repository.dart';
 import 'features/technician/availability/infrastructure/http_technician_availability_repository.dart';
 import 'features/technician/availability/presentation/technician_availability_page.dart';
-=======
->>>>>>> develop
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
@@ -66,10 +63,7 @@ abstract final class AppRoutes {
   static const clientServiceRequest = '/cliente/publicar-problema';
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianSpecialties = '/tecnico/especialidades';
-<<<<<<< HEAD
   static const technicianAvailability = '/tecnico/disponibilidad';
-=======
->>>>>>> develop
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
@@ -126,7 +120,6 @@ Future<void> main() async {
           ).call,
         ),
       ),
-<<<<<<< HEAD
       technicianAvailabilityRepository: HttpTechnicianAvailabilityRepository(
         client: httpClient,
         baseUrl: usersApiBaseUrl,
@@ -139,8 +132,6 @@ Future<void> main() async {
           ).call,
         ),
       ),
-=======
->>>>>>> develop
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -157,10 +148,7 @@ class FixiaApp extends StatefulWidget {
     required this.authRepository,
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
-<<<<<<< HEAD
     this.technicianAvailabilityRepository,
-=======
->>>>>>> develop
     this.sessionStore,
   });
 
@@ -174,13 +162,10 @@ class FixiaApp extends StatefulWidget {
   /// uno en memoria.
   final TechnicianSpecialtiesRepository? technicianSpecialtiesRepository;
 
-<<<<<<< HEAD
   /// Repositorio de disponibilidad y zona con sesión. Si es `null` se usa uno
   /// en memoria.
   final TechnicianAvailabilityRepository? technicianAvailabilityRepository;
 
-=======
->>>>>>> develop
   /// Sesión de la app. Si es `null` se crea una vacía. Llega con la sesión ya
   /// iniciada cuando se restauró desde el almacenamiento.
   final SessionStore? sessionStore;
@@ -194,7 +179,6 @@ class _FixiaAppState extends State<FixiaApp> {
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
-<<<<<<< HEAD
   late final TechnicianAvailabilityRepository _availabilityRepository =
       widget.technicianAvailabilityRepository ??
           DemoTechnicianAvailabilityRepository();
@@ -219,8 +203,6 @@ class _FixiaAppState extends State<FixiaApp> {
           .pushReplacementNamed(AppRoutes.technicianProfile),
     );
   }
-=======
->>>>>>> develop
 
   Widget _technicianSpecialtiesPage(BuildContext context) {
     final repository = _specialtiesRepository;
@@ -399,11 +381,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
-<<<<<<< HEAD
       onOpenAvailability: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianAvailability),
-=======
->>>>>>> develop
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -512,18 +491,6 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.clientDashboard:
             _guard(RouteAccess.client, _clientDashboardPage),
         AppRoutes.technicianDashboard:
-<<<<<<< HEAD
-            _forRole(UserRole.professional, _technicianDashboardPage),
-        AppRoutes.clientProfile: _forRole(UserRole.client, _clientProfilePage),
-        AppRoutes.clientServiceRequest:
-            _forRole(UserRole.client, _clientServiceRequestPage),
-        AppRoutes.technicianOpportunities:
-            _forRole(UserRole.professional, _technicianOpportunitiesPage),
-        AppRoutes.technicianSpecialties:
-            _forRole(UserRole.professional, _technicianSpecialtiesPage),
-        AppRoutes.technicianAvailability:
-            _forRole(UserRole.professional, _technicianAvailabilityPage),
-=======
             _guard(RouteAccess.professional, _technicianDashboardPage),
         AppRoutes.clientProfile: _guard(RouteAccess.client, _clientProfilePage),
         AppRoutes.clientServiceRequest:
@@ -532,7 +499,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.professional, _technicianOpportunitiesPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
->>>>>>> develop
+        AppRoutes.technicianAvailability:
+            _guard(RouteAccess.professional, _technicianAvailabilityPage),
       },
       // Una URL que no existe lleva al inicio en vez de mostrar un error.
       onUnknownRoute: (settings) => MaterialPageRoute<void>(
@@ -576,10 +544,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenSettings,
     required this.onOpenOpportunities,
     required this.onOpenSpecialties,
-<<<<<<< HEAD
     required this.onOpenAvailability,
-=======
->>>>>>> develop
     required this.onLogout,
     required this.onSessionExpired,
   });
@@ -589,10 +554,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
   final VoidCallback onOpenSpecialties;
-<<<<<<< HEAD
   final VoidCallback onOpenAvailability;
-=======
->>>>>>> develop
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -690,10 +652,7 @@ class _TechnicianDashboardLoaderState
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenSpecialties: widget.onOpenSpecialties,
-<<<<<<< HEAD
           onOpenAvailability: widget.onOpenAvailability,
-=======
->>>>>>> develop
           onLogout: widget.onLogout,
         );
       },
