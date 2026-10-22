@@ -54,6 +54,12 @@ class _TechnicianOpportunitiesPageState
   bool _loading = false;
   String? _loadError;
 
+  /// Sin solicitudes reales publicadas se muestran las de ejemplo y la
+  /// postulación es local, para poder probar el flujo mientras no haya datos.
+  bool _demoFallback = false;
+
+  bool get _localApply => widget.applyToServiceRequest == null || _demoFallback;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +76,7 @@ class _TechnicianOpportunitiesPageState
       if (!mounted) return;
       setState(() {
         _remote = page.items.map(ServiceOpportunity.fromOpportunity).toList();
+        _demoFallback = _remote!.isEmpty;
         _loading = false;
       });
     } on OpportunityFailure catch (failure) {
@@ -82,10 +89,12 @@ class _TechnicianOpportunitiesPageState
     }
   }
 
-  List<ServiceOpportunity> get _visibleOpportunities => (_remote ??
-          (widget.listOpportunities == null
-              ? mockServiceOpportunities
-              : const <ServiceOpportunity>[]))
+  List<ServiceOpportunity> get _visibleOpportunities => (_demoFallback
+          ? mockServiceOpportunities
+          : _remote ??
+              (widget.listOpportunities == null
+                  ? mockServiceOpportunities
+                  : const <ServiceOpportunity>[]))
       .where(
         (opportunity) =>
             _selectedCategory == null ||
@@ -284,7 +293,7 @@ class _TechnicianOpportunitiesPageState
       builder: (context) => _OpportunityDetailsSheet(
         opportunity: opportunity,
         applied: _appliedIds.contains(opportunity.id),
-        demo: widget.applyToServiceRequest == null,
+        demo: _localApply,
         onApply: () async {
           final confirmation = await showApplyConfirmationDialog(
             context,
@@ -301,7 +310,7 @@ class _TechnicianOpportunitiesPageState
   Future<void> _submitApplication(ServiceOpportunity opportunity) async {
     final messenger = ScaffoldMessenger.of(context);
     final apply = widget.applyToServiceRequest;
-    if (apply == null) {
+    if (apply == null || _demoFallback) {
       setState(() => _appliedIds.add(opportunity.id));
       widget.onApply?.call(opportunity.id);
       messenger.showSnackBar(
