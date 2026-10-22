@@ -7,18 +7,21 @@
 /// - **Persistente** (`localStorage`): solo con "Mantener sesión iniciada". La
 ///   sesión sobrevive a cerrar el navegador.
 abstract interface class SessionStorage {
-  /// El token persistente o, si no hay, el de la pestaña. El persistente va
-  /// primero porque lo comparten todas las pestañas y siempre es el más nuevo.
+  /// El token de esta pestaña. Si la pestaña es de la sesión persistente (o
+  /// es nueva y no tiene sesión), el persistente, que comparten sus pestañas y
+  /// siempre es el más nuevo. Nunca el de otra cuenta abierta en otra pestaña.
   Future<String?> readRefreshToken();
 
   /// Guarda el token de una sesión nueva. Con [persist] también lo guarda en
-  /// el alcance persistente; sin él borra cualquier token persistente viejo.
+  /// el alcance persistente; sin él olvida la sesión persistente solo si era
+  /// de esta pestaña.
   Future<void> saveRefreshToken(String refreshToken, {bool persist = false});
 
   /// Reemplaza el token tras rotarlo (es de un solo uso) sin cambiar el
   /// alcance que eligió el usuario al iniciar sesión.
   Future<void> replaceRefreshToken(String refreshToken);
 
-  /// Borra el token de ambos alcances.
+  /// Borra el token de la pestaña y, si la sesión persistente es la suya,
+  /// también ese.
   Future<void> clear();
 }

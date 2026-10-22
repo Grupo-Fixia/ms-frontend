@@ -235,8 +235,7 @@ void main() {
       expect(store.session!.refreshToken, original);
     });
 
-    test('si el guardado es de otra cuenta, deja su reemplazo en el navegador',
-        () async {
+    test('si el guardado es de otra cuenta, no lo toca', () async {
       await login(remember: false);
       // En otra pestaña Beto inicia sesión con "Mantener sesión".
       final beto = await backend.login(email: _beto.email, password: 'x');
@@ -247,7 +246,7 @@ void main() {
       expect(await refresh()(), isFalse);
       expect(store.profile, _ana, reason: 'no se mezcla con Beto');
       final saved = local.read(BrowserSessionStorage.key);
-      expect(saved, isNot(beto.refreshToken));
+      expect(saved, beto.refreshToken, reason: 'no gasta el token de Beto');
       expect(backend.isValid(saved), isTrue,
           reason: 'Beto conserva "Mantener sesión"');
     });

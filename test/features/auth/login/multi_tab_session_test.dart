@@ -229,6 +229,93 @@ void main() {
     });
   });
 
+  group('dos cuentas en el mismo navegador', () {
+    test(
+        'la pestaña sin "Mantener" no se vuelve la cuenta recordada al '
+        'recargar', () async {
+      final tecnico = _Tab(backend, local);
+      await tecnico.login(email: 'beto@fixia.com', remember: false);
+      final cliente = _Tab(backend, local);
+      await cliente.login();
+
+      expect(await tecnico.reload(), isTrue);
+      expect(tecnico.store.profile, _beto);
+      expect(await cliente.reload(), isTrue);
+      expect(cliente.store.profile, _ana);
+    });
+
+    test('renovar en la pestaña sin "Mantener" no pisa la cuenta recordada',
+        () async {
+      final tecnico = _Tab(backend, local);
+      await tecnico.login(email: 'beto@fixia.com', remember: false);
+      final cliente = _Tab(backend, local);
+      await cliente.login();
+      final remembered = persisted();
+
+      expect(await tecnico.renew(), isTrue);
+      expect(persisted(), remembered);
+
+      // Una pestaña nueva abre la cuenta recordada, no la del técnico.
+      final nueva = _Tab(backend, local);
+      expect(await nueva.reload(), isTrue);
+      expect(nueva.store.profile, _ana);
+      expect(await cliente.reload(), isTrue);
+      expect(cliente.store.profile, _ana);
+    });
+
+    test('dos cuentas con "Mantener": cada pestaña conserva la suya', () async {
+      final cliente = _Tab(backend, local);
+      await cliente.login();
+      final tecnico = _Tab(backend, local);
+      await tecnico.login(email: 'beto@fixia.com');
+
+      expect(await cliente.renew(), isTrue);
+      expect(await cliente.reload(), isTrue);
+      expect(cliente.store.profile, _ana);
+      expect(await tecnico.reload(), isTrue);
+      expect(tecnico.store.profile, _beto);
+      // La recordada para pestañas nuevas es la del último inicio de sesión.
+      final nueva = _Tab(backend, local);
+      expect(await nueva.reload(), isTrue);
+      expect(nueva.store.profile, _beto);
+    });
+
+    test('cerrar sesión en una pestaña no cierra la otra cuenta', () async {
+      final tecnico = _Tab(backend, local);
+      await tecnico.login(email: 'beto@fixia.com', remember: false);
+      final cliente = _Tab(backend, local);
+      await cliente.login();
+
+      await tecnico.storage.clear();
+      tecnico.store.clear();
+
+      expect(persisted(), isNotNull);
+      expect(await cliente.reload(), isTrue);
+      expect(cliente.store.profile, _ana);
+    });
+
+    test(
+        'en una pestaña que abrió la cuenta recordada: cerrar sesión y entrar '
+        'con otra cuenta deja esa pestaña con la nueva', () async {
+      final cliente = _Tab(backend, local);
+      await cliente.login();
+      final otra = _Tab(backend, local);
+      expect(await otra.reload(), isTrue, reason: 'se une a la recordada');
+      expect(otra.store.profile, _ana);
+
+      // Cerrar sesión cierra la sesión recordada que comparten.
+      await otra.storage.clear();
+      otra.store.clear();
+      expect(persisted(), isNull);
+
+      await otra.login(email: 'beto@fixia.com', remember: false);
+      expect(await otra.reload(), isTrue);
+      expect(otra.store.profile, _beto);
+      expect(await _Tab(backend, local).reload(), isFalse,
+          reason: 'una pestaña nueva no abre ninguna de las dos');
+    });
+  });
+
   group('renovar a mitad de sesión', () {
     test('si otra pestaña ya usó su token, renueva con el guardado', () async {
       final a = _Tab(backend, local);

@@ -40,12 +40,37 @@ void main() {
       expect(await storage.readRefreshToken(), 'r1');
     });
 
-    test('sin persistir borra un token persistente de otra sesión', () async {
-      persistent.write(key, 'viejo');
+    test('sin persistir olvida la sesión recordada por esta pestaña', () async {
+      await storage.saveRefreshToken('viejo', persist: true);
 
       await storage.saveRefreshToken('r1');
 
       expect(persistent.read(key), isNull);
+      expect(persistent.read(BrowserSessionStorage.sessionIdKey), isNull);
+      expect(await storage.readRefreshToken(), 'r1');
+    });
+
+    test('sin persistir no borra la sesión recordada de otra pestaña',
+        () async {
+      persistent
+        ..write(key, 'de-otra-pestaña')
+        ..write(BrowserSessionStorage.sessionIdKey, 'otra');
+
+      await storage.saveRefreshToken('r1');
+
+      expect(persistent.read(key), 'de-otra-pestaña');
+      expect(await storage.readRefreshToken(), 'r1');
+    });
+
+    test('cada inicio de sesión persistente tiene su propio id', () async {
+      await storage.saveRefreshToken('r1', persist: true);
+      final first = persistent.read(BrowserSessionStorage.sessionIdKey);
+      await storage.saveRefreshToken('r2', persist: true);
+
+      expect(first, isNotNull);
+      expect(persistent.read(BrowserSessionStorage.sessionIdKey), isNot(first));
+      expect(tab.read(BrowserSessionStorage.sessionIdKey),
+          persistent.read(BrowserSessionStorage.sessionIdKey));
     });
 
     test('persistiendo guarda en la pestaña y en localStorage', () async {
@@ -57,12 +82,62 @@ void main() {
   });
 
   group('readRefreshToken', () {
-    test('prefiere el persistente, que es el más nuevo entre pestañas',
+    test('si la pestaña es de la sesión persistente, prefiere el persistente',
         () async {
-      tab.write(key, 'copia-vieja-de-la-pestaña');
+      tab
+        ..write(key, 'copia-vieja-de-la-pestaña')
+        ..write(BrowserSessionStorage.sessionIdKey, 's1');
+      persistent
+        ..write(key, 'persistente')
+        ..write(BrowserSessionStorage.sessionIdKey, 's1');
+
+      expect(await storage.readRefreshToken(), 'persistente');
+    });
+
+    test('si el persistente es de otra sesión, usa el de la pestaña', () async {
+      tab
+        ..write(key, 'pestaña')
+        ..write(BrowserSessionStorage.sessionIdKey, 's1');
+      persistent
+        ..write(key, 'de-otra-cuenta')
+        ..write(BrowserSessionStorage.sessionIdKey, 's2');
+
+      expect(await storage.readRefreshToken(), 'pestaña');
+    });
+
+    test('una pestaña con sesión propia no adopta la persistente', () async {
+      tab.write(key, 'pestaña');
+      persistent.write(key, 'persistente');
+
+      expect(await storage.readRefreshToken(), 'pestaña');
+    });
+
+    test('una pestaña nueva se une a la sesión persistente y a su id',
+        () async {
+      persistent
+        ..write(key, 'persistente')
+        ..write(BrowserSessionStorage.sessionIdKey, 's1');
+
+      expect(await storage.readRefreshToken(), 'persistente');
+      expect(tab.read(BrowserSessionStorage.sessionIdKey), 's1');
+    });
+
+    test('un persistente sin id (guardado antes) recibe uno al adoptarlo',
+        () async {
       persistent.write(key, 'persistente');
 
       expect(await storage.readRefreshToken(), 'persistente');
+      final id = persistent.read(BrowserSessionStorage.sessionIdKey);
+      expect(id, isNotNull);
+      expect(tab.read(BrowserSessionStorage.sessionIdKey), id);
+    });
+
+    test('sin sessionStorage usa el persistente', () async {
+      persistent.write(key, 'persistente');
+      final blocked =
+          BrowserSessionStorage(tab: _BlockedStore(), persistent: persistent);
+
+      expect(await blocked.readRefreshToken(), 'persistente');
     });
 
     test('sin persistente usa el de la pestaña', () async {
@@ -93,6 +168,18 @@ void main() {
   });
 
   group('replaceRefreshToken', () {
+    test('no pisa la sesión persistente de otra pestaña', () async {
+      await storage.saveRefreshToken('r1');
+      persistent
+        ..write(key, 'de-otra-cuenta')
+        ..write(BrowserSessionStorage.sessionIdKey, 'otra');
+
+      await storage.replaceRefreshToken('r2');
+
+      expect(tab.read(key), 'r2');
+      expect(persistent.read(key), 'de-otra-cuenta');
+    });
+
     test('sesión solo de pestaña: no escribe en localStorage', () async {
       await storage.saveRefreshToken('r1');
 
@@ -120,6 +207,18 @@ void main() {
     expect(tab.read(key), isNull);
     expect(persistent.read(key), isNull);
     expect(await storage.readRefreshToken(), isNull);
+  });
+
+  test('clear no borra la sesión persistente de otra pestaña', () async {
+    await storage.saveRefreshToken('r1');
+    persistent
+      ..write(key, 'de-otra-cuenta')
+      ..write(BrowserSessionStorage.sessionIdKey, 'otra');
+
+    await storage.clear();
+
+    expect(tab.read(key), isNull);
+    expect(persistent.read(key), 'de-otra-cuenta');
   });
 
   test('clear borra localStorage aunque sessionStorage falle', () async {
