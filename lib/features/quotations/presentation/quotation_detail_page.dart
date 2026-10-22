@@ -235,6 +235,10 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
           final counterInvalid =
               counterText.isNotEmpty && (counter == null || counter <= 0);
           final canCounter = counter != null && counter > 0;
+          final buttonStyle = FilledButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          );
           return AlertDialog(
             key: const ValueKey('reject-dialog'),
             title: const Text('Responder la cotización'),
@@ -282,27 +286,55 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
                 ),
               ],
             ),
-            actionsOverflowDirection: VerticalDirection.down,
             actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancelar'),
-              ),
-              FilledButton(
-                key: const ValueKey('reject-confirm'),
-                onPressed: counterText.isNotEmpty
-                    ? null
-                    : () => Navigator.of(context)
-                        .pop((reason: reasonController.text, counter: null)),
-                child: const Text('Rechazar'),
-              ),
-              FilledButton(
-                key: const ValueKey('counter-offer-confirm'),
-                onPressed: canCounter
-                    ? () => Navigator.of(context)
-                        .pop((reason: reasonController.text, counter: counter))
-                    : null,
-                child: const Text('Enviar contraoferta'),
+              SizedBox(
+                width: double.infinity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            key: const ValueKey('reject-confirm'),
+                            style: buttonStyle,
+                            onPressed: counterText.isNotEmpty
+                                ? null
+                                : () => Navigator.of(context).pop((
+                                      reason: reasonController.text,
+                                      counter: null
+                                    )),
+                            child: const Text(
+                              'Rechazar',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            key: const ValueKey('counter-offer-confirm'),
+                            style: buttonStyle,
+                            onPressed: canCounter
+                                ? () => Navigator.of(context).pop((
+                                      reason: reasonController.text,
+                                      counter: counter
+                                    ))
+                                : null,
+                            child: const Text(
+                              'Enviar contraoferta',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancelar'),
+                    ),
+                  ],
+                ),
               ),
             ],
           );
