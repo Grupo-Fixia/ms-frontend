@@ -92,6 +92,114 @@ const mockProviderProfiles = <ProviderPublicProfile>[
     description: 'Técnico en mantenimiento general, recién registrado.',
     yearsOfExperience: 2,
   ),
+  ProviderPublicProfile(
+    providerId: 'ana-garcia',
+    displayName: 'Ana García',
+    approximateZone: 'Usaquén, Bogotá',
+    verificationStatus: VerificationStatus.valid,
+    verifiedCategories: {ServiceCategory.plumbing},
+    description: 'Plomera con 6 años de experiencia en reparaciones y '
+        'adecuaciones de baños y cocinas.',
+    yearsOfExperience: 6,
+    averageRating: 4.8,
+    ratingCount: 64,
+    completedJobs: [
+      CompletedJob(
+        title: 'Cambio de grifería en cocina',
+        category: ServiceCategory.plumbing,
+        dateLabel: 'Octubre 2026',
+      ),
+    ],
+    reviews: [
+      ProviderReview(
+        authorName: 'Marcela V.',
+        rating: 5,
+        comment: 'Resolvió la filtración el mismo día.',
+        dateLabel: 'Hace 1 semana',
+      ),
+    ],
+  ),
+  ProviderPublicProfile(
+    providerId: 'pedro-rojas',
+    displayName: 'Pedro Rojas',
+    approximateZone: 'Teusaquillo, Bogotá',
+    verificationStatus: VerificationStatus.valid,
+    verifiedCategories: {ServiceCategory.painting},
+    description: 'Pintor de interiores y fachadas, trabajo limpio y con '
+        'acabados garantizados.',
+    yearsOfExperience: 10,
+    averageRating: 4.7,
+    ratingCount: 112,
+    completedJobs: [
+      CompletedJob(
+        title: 'Pintura de apartamento de 70 m²',
+        category: ServiceCategory.painting,
+        dateLabel: 'Septiembre 2026',
+      ),
+    ],
+    reviews: [
+      ProviderReview(
+        authorName: 'Julia C.',
+        rating: 5,
+        comment: 'Cubrió los muebles y dejó todo impecable.',
+        dateLabel: 'Hace 3 semanas',
+      ),
+    ],
+  ),
+  ProviderPublicProfile(
+    providerId: 'laura-torres',
+    displayName: 'Laura Torres',
+    approximateZone: 'Suba, Bogotá',
+    verificationStatus: VerificationStatus.valid,
+    verifiedCategories: {ServiceCategory.maintenance},
+    description: 'Especialista en limpieza profunda y mantenimiento de '
+        'viviendas y oficinas.',
+    yearsOfExperience: 7,
+    averageRating: 5.0,
+    ratingCount: 203,
+    completedJobs: [
+      CompletedJob(
+        title: 'Limpieza profunda post-obra',
+        category: ServiceCategory.maintenance,
+        dateLabel: 'Octubre 2026',
+      ),
+    ],
+    reviews: [
+      ProviderReview(
+        authorName: 'Ricardo S.',
+        rating: 5,
+        comment: 'Puntual y muy detallista.',
+        dateLabel: 'Hace 2 semanas',
+      ),
+    ],
+  ),
+  ProviderPublicProfile(
+    providerId: 'camilo-diaz',
+    displayName: 'Camilo Díaz',
+    approximateZone: 'Chapinero, Bogotá',
+    verificationStatus: VerificationStatus.valid,
+    verifiedCategories: {ServiceCategory.electrical},
+    description: 'Electricista certificado en instalaciones residenciales '
+        'y revisión de tableros.',
+    yearsOfExperience: 9,
+    averageRating: 4.9,
+    ratingCount: 87,
+    completedJobs: [
+      CompletedJob(
+        title: 'Cambio de tablero eléctrico',
+        category: ServiceCategory.electrical,
+        dateLabel: 'Agosto 2026',
+      ),
+    ],
+    reviews: [
+      ProviderReview(
+        authorName: 'Natalia B.',
+        rating: 5,
+        comment: 'Explicó cada paso y dejó todo seguro.',
+        dateLabel: 'Hace 1 mes',
+      ),
+    ],
+  ),
 ];
 
 /// Perfiles públicos locales para pruebas sin red y para el flujo E2E.

@@ -123,6 +123,42 @@ void main() {
     expect(find.text('ACEPTADA'), findsOneWidget);
     _pop(tester);
   });
+  testWidgets('el cliente abre el perfil de un técnico recomendado',
+      (tester) async {
+    await _pump(tester, DemoFlow(latency: Duration.zero), _clientProfile);
+
+    await _tapKey(tester, 'client-technician-profile-ana-garcia');
+
+    expect(find.byKey(const ValueKey('provider-profile-body')), findsOneWidget);
+    expect(find.text('Ana García'), findsWidgets);
+    expect(find.text('Seleccionar prestador'), findsNothing);
+  });
+
+  testWidgets('el cliente rechaza y acepta cotizaciones de ejemplo',
+      (tester) async {
+    await _pump(tester, DemoFlow(latency: Duration.zero), _clientProfile);
+
+    await _tapKey(tester, 'client-quote-lamparas-sala');
+    await _tapKey(tester, 'quotation-reject');
+    await tester.enterText(
+        find.byKey(const ValueKey('reject-reason')), 'Muy costosa');
+    await _tapKey(tester, 'reject-confirm');
+    expect(find.text('RECHAZADA'), findsOneWidget);
+    _pop(tester);
+    await tester.pumpAndSettle();
+
+    await _tapKey(tester, 'client-quote-pintura-habitacion');
+    expect(find.text('Cotización de Sofía Méndez'), findsOneWidget);
+    await _tapKey(tester, 'quotation-accept');
+    await _tapKey(tester, 'accept-confirm');
+    expect(find.text('ACEPTADA'), findsOneWidget);
+    _pop(tester);
+    await tester.pumpAndSettle();
+
+    await _tapKey(tester, 'client-quote-cerradura-puerta');
+    expect(find.text('VENCIDA'), findsOneWidget);
+    expect(find.byKey(const ValueKey('quotation-accept')), findsNothing);
+  });
 }
 
 const _clientProfile = UserProfile(

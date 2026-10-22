@@ -16,6 +16,9 @@ class ClientDashboardPage extends StatefulWidget {
     this.onOpenChat,
     this.onReviewQuote,
     this.onOpenApplicants,
+    this.onOpenTechnicianProfile,
+    this.receivedQuotes = const [],
+    this.onOpenQuote,
     this.onConfirmClosure,
   });
 
@@ -31,6 +34,14 @@ class ClientDashboardPage extends StatefulWidget {
 
   /// Abre los postulantes de la solicitud publicada (GC-349).
   final VoidCallback? onOpenApplicants;
+
+  /// Abre el perfil público de un técnico recomendado (GC-350).
+  final ValueChanged<String>? onOpenTechnicianProfile;
+
+  /// Cotizaciones recibidas por el cliente y acción para abrir cada una
+  /// (GC-355 y GC-360).
+  final List<ReceivedQuoteSummary> receivedQuotes;
+  final ValueChanged<String>? onOpenQuote;
   final VoidCallback? onConfirmClosure;
 
   static const _technicians = [
@@ -199,6 +210,10 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
                 data: _visibleTechnicians[index],
                 onRequest: () => widget.onRequestTechnician
                     ?.call(_visibleTechnicians[index].id),
+                onOpenProfile: widget.onOpenTechnicianProfile == null
+                    ? null
+                    : () => widget.onOpenTechnicianProfile!
+                        .call(_visibleTechnicians[index].id),
               ),
               if (index < _visibleTechnicians.length - 1)
                 const SizedBox(height: 12),
@@ -245,6 +260,18 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
             icon: Icons.task_alt_rounded,
             onPressed: widget.onConfirmClosure,
           ),
+          if (widget.receivedQuotes.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const DashboardSectionHeading(title: 'Cotizaciones recibidas'),
+            const SizedBox(height: 12),
+            for (final quote in widget.receivedQuotes) ...[
+              _ReceivedQuoteCard(
+                quote: quote,
+                onOpen: () => widget.onOpenQuote?.call(quote.requestId),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
           const SizedBox(height: 20),
         ],
       ),
@@ -464,10 +491,15 @@ class _NoTechniciansFound extends StatelessWidget {
 }
 
 class _TechnicianCard extends StatelessWidget {
-  const _TechnicianCard({required this.data, required this.onRequest});
+  const _TechnicianCard({
+    required this.data,
+    required this.onRequest,
+    this.onOpenProfile,
+  });
 
   final _TechnicianCardData data;
   final VoidCallback onRequest;
+  final VoidCallback? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -522,6 +554,16 @@ class _TechnicianCard extends StatelessWidget {
           _RatingAndDistance(data: data),
           const SizedBox(height: 12),
           const Divider(height: 1, color: FixiaColors.supportBackground),
+          if (onOpenProfile != null)
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                key: ValueKey('client-technician-profile-${data.id}'),
+                onPressed: onOpenProfile,
+                icon: const Icon(Icons.person_search_outlined),
+                label: const Text('Ver perfil'),
+              ),
+            ),
           const SizedBox(height: 11),
           Row(
             children: [
@@ -672,6 +714,64 @@ class _CategoryBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+/// Resumen de una cotización recibida para mostrarla en el inicio.
+class ReceivedQuoteSummary {
+  const ReceivedQuoteSummary({
+    required this.requestId,
+    required this.title,
+    required this.providerName,
+  });
+
+  final String requestId;
+  final String title;
+  final String providerName;
+}
+
+class _ReceivedQuoteCard extends StatelessWidget {
+  const _ReceivedQuoteCard({required this.quote, required this.onOpen});
+
+  final ReceivedQuoteSummary quote;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return DashboardCard(
+      child: Row(
+        children: [
+          const Icon(
+            Icons.request_quote_outlined,
+            color: FixiaColors.secondary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  quote.title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Cotización de ${quote.providerName}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            key: ValueKey('client-quote-${quote.requestId}'),
+            onPressed: onOpen,
+            child: const Text('Ver cotización'),
+          ),
+        ],
       ),
     );
   }

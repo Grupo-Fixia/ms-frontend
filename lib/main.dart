@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'features/client/service_requests/application/provider_profile_use_cases.dart';
 import 'features/client/service_requests/application/service_request_use_cases.dart';
 import 'features/client/service_requests/presentation/applicants_page.dart';
+import 'features/client/service_requests/presentation/provider_public_profile_page.dart';
 import 'features/dev_sandbox/demo_flow.dart';
 import 'features/dev_sandbox/presentation/flow_sandbox_page.dart';
 import 'features/quotations/application/quotation_use_cases.dart';
@@ -82,6 +83,7 @@ abstract final class AppRoutes {
   static const devFlowSandbox = '/dev/flujo-e2e';
   static const clientApplicants = '/cliente/solicitud/postulantes';
   static const clientQuotation = '/cliente/solicitud/cotizacion';
+  static const clientProviderProfile = '/cliente/prestador';
   static const technicianQuotation = '/tecnico/cotizacion';
 }
 
@@ -396,8 +398,15 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
       onOpenApplicants: () => Navigator.of(context)
           .pushNamed(AppRoutes.clientApplicants, arguments: DemoFlow.requestId),
-      onReviewQuote: () => Navigator.of(context)
-          .pushNamed(AppRoutes.clientQuotation, arguments: DemoFlow.requestId),
+      onReviewQuote: () => Navigator.of(context).pushNamed(
+        AppRoutes.clientQuotation,
+        arguments: DemoFlow.receivedQuotes.first.requestId,
+      ),
+      receivedQuotes: DemoFlow.receivedQuotes,
+      onOpenQuote: (requestId) => Navigator.of(context)
+          .pushNamed(AppRoutes.clientQuotation, arguments: requestId),
+      onOpenTechnicianProfile: (providerId) => Navigator.of(context)
+          .pushNamed(AppRoutes.clientProviderProfile, arguments: providerId),
       onLogout: () => _logoutAndGoToLogin(context),
     );
   }
@@ -422,12 +431,22 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  Widget _clientProviderProfilePage(BuildContext context) {
+    return ProviderPublicProfilePage(
+      providerId: _requestIdOf(context),
+      getProfile: GetProviderPublicProfile(_demo.profiles),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+
   Widget _clientQuotationPage(BuildContext context) {
+    final requestId = _requestIdOf(context);
+    final summary = DemoFlow.summaryOf(requestId);
     return QuotationDetailPage(
-      serviceRequestId: _requestIdOf(context),
+      serviceRequestId: requestId,
       listQuotations: ListRequestQuotations(_demo.quotations),
-      serviceSummary: DemoFlow.requestSummary,
-      providerName: DemoFlow.providerName,
+      serviceSummary: summary.title,
+      providerName: summary.providerName,
       acceptQuotation: AcceptQuotation(_demo.quotations),
       rejectQuotation: RejectQuotation(_demo.quotations),
       onSessionExpired: () => _expireSession(context),
@@ -646,6 +665,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.client, _clientApplicantsPage),
         AppRoutes.clientQuotation:
             _guard(RouteAccess.client, _clientQuotationPage),
+        AppRoutes.clientProviderProfile:
+            _guard(RouteAccess.client, _clientProviderProfilePage),
         AppRoutes.technicianQuotation:
             _guard(RouteAccess.professional, _technicianQuotationPage),
       },

@@ -20,6 +20,9 @@ class MockQuotationRepository
   final List<Quotation> _items = [];
   int _sequence = 0;
 
+  /// Agrega una cotización ya existente (datos de ejemplo).
+  void seed(Quotation quotation) => _items.add(quotation);
+
   @override
   Future<Quotation> send(NewQuotation quotation) async {
     final amount = quotation.amountInCents;
