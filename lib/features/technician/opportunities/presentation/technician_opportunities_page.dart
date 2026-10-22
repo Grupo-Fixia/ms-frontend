@@ -11,12 +11,27 @@ import '../domain/opportunity_exceptions.dart';
 import '../domain/service_opportunity.dart';
 import '../infrastructure/mock_service_opportunities.dart';
 
+/// Estado del técnico respecto a las solicitudes: en cuáles se postuló y en
+/// cuáles el cliente ya lo seleccionó (puede enviar cotización).
+class OpportunityFlowState {
+  const OpportunityFlowState({
+    this.applied = const {},
+    this.selected = const {},
+  });
+
+  final Set<String> applied;
+  final Set<String> selected;
+}
+
 class TechnicianOpportunitiesPage extends StatefulWidget {
   const TechnicianOpportunitiesPage({
     super.key,
     this.listOpportunities,
     this.applyToServiceRequest,
     this.onSessionExpired,
+    this.demoApplyToServiceRequest,
+    this.loadFlowState,
+    this.onSendQuotation,
     this.onApply,
     this.onBack,
     this.onOpenHome,
@@ -33,6 +48,16 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
   /// solo local (demostración sin red).
   final ApplyToServiceRequest? applyToServiceRequest;
   final VoidCallback? onSessionExpired;
+
+  /// Postulación simulada que se usa cuando el backend no devuelve solicitudes
+  /// y se muestran las de ejemplo.
+  final ApplyToServiceRequest? demoApplyToServiceRequest;
+
+  /// Consulta en qué solicitudes ya se postuló o fue seleccionado el técnico.
+  final Future<OpportunityFlowState> Function()? loadFlowState;
+
+  /// Abre el formulario de cotización de la solicitud en la que fue seleccionado.
+  final ValueChanged<String>? onSendQuotation;
   final ValueChanged<String>? onApply;
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
@@ -49,6 +74,7 @@ class _TechnicianOpportunitiesPageState
     extends State<TechnicianOpportunitiesPage> {
   ServiceCategory? _selectedCategory;
   final Set<String> _appliedIds = {};
+  final Set<String> _selectedIds = {};
 
   List<ServiceOpportunity>? _remote;
   bool _loading = false;
@@ -58,12 +84,30 @@ class _TechnicianOpportunitiesPageState
   /// postulación es local, para poder probar el flujo mientras no haya datos.
   bool _demoFallback = false;
 
-  bool get _localApply => widget.applyToServiceRequest == null || _demoFallback;
+  bool get _localApply => _demoFallback || widget.applyToServiceRequest == null;
+
+  ApplyToServiceRequest? get _apply => _localApply
+      ? widget.demoApplyToServiceRequest
+      : widget.applyToServiceRequest;
 
   @override
   void initState() {
     super.initState();
     if (widget.listOpportunities != null) _load();
+    _refreshFlowState();
+  }
+
+  Future<void> _refreshFlowState() async {
+    final load = widget.loadFlowState;
+    if (load == null) return;
+    final state = await load();
+    if (!mounted) return;
+    setState(() {
+      _appliedIds.addAll(state.applied);
+      _selectedIds
+        ..clear()
+        ..addAll(state.selected);
+    });
   }
 
   Future<void> _load() async {
@@ -219,6 +263,7 @@ class _TechnicianOpportunitiesPageState
                       child: _OpportunityCard(
                         opportunity: opportunity,
                         applied: _appliedIds.contains(opportunity.id),
+                        selected: _selectedIds.contains(opportunity.id),
                         onOpen: () => _showDetails(opportunity),
                       ),
                     );
@@ -293,7 +338,13 @@ class _TechnicianOpportunitiesPageState
       builder: (context) => _OpportunityDetailsSheet(
         opportunity: opportunity,
         applied: _appliedIds.contains(opportunity.id),
+        selected: _selectedIds.contains(opportunity.id) &&
+            widget.onSendQuotation != null,
         demo: _localApply,
+        onSendQuotation: () {
+          Navigator.of(context).pop();
+          widget.onSendQuotation?.call(opportunity.id);
+        },
         onApply: () async {
           final confirmation = await showApplyConfirmationDialog(
             context,
@@ -309,8 +360,8 @@ class _TechnicianOpportunitiesPageState
 
   Future<void> _submitApplication(ServiceOpportunity opportunity) async {
     final messenger = ScaffoldMessenger.of(context);
-    final apply = widget.applyToServiceRequest;
-    if (apply == null || _demoFallback) {
+    final apply = _apply;
+    if (apply == null) {
       setState(() => _appliedIds.add(opportunity.id));
       widget.onApply?.call(opportunity.id);
       messenger.showSnackBar(
@@ -328,6 +379,7 @@ class _TechnicianOpportunitiesPageState
       if (!mounted) return;
       setState(() => _appliedIds.add(opportunity.id));
       widget.onApply?.call(opportunity.id);
+      _refreshFlowState();
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -387,11 +439,13 @@ class _OpportunityCard extends StatelessWidget {
   const _OpportunityCard({
     required this.opportunity,
     required this.applied,
+    required this.selected,
     required this.onOpen,
   });
 
   final ServiceOpportunity opportunity;
   final bool applied;
+  final bool selected;
   final VoidCallback onOpen;
 
   @override
@@ -477,7 +531,13 @@ class _OpportunityCard extends StatelessWidget {
                     'technician-opportunity-detail-${opportunity.id}',
                   ),
                   onPressed: onOpen,
-                  child: Text(applied ? 'Postulada' : 'Ver detalle'),
+                  child: Text(
+                    selected
+                        ? 'Cotizar'
+                        : applied
+                            ? 'Postulada'
+                            : 'Ver detalle',
+                  ),
                 ),
               ],
             ),
@@ -534,14 +594,18 @@ class _OpportunityDetailsSheet extends StatelessWidget {
   const _OpportunityDetailsSheet({
     required this.opportunity,
     required this.applied,
+    required this.selected,
     required this.demo,
     required this.onApply,
+    required this.onSendQuotation,
   });
 
   final ServiceOpportunity opportunity;
   final bool applied;
+  final bool selected;
   final bool demo;
   final VoidCallback onApply;
+  final VoidCallback onSendQuotation;
 
   @override
   Widget build(BuildContext context) {
@@ -615,14 +679,29 @@ class _OpportunityDetailsSheet extends StatelessWidget {
                     ),
               ),
               const SizedBox(height: 22),
-              FilledButton.icon(
-                key: ValueKey('technician-apply-${opportunity.id}'),
-                onPressed: applied ? null : onApply,
-                icon: Icon(
-                  applied ? Icons.check_circle_outline : Icons.send_outlined,
+              if (selected) ...[
+                Text(
+                  'El cliente te seleccionó para esta solicitud. Envía tu '
+                  'cotización para continuar.',
+                  key: ValueKey('technician-selected-${opportunity.id}'),
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                label: Text(applied ? 'Postulación enviada' : 'Postularse'),
-              ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  key: ValueKey('technician-quote-${opportunity.id}'),
+                  onPressed: onSendQuotation,
+                  icon: const Icon(Icons.request_quote_outlined),
+                  label: const Text('Enviar cotización'),
+                ),
+              ] else
+                FilledButton.icon(
+                  key: ValueKey('technician-apply-${opportunity.id}'),
+                  onPressed: applied ? null : onApply,
+                  icon: Icon(
+                    applied ? Icons.check_circle_outline : Icons.send_outlined,
+                  ),
+                  label: Text(applied ? 'Postulación enviada' : 'Postularse'),
+                ),
               if (demo) ...[
                 const SizedBox(height: 5),
                 Text(

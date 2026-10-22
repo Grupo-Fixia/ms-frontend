@@ -4,7 +4,6 @@ import '../../../core/theme/fixia_theme.dart';
 import '../../client/service_requests/application/provider_profile_use_cases.dart';
 import '../../client/service_requests/application/service_request_use_cases.dart';
 import '../../client/service_requests/domain/service_request.dart';
-import '../../client/service_requests/infrastructure/mock_provider_profile_repository.dart';
 import '../../client/service_requests/infrastructure/mock_service_request_repository.dart';
 import '../../client/service_requests/presentation/applicants_page.dart';
 import '../../home/presentation/widgets/dashboard_components.dart';
@@ -15,7 +14,7 @@ import '../../quotations/presentation/quotation_detail_page.dart';
 import '../../quotations/presentation/quotation_form_page.dart';
 import '../../quotations/presentation/quotation_formatters.dart';
 import '../../technician/applications/application/application_use_cases.dart';
-import '../../technician/applications/infrastructure/mock_application_repository.dart';
+import '../demo_flow.dart';
 import '../../technician/opportunities/presentation/technician_opportunities_page.dart';
 
 /// Herramienta de desarrollo: recorre en una sola sesión el flujo
@@ -23,32 +22,34 @@ import '../../technician/opportunities/presentation/technician_opportunities_pag
 /// (GC-344, GC-349, GC-350, GC-355 y GC-360) alternando entre el rol técnico
 /// y el cliente, siempre con datos locales (sin red ni sesión).
 class FlowSandboxPage extends StatefulWidget {
-  const FlowSandboxPage({super.key, this.onBack, this.latency});
+  const FlowSandboxPage({super.key, this.onBack, this.latency, this.flow});
 
   final VoidCallback? onBack;
 
   /// Latencia simulada de la postulación (en pruebas, cero).
   final Duration? latency;
 
+  /// Datos compartidos con el resto de la app; si   es null usa unos propios.
+  final DemoFlow? flow;
+
   @override
   State<FlowSandboxPage> createState() => _FlowSandboxPageState();
 }
 
 class _FlowSandboxPageState extends State<FlowSandboxPage> {
-  static const _requestId = MockServiceRequestRepository.demoRequestId;
-  static const _summary = 'Fuga en el lavaplatos';
+  static const _requestId = DemoFlow.requestId;
+  static const _summary = DemoFlow.requestSummary;
 
-  late MockServiceRequestRepository _requests;
-  late MockApplicationRepository _applications;
-  late MockQuotationRepository _quotations;
-  late MockProviderProfileRepository _profiles;
+  late final DemoFlow _flow = widget.flow ??
+      DemoFlow(latency: widget.latency ?? const Duration(milliseconds: 300));
+  MockServiceRequestRepository get _requests => _flow.requests;
+  MockQuotationRepository get _quotations => _flow.quotations;
 
   bool _applied = false;
   ServiceRequest? _request;
   Quotation? _quotation;
 
-  bool get _selected =>
-      _request?.selectedProviderId == demoTechnicianProviderId;
+  bool get _selected => _request?.selectedProviderId == DemoFlow.providerId;
   bool get _otherSelected => _request?.selectedProviderId != null && !_selected;
 
   @override
@@ -58,19 +59,7 @@ class _FlowSandboxPageState extends State<FlowSandboxPage> {
   }
 
   void _reset() {
-    _requests = MockServiceRequestRepository.demo();
-    _profiles = MockProviderProfileRepository();
-    _quotations = MockQuotationRepository(providerId: demoTechnicianProviderId);
-    _applications = MockApplicationRepository(
-      latency: widget.latency ?? const Duration(milliseconds: 300),
-      onApplied: (application) {
-        _requests.addApplicant(
-          application.serviceRequest.id,
-          demoTechnicianProviderId,
-        );
-        if (mounted) setState(() => _applied = true);
-      },
-    );
+    _flow.reset();
     _applied = false;
     _request = null;
     _quotation = null;
@@ -91,7 +80,8 @@ class _FlowSandboxPageState extends State<FlowSandboxPage> {
 
   void _openApply() => _open(
         (context) => TechnicianOpportunitiesPage(
-          applyToServiceRequest: ApplyToServiceRequest(_applications),
+          applyToServiceRequest: ApplyToServiceRequest(_flow.applications),
+          onApply: (_) => setState(() => _applied = true),
           onBack: () => Navigator.of(context).pop(),
         ),
       );
@@ -101,7 +91,7 @@ class _FlowSandboxPageState extends State<FlowSandboxPage> {
           requestId: _requestId,
           listApplicants: ListApplicants(_requests),
           selectProvider: SelectProvider(_requests),
-          getProfile: GetProviderPublicProfile(_profiles),
+          getProfile: GetProviderPublicProfile(_flow.profiles),
           onProviderSelected: (request) => setState(() => _request = request),
           onBack: () => Navigator.of(context).pop(),
         ),
@@ -121,7 +111,7 @@ class _FlowSandboxPageState extends State<FlowSandboxPage> {
         (context) => QuotationDetailPage(
           serviceRequestId: _requestId,
           serviceSummary: _summary,
-          providerName: 'Carlos Ramírez',
+          providerName: DemoFlow.providerName,
           listQuotations: ListRequestQuotations(_quotations),
           acceptQuotation: AcceptQuotation(_quotations),
           rejectQuotation: RejectQuotation(_quotations),

@@ -15,6 +15,7 @@ class ClientDashboardPage extends StatefulWidget {
     this.onRequestTechnician,
     this.onOpenChat,
     this.onReviewQuote,
+    this.onOpenApplicants,
     this.onConfirmClosure,
   });
 
@@ -27,6 +28,9 @@ class ClientDashboardPage extends StatefulWidget {
   final ValueChanged<String>? onRequestTechnician;
   final VoidCallback? onOpenChat;
   final VoidCallback? onReviewQuote;
+
+  /// Abre los postulantes de la solicitud publicada (GC-349).
+  final VoidCallback? onOpenApplicants;
   final VoidCallback? onConfirmClosure;
 
   static const _technicians = [
@@ -208,7 +212,7 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
             ),
           ),
           const SizedBox(height: 12),
-          const _RequestSummaryCard(),
+          _RequestSummaryCard(onOpenApplicants: widget.onOpenApplicants),
           const SizedBox(height: 26),
           DashboardSectionHeading(
             title: 'Tus servicios en curso',
@@ -405,31 +409,32 @@ class _CategoryFilters extends StatelessWidget {
       child: ScrollConfiguration(
         behavior: const DragScrollBehavior(),
         child: ListView.separated(
-        key: const ValueKey('client-technician-categories'),
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final selected = categories[index] == selectedCategory;
-          return ChoiceChip(
-            key: ValueKey('client-category-${categories[index]}'),
-            label: Text(categories[index]),
-            selected: selected,
-            onSelected: (_) => onSelected(categories[index]),
-            showCheckmark: false,
-            selectedColor: FixiaColors.secondary,
-            backgroundColor: FixiaColors.white,
-            side: BorderSide(
-              color: selected ? FixiaColors.secondary : const Color(0xFFDCE5F0),
-            ),
-            labelStyle: TextStyle(
-              color: selected ? FixiaColors.white : FixiaColors.textSecondary,
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-          );
-        },
+          key: const ValueKey('client-technician-categories'),
+          scrollDirection: Axis.horizontal,
+          itemCount: categories.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final selected = categories[index] == selectedCategory;
+            return ChoiceChip(
+              key: ValueKey('client-category-${categories[index]}'),
+              label: Text(categories[index]),
+              selected: selected,
+              onSelected: (_) => onSelected(categories[index]),
+              showCheckmark: false,
+              selectedColor: FixiaColors.secondary,
+              backgroundColor: FixiaColors.white,
+              side: BorderSide(
+                color:
+                    selected ? FixiaColors.secondary : const Color(0xFFDCE5F0),
+              ),
+              labelStyle: TextStyle(
+                color: selected ? FixiaColors.white : FixiaColors.textSecondary,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+            );
+          },
         ),
       ),
     );
@@ -730,7 +735,9 @@ class _ActiveServiceCard extends StatelessWidget {
 }
 
 class _RequestSummaryCard extends StatelessWidget {
-  const _RequestSummaryCard();
+  const _RequestSummaryCard({this.onOpenApplicants});
+
+  final VoidCallback? onOpenApplicants;
 
   @override
   Widget build(BuildContext context) {
@@ -773,6 +780,18 @@ class _RequestSummaryCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onOpenApplicants != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('client-view-applicants'),
+                onPressed: onOpenApplicants,
+                icon: const Icon(Icons.people_alt_outlined),
+                label: const Text('Ver postulantes'),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
+import 'features/client/service_requests/application/provider_profile_use_cases.dart';
+import 'features/client/service_requests/application/service_request_use_cases.dart';
+import 'features/client/service_requests/presentation/applicants_page.dart';
+import 'features/dev_sandbox/demo_flow.dart';
 import 'features/dev_sandbox/presentation/flow_sandbox_page.dart';
+import 'features/quotations/application/quotation_use_cases.dart';
+import 'features/quotations/presentation/quotation_detail_page.dart';
+import 'features/quotations/presentation/quotation_form_page.dart';
+import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
@@ -72,6 +80,9 @@ abstract final class AppRoutes {
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
   static const devFlowSandbox = '/dev/flujo-e2e';
+  static const clientApplicants = '/cliente/solicitud/postulantes';
+  static const clientQuotation = '/cliente/solicitud/cotizacion';
+  static const technicianQuotation = '/tecnico/cotizacion';
 }
 
 Future<void> main() async {
@@ -176,6 +187,7 @@ class FixiaApp extends StatefulWidget {
     this.technicianSpecialtiesRepository,
     this.listOpportunities,
     this.applyToServiceRequest,
+    this.demoFlow,
     this.sessionStore,
   });
 
@@ -183,6 +195,11 @@ class FixiaApp extends StatefulWidget {
   /// `null` la pantalla de oportunidades usa datos locales de demostración.
   final ListCompatibleOpportunities? listOpportunities;
   final ApplyToServiceRequest? applyToServiceRequest;
+
+  /// Datos en memoria compartidos entre técnico y cliente para recorrer el
+  /// flujo de postulación y cotización mientras no exista el backend. Si es
+  /// null se crean unos propios.
+  final DemoFlow? demoFlow;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -204,6 +221,7 @@ class FixiaApp extends StatefulWidget {
 
 class _FixiaAppState extends State<FixiaApp> {
   late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
+  late final DemoFlow _demo = widget.demoFlow ?? DemoFlow();
 
   /// Ruta protegida que un visitante intentó abrir sin sesión (GC-315). Tras
   /// iniciar sesión se vuelve a ella; si no es para su rol, la guarda de la
@@ -376,7 +394,54 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
+      onOpenApplicants: () => Navigator.of(context)
+          .pushNamed(AppRoutes.clientApplicants, arguments: DemoFlow.requestId),
+      onReviewQuote: () => Navigator.of(context)
+          .pushNamed(AppRoutes.clientQuotation, arguments: DemoFlow.requestId),
       onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  String _requestIdOf(BuildContext context) =>
+      ModalRoute.of(context)?.settings.arguments as String? ??
+      DemoFlow.requestId;
+
+  void _expireSession(BuildContext context) {
+    _sessionStore.clear();
+    _goToLogin(context);
+  }
+
+  Widget _clientApplicantsPage(BuildContext context) {
+    return ApplicantsPage(
+      requestId: _requestIdOf(context),
+      listApplicants: ListApplicants(_demo.requests),
+      selectProvider: SelectProvider(_demo.requests),
+      getProfile: GetProviderPublicProfile(_demo.profiles),
+      onSessionExpired: () => _expireSession(context),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+
+  Widget _clientQuotationPage(BuildContext context) {
+    return QuotationDetailPage(
+      serviceRequestId: _requestIdOf(context),
+      listQuotations: ListRequestQuotations(_demo.quotations),
+      serviceSummary: DemoFlow.requestSummary,
+      providerName: DemoFlow.providerName,
+      acceptQuotation: AcceptQuotation(_demo.quotations),
+      rejectQuotation: RejectQuotation(_demo.quotations),
+      onSessionExpired: () => _expireSession(context),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+
+  Widget _technicianQuotationPage(BuildContext context) {
+    return QuotationFormPage(
+      serviceRequestId: _requestIdOf(context),
+      sendQuotation: SendQuotation(_demo.quotations),
+      serviceSummary: DemoFlow.requestSummary,
+      onSessionExpired: () => _expireSession(context),
+      onBack: () => Navigator.of(context).maybePop(),
     );
   }
 
@@ -440,10 +505,22 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  Future<OpportunityFlowState> _loadFlowState() async {
+    final applications = await ListMyApplications(_demo.applications)();
+    return OpportunityFlowState(
+      applied: {for (final a in applications) a.serviceRequest.id},
+      selected: await _demo.selectedRequestIds(),
+    );
+  }
+
   Widget _technicianOpportunitiesPage(BuildContext context) {
     return TechnicianOpportunitiesPage(
       listOpportunities: widget.listOpportunities,
       applyToServiceRequest: widget.applyToServiceRequest,
+      demoApplyToServiceRequest: ApplyToServiceRequest(_demo.applications),
+      loadFlowState: _loadFlowState,
+      onSendQuotation: (requestId) => Navigator.of(context)
+          .pushNamed(AppRoutes.technicianQuotation, arguments: requestId),
       onSessionExpired: () {
         _sessionStore.clear();
         _goToLogin(context);
@@ -503,6 +580,7 @@ class _FixiaAppState extends State<FixiaApp> {
           ApiConfig.devFlowSandbox ? AppRoutes.devFlowSandbox : AppRoutes.home,
       routes: {
         AppRoutes.devFlowSandbox: (context) => FlowSandboxPage(
+              flow: _demo,
               onBack: () => Navigator.of(context)
                   .pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
             ),
@@ -564,6 +642,12 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.professional, _technicianOpportunitiesPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
+        AppRoutes.clientApplicants:
+            _guard(RouteAccess.client, _clientApplicantsPage),
+        AppRoutes.clientQuotation:
+            _guard(RouteAccess.client, _clientQuotationPage),
+        AppRoutes.technicianQuotation:
+            _guard(RouteAccess.professional, _technicianQuotationPage),
       },
       // Una URL que no existe lleva al inicio en vez de mostrar un error.
       onUnknownRoute: (settings) => MaterialPageRoute<void>(

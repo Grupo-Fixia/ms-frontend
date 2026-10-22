@@ -9,7 +9,15 @@ COPY . .
 # URL base de la API, fijada al compilar. Con el mismo origen que sirve Traefik (http://localhost)
 # el navegador no necesita CORS. Para otro host: --build-arg USERS_API_BASE_URL=...
 ARG USERS_API_BASE_URL=http://localhost
-RUN flutter build web --release --dart-define=USERS_API_BASE_URL=${USERS_API_BASE_URL}
+# Flujo postulacion/cotizacion con datos locales mientras no haya solicitudes reales:
+# USE_MOCK_APPLICATIONS=true usa postulaciones simuladas (sin ms-services);
+# DEV_FLOW_SANDBOX=true abre al iniciar la pantalla del flujo E2E (/dev/flujo-e2e).
+ARG USE_MOCK_APPLICATIONS=true
+ARG DEV_FLOW_SANDBOX=false
+RUN flutter build web --release \
+    --dart-define=USERS_API_BASE_URL=${USERS_API_BASE_URL} \
+    --dart-define=USE_MOCK_APPLICATIONS=${USE_MOCK_APPLICATIONS} \
+    --dart-define=DEV_FLOW_SANDBOX=${DEV_FLOW_SANDBOX}
 
 # Etapa Nginx
 FROM nginx:alpine
