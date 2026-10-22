@@ -37,18 +37,22 @@ void main() {
       );
 
       expect(storage.refreshToken, fixtureSession.refreshToken);
+      expect(storage.persisted, isTrue);
     });
 
-    test('sin "mantener sesión" descarta cualquier token guardado antes',
-        () async {
-      final storage = FakeSessionStorage(refreshToken: 'viejo');
+    test(
+        'sin "mantener sesión" guarda el token solo en la pestaña y '
+        'reemplaza el anterior (GC-394)', () async {
+      final storage =
+          FakeSessionStorage(refreshToken: 'viejo', persisted: true);
 
       await LoginUser(FakeAuthRepository(), SessionStore(), storage)(
         email: 'ana@fixia.com',
         password: 'Segura123',
       );
 
-      expect(storage.refreshToken, isNull);
+      expect(storage.refreshToken, fixtureSession.refreshToken);
+      expect(storage.persisted, isFalse);
     });
 
     test('si el navegador no deja guardar, el login igual funciona', () async {
@@ -86,7 +90,8 @@ void main() {
       final store = SessionStore();
 
       await expectLater(
-        LoginUser(repository, store, FakeSessionStorage())(email: 'ana@fixia.com', password: 'x'),
+        LoginUser(repository, store, FakeSessionStorage())(
+            email: 'ana@fixia.com', password: 'x'),
         throwsA(isA<AuthFailure>()),
       );
 
@@ -102,7 +107,8 @@ void main() {
       final store = SessionStore();
 
       await expectLater(
-        LoginUser(repository, store, FakeSessionStorage())(email: 'ana@fixia.com', password: 'x'),
+        LoginUser(repository, store, FakeSessionStorage())(
+            email: 'ana@fixia.com', password: 'x'),
         throwsA(isA<AuthFailure>()),
       );
 
