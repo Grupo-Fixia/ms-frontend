@@ -53,8 +53,14 @@ abstract final class AppRoutes {
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
   static const technicianRegistration = '/registro-tecnico';
-  static const clientDashboard = '/demo/inicio-cliente';
-  static const technicianDashboard = '/demo/inicio-tecnico';
+  static const clientDashboard = '/cliente/inicio';
+  static const technicianDashboard = '/tecnico/inicio';
+
+  /// Rutas anteriores de los paneles, cuando se llamaban «demo». Ya no se
+  /// anuncian, pero siguen abriendo el inicio del rol para no romper enlaces
+  /// ni marcadores guardados (GC-315).
+  static const legacyClientDashboard = '/demo/inicio-cliente';
+  static const legacyTechnicianDashboard = '/demo/inicio-tecnico';
   static const clientServiceRequest = '/cliente/publicar-problema';
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianSpecialties = '/tecnico/especialidades';
@@ -153,6 +159,35 @@ class FixiaApp extends StatefulWidget {
 
 class _FixiaAppState extends State<FixiaApp> {
   late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
+
+  /// Ruta protegida que un visitante intentó abrir sin sesión (GC-315). Tras
+  /// iniciar sesión se vuelve a ella; si no es para su rol, la guarda de la
+  /// propia ruta lo lleva a su inicio.
+  String? _returnTo;
+
+  /// Hubo una sesión que ya terminó (cierre o vencimiento). Entonces no se
+  /// recuerda la ruta que se estaba viendo: otra persona podría ingresar después
+  /// y no debe heredar el destino de la anterior.
+  bool _sessionEnded = false;
+  bool _wasAuthenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasAuthenticated = _sessionStore.isAuthenticated;
+    _sessionStore.addListener(_onSessionChanged);
+  }
+
+  void _onSessionChanged() {
+    final authenticated = _sessionStore.isAuthenticated;
+    if (authenticated) {
+      _sessionEnded = false;
+    } else if (_wasAuthenticated) {
+      _sessionEnded = true;
+      _returnTo = null;
+    }
+    _wasAuthenticated = authenticated;
+  }
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -179,6 +214,7 @@ class _FixiaAppState extends State<FixiaApp> {
 
   @override
   void dispose() {
+    _sessionStore.removeListener(_onSessionChanged);
     if (widget.sessionStore == null) _sessionStore.dispose();
     super.dispose();
   }
@@ -205,6 +241,7 @@ class _FixiaAppState extends State<FixiaApp> {
     } catch (_) {
       return false;
     }
+    _returnTo = null;
     if (context.mounted) {
       final route = _sessionStore.profile?.role == UserRole.professional
           ? AppRoutes.technicianProfile
@@ -216,6 +253,17 @@ class _FixiaAppState extends State<FixiaApp> {
 
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+
+  /// Después de iniciar sesión: al inicio del rol y, si el visitante había
+  /// pedido una ruta protegida, a esa ruta (GC-315). La guarda de la ruta
+  /// decide si es para su rol; si no, queda en su inicio.
+  void _goAfterLogin(BuildContext context) {
+    final target = _returnTo;
+    _returnTo = null;
+    final navigator = Navigator.of(context);
+    navigator.pushNamedAndRemoveUntil(AppRoutes.home, (_) => false);
+    if (target != null && target != AppRoutes.home) navigator.pushNamed(target);
+  }
 
   /// Aplica la regla de acceso de la ruta (GC-314, `RouteGuard`). Las rutas
   /// protegidas escuchan la sesión: si se cierra o vence mientras están
@@ -232,6 +280,8 @@ class _FixiaAppState extends State<FixiaApp> {
         case RouteDecision.allow:
           return builder(context);
         case RouteDecision.toLogin:
+          // Un visitante que pide una ruta protegida vuelve a ella al ingresar.
+          if (!_sessionEnded) _returnTo = ModalRoute.of(context)?.settings.name;
           return const _RedirectTo(AppRoutes.login);
         case RouteDecision.toHome:
           return const _RedirectTo(AppRoutes.home);
@@ -383,10 +433,7 @@ class _FixiaAppState extends State<FixiaApp> {
         _sessionStore,
         widget.sessionStorage,
       ),
-      onLoggedIn: () => Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.home,
-        (_) => false,
-      ),
+      onLoggedIn: () => _goAfterLogin(context),
       onGoToRegistration: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.clientRegistration),
     );
@@ -418,6 +465,9 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.clientRegistration: _guard(
             RouteAccess.guestOnly,
             (context) => RegistrationPage(
+                  // Como el técnico: tras crear la cuenta se inicia sesión.
+                  onAutoLogin: (email, password) =>
+                      _signInAfterRegistration(context, email, password),
                   registerAccount:
                       RegisterAccount(widget.clientRegistrationRepository),
                   onGoToLogin: () => Navigator.of(context)
@@ -441,6 +491,11 @@ class _FixiaAppState extends State<FixiaApp> {
                 )),
         AppRoutes.clientDashboard:
             _guard(RouteAccess.client, _clientDashboardPage),
+        // Rutas anteriores («demo»): llevan al inicio del rol, o al login.
+        AppRoutes.legacyClientDashboard: _guard(RouteAccess.authenticated,
+            (_) => const _RedirectTo(AppRoutes.home)),
+        AppRoutes.legacyTechnicianDashboard: _guard(RouteAccess.authenticated,
+            (_) => const _RedirectTo(AppRoutes.home)),
         AppRoutes.technicianDashboard:
             _guard(RouteAccess.professional, _technicianDashboardPage),
         AppRoutes.clientProfile: _guard(RouteAccess.client, _clientProfilePage),
