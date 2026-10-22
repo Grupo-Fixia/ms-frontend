@@ -62,3 +62,43 @@ class ListRequestQuotations {
   Future<List<Quotation>> call(String serviceRequestId) =>
       _repository.listForRequest(serviceRequestId);
 }
+
+/// Caso de uso: el cliente acepta una cotización de su solicitud (GC-361).
+///
+/// Al aceptarla, la solicitud queda contratada con las condiciones de esa
+/// cotización (GC-359). Solo se puede aceptar una cotización vigente del
+/// prestador seleccionado; el backend rechaza las demás.
+class AcceptQuotation {
+  const AcceptQuotation(this._repository);
+
+  final QuotationRepository _repository;
+
+  Future<Quotation> call(String serviceRequestId, String quotationId) async =>
+      _repository.accept(
+        _required(serviceRequestId, _missingRequest),
+        _required(quotationId, _missingQuotation),
+      );
+}
+
+/// Caso de uso: el cliente rechaza una cotización de su solicitud (GC-361).
+/// El prestador seleccionado puede enviar otra.
+class RejectQuotation {
+  const RejectQuotation(this._repository);
+
+  final QuotationRepository _repository;
+
+  Future<Quotation> call(String serviceRequestId, String quotationId) async =>
+      _repository.reject(
+        _required(serviceRequestId, _missingRequest),
+        _required(quotationId, _missingQuotation),
+      );
+}
+
+const _missingRequest = 'Falta la solicitud de la cotización.';
+const _missingQuotation = 'Elige la cotización que quieres responder.';
+
+String _required(String value, String message) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) throw QuotationFailure(message);
+  return trimmed;
+}
