@@ -57,7 +57,10 @@ void main() {
     );
     await tester.tap(apply);
     await tester.pumpAndSettle();
-
+    expect(find.byKey(const ValueKey('apply-confirmation-dialog')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('apply-confirm-button')));
+    await tester.pumpAndSettle();
     expect(appliedId, 'fuga-lavaplatos');
     expect(
         find.text('Postulación enviada en esta demostración.'), findsOneWidget);

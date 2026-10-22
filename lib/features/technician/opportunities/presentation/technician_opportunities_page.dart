@@ -3,12 +3,35 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../applications/application/application_use_cases.dart';
+import '../../applications/domain/application_exceptions.dart';
+import '../../applications/presentation/application_dialogs.dart';
+import '../application/list_compatible_opportunities.dart';
+import '../domain/opportunity_exceptions.dart';
 import '../domain/service_opportunity.dart';
 import '../infrastructure/mock_service_opportunities.dart';
+
+/// Estado del técnico respecto a las solicitudes: en cuáles se postuló y en
+/// cuáles el cliente ya lo seleccionó (puede enviar cotización).
+class OpportunityFlowState {
+  const OpportunityFlowState({
+    this.applied = const {},
+    this.selected = const {},
+  });
+
+  final Set<String> applied;
+  final Set<String> selected;
+}
 
 class TechnicianOpportunitiesPage extends StatefulWidget {
   const TechnicianOpportunitiesPage({
     super.key,
+    this.listOpportunities,
+    this.applyToServiceRequest,
+    this.onSessionExpired,
+    this.demoApplyToServiceRequest,
+    this.loadFlowState,
+    this.onSendQuotation,
     this.onApply,
     this.onBack,
     this.onOpenHome,
@@ -17,6 +40,24 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
     this.onOpenWallet,
   });
 
+  /// Solicitudes compatibles reales (ms-services). Si es `null` se muestran
+  /// las de ejemplo.
+  final ListCompatibleOpportunities? listOpportunities;
+
+  /// Postulación real contra ms-services. Si es `null` la postulación es
+  /// solo local (demostración sin red).
+  final ApplyToServiceRequest? applyToServiceRequest;
+  final VoidCallback? onSessionExpired;
+
+  /// Postulación simulada que se usa cuando el backend no devuelve solicitudes
+  /// y se muestran las de ejemplo.
+  final ApplyToServiceRequest? demoApplyToServiceRequest;
+
+  /// Consulta en qué solicitudes ya se postuló o fue seleccionado el técnico.
+  final Future<OpportunityFlowState> Function()? loadFlowState;
+
+  /// Abre el formulario de cotización de la solicitud en la que fue seleccionado.
+  final ValueChanged<String>? onSendQuotation;
   final ValueChanged<String>? onApply;
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
@@ -33,8 +74,71 @@ class _TechnicianOpportunitiesPageState
     extends State<TechnicianOpportunitiesPage> {
   ServiceCategory? _selectedCategory;
   final Set<String> _appliedIds = {};
+  final Set<String> _selectedIds = {};
 
-  List<ServiceOpportunity> get _visibleOpportunities => mockServiceOpportunities
+  List<ServiceOpportunity>? _remote;
+  bool _loading = false;
+  String? _loadError;
+
+  /// Sin solicitudes reales publicadas se muestran las de ejemplo y la
+  /// postulación es local, para poder probar el flujo mientras no haya datos.
+  bool _demoFallback = false;
+
+  bool get _localApply => _demoFallback || widget.applyToServiceRequest == null;
+
+  ApplyToServiceRequest? get _apply => _localApply
+      ? widget.demoApplyToServiceRequest
+      : widget.applyToServiceRequest;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.listOpportunities != null) _load();
+    _refreshFlowState();
+  }
+
+  Future<void> _refreshFlowState() async {
+    final load = widget.loadFlowState;
+    if (load == null) return;
+    final state = await load();
+    if (!mounted) return;
+    setState(() {
+      _appliedIds.addAll(state.applied);
+      _selectedIds
+        ..clear()
+        ..addAll(state.selected);
+    });
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final page = await widget.listOpportunities!();
+      if (!mounted) return;
+      setState(() {
+        _remote = page.items.map(ServiceOpportunity.fromOpportunity).toList();
+        _demoFallback = _remote!.isEmpty;
+        _loading = false;
+      });
+    } on OpportunityFailure catch (failure) {
+      if (!mounted) return;
+      if (failure.isSessionExpired) widget.onSessionExpired?.call();
+      setState(() {
+        _loadError = failure.message;
+        _loading = false;
+      });
+    }
+  }
+
+  List<ServiceOpportunity> get _visibleOpportunities => (_demoFallback
+          ? mockServiceOpportunities
+          : _remote ??
+              (widget.listOpportunities == null
+                  ? mockServiceOpportunities
+                  : const <ServiceOpportunity>[]))
       .where(
         (opportunity) =>
             _selectedCategory == null ||
@@ -119,7 +223,29 @@ class _TechnicianOpportunitiesPageState
               ),
             ),
           ),
-          if (_visibleOpportunities.isEmpty)
+          if (_loading)
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_loadError != null)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _load,
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_visibleOpportunities.isEmpty)
             const SliverFillRemaining(
               hasScrollBody: false,
               child:
@@ -137,6 +263,7 @@ class _TechnicianOpportunitiesPageState
                       child: _OpportunityCard(
                         opportunity: opportunity,
                         applied: _appliedIds.contains(opportunity.id),
+                        selected: _selectedIds.contains(opportunity.id),
                         onOpen: () => _showDetails(opportunity),
                       ),
                     );
@@ -211,18 +338,70 @@ class _TechnicianOpportunitiesPageState
       builder: (context) => _OpportunityDetailsSheet(
         opportunity: opportunity,
         applied: _appliedIds.contains(opportunity.id),
-        onApply: () {
-          setState(() => _appliedIds.add(opportunity.id));
-          widget.onApply?.call(opportunity.id);
+        selected: _selectedIds.contains(opportunity.id) &&
+            widget.onSendQuotation != null,
+        demo: _localApply,
+        onSendQuotation: () {
           Navigator.of(context).pop();
-          ScaffoldMessenger.of(this.context).showSnackBar(
-            const SnackBar(
-              content: Text('Postulación enviada en esta demostración.'),
-            ),
+          widget.onSendQuotation?.call(opportunity.id);
+        },
+        onApply: () async {
+          final confirmation = await showApplyConfirmationDialog(
+            context,
+            requestTitle: opportunity.title,
           );
+          if (confirmation == null || !context.mounted) return;
+          Navigator.of(context).pop();
+          await _submitApplication(opportunity);
         },
       ),
     );
+  }
+
+  Future<void> _submitApplication(ServiceOpportunity opportunity) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final apply = _apply;
+    if (apply == null) {
+      setState(() => _appliedIds.add(opportunity.id));
+      widget.onApply?.call(opportunity.id);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Postulación enviada en esta demostración.'),
+        ),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Enviando tu postulación…')),
+    );
+    try {
+      await apply(opportunity.id);
+      if (!mounted) return;
+      setState(() => _appliedIds.add(opportunity.id));
+      widget.onApply?.call(opportunity.id);
+      _refreshFlowState();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content:
+                Text('Postulación enviada. El cliente revisará tu perfil.'),
+          ),
+        );
+    } on ApplicationFailure catch (failure) {
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      if (failure.isSessionExpired) {
+        widget.onSessionExpired?.call();
+      } else if (failure.isDuplicate) {
+        setState(() => _appliedIds.add(opportunity.id));
+        messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+      } else if (failure.isNotEligible) {
+        await showApplicationFailureDialog(context, failure);
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text(failure.message)));
+      }
+    }
   }
 }
 
@@ -260,11 +439,13 @@ class _OpportunityCard extends StatelessWidget {
   const _OpportunityCard({
     required this.opportunity,
     required this.applied,
+    required this.selected,
     required this.onOpen,
   });
 
   final ServiceOpportunity opportunity;
   final bool applied;
+  final bool selected;
   final VoidCallback onOpen;
 
   @override
@@ -350,7 +531,13 @@ class _OpportunityCard extends StatelessWidget {
                     'technician-opportunity-detail-${opportunity.id}',
                   ),
                   onPressed: onOpen,
-                  child: Text(applied ? 'Postulada' : 'Ver detalle'),
+                  child: Text(
+                    selected
+                        ? 'Cotizar'
+                        : applied
+                            ? 'Postulada'
+                            : 'Ver detalle',
+                  ),
                 ),
               ],
             ),
@@ -407,12 +594,18 @@ class _OpportunityDetailsSheet extends StatelessWidget {
   const _OpportunityDetailsSheet({
     required this.opportunity,
     required this.applied,
+    required this.selected,
+    required this.demo,
     required this.onApply,
+    required this.onSendQuotation,
   });
 
   final ServiceOpportunity opportunity;
   final bool applied;
+  final bool selected;
+  final bool demo;
   final VoidCallback onApply;
+  final VoidCallback onSendQuotation;
 
   @override
   Widget build(BuildContext context) {
@@ -486,20 +679,37 @@ class _OpportunityDetailsSheet extends StatelessWidget {
                     ),
               ),
               const SizedBox(height: 22),
-              FilledButton.icon(
-                key: ValueKey('technician-apply-${opportunity.id}'),
-                onPressed: applied ? null : onApply,
-                icon: Icon(
-                  applied ? Icons.check_circle_outline : Icons.send_outlined,
+              if (selected) ...[
+                Text(
+                  'El cliente te seleccionó para esta solicitud. Envía tu '
+                  'cotización para continuar.',
+                  key: ValueKey('technician-selected-${opportunity.id}'),
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                label: Text(applied ? 'Postulación enviada' : 'Postularse'),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                'Demostración local: la postulación no se envía a un servidor.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  key: ValueKey('technician-quote-${opportunity.id}'),
+                  onPressed: onSendQuotation,
+                  icon: const Icon(Icons.request_quote_outlined),
+                  label: const Text('Enviar cotización'),
+                ),
+              ] else
+                FilledButton.icon(
+                  key: ValueKey('technician-apply-${opportunity.id}'),
+                  onPressed: applied ? null : onApply,
+                  icon: Icon(
+                    applied ? Icons.check_circle_outline : Icons.send_outlined,
+                  ),
+                  label: Text(applied ? 'Postulación enviada' : 'Postularse'),
+                ),
+              if (demo) ...[
+                const SizedBox(height: 5),
+                Text(
+                  'Demostración local: la postulación no se envía a un servidor.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
           ),
         ),

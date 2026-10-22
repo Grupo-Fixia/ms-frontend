@@ -9,6 +9,7 @@ class TechnicianDashboardPage extends StatelessWidget {
     super.key,
     this.firstName,
     this.verificationStatus = VerificationStatus.pending,
+    this.allowDemoApply = false,
     this.onOpenSettings,
     this.onLogout,
     this.onOpenOpportunities,
@@ -23,6 +24,10 @@ class TechnicianDashboardPage extends StatelessWidget {
 
   final String? firstName;
   final VerificationStatus verificationStatus;
+
+  /// Las tarjetas son de ejemplo: permite abrir el flujo de postulación aunque
+  /// la cuenta no esté verificada (el backend valida RF-014 al postular).
+  final bool allowDemoApply;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onLogout;
   final VoidCallback? onOpenOpportunities;
@@ -36,7 +41,8 @@ class TechnicianDashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isVerified = verificationStatus == VerificationStatus.valid;
+    final isVerified =
+        allowDemoApply || verificationStatus == VerificationStatus.valid;
     return DashboardShell(
       contentPadding: EdgeInsets.zero,
       bottomNavigationBar: _TechnicianNavigationBar(

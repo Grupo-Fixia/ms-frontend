@@ -1,4 +1,14 @@
 import 'package:flutter/material.dart';
+import 'features/client/service_requests/application/provider_profile_use_cases.dart';
+import 'features/client/service_requests/application/service_request_use_cases.dart';
+import 'features/client/service_requests/presentation/applicants_page.dart';
+import 'features/client/service_requests/presentation/provider_public_profile_page.dart';
+import 'features/dev_sandbox/demo_flow.dart';
+import 'features/dev_sandbox/presentation/flow_sandbox_page.dart';
+import 'features/quotations/application/quotation_use_cases.dart';
+import 'features/quotations/presentation/quotation_detail_page.dart';
+import 'features/quotations/presentation/quotation_form_page.dart';
+import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
@@ -29,7 +39,10 @@ import 'features/client/profile/presentation/client_profile_page.dart';
 import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
-import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
+import 'features/technician/applications/application/application_use_cases.dart';
+import 'features/technician/applications/infrastructure/http_application_repository.dart';
+import 'features/technician/opportunities/application/list_compatible_opportunities.dart';
+import 'features/technician/opportunities/infrastructure/http_opportunity_repository.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
@@ -66,6 +79,11 @@ abstract final class AppRoutes {
   static const technicianSpecialties = '/tecnico/especialidades';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
+  static const devFlowSandbox = '/dev/flujo-e2e';
+  static const clientApplicants = '/cliente/solicitud/postulantes';
+  static const clientQuotation = '/cliente/solicitud/cotizacion';
+  static const clientProviderProfile = '/cliente/prestador';
+  static const technicianQuotation = '/tecnico/cotizacion';
 }
 
 Future<void> main() async {
@@ -86,6 +104,20 @@ Future<void> main() async {
   // iniciada"), la sesión se restaura antes de mostrar la primera pantalla.
   final sessionStore = SessionStore();
   await RestoreSession(authRepository, sessionStore, sessionStorage)();
+
+  // ms-services con sesión real, salvo que se pida el modo local
+  // (`--dart-define=USE_MOCK_APPLICATIONS=true`).
+  final servicesApiBaseUrl = Uri.parse(ApiConfig.servicesBaseUrl);
+  final servicesAuthorizedHttp = ApiConfig.useMockApplications
+      ? null
+      : AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).call,
+        );
 
   runApp(
     FixiaApp(
@@ -123,6 +155,24 @@ Future<void> main() async {
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
+      listOpportunities: servicesAuthorizedHttp == null
+          ? null
+          : ListCompatibleOpportunities(
+              HttpOpportunityRepository(
+                client: httpClient,
+                baseUrl: servicesApiBaseUrl,
+                authorizedHttp: servicesAuthorizedHttp,
+              ),
+            ),
+      applyToServiceRequest: servicesAuthorizedHttp == null
+          ? null
+          : ApplyToServiceRequest(
+              HttpApplicationRepository(
+                client: httpClient,
+                baseUrl: servicesApiBaseUrl,
+                authorizedHttp: servicesAuthorizedHttp,
+              ),
+            ),
     ),
   );
 }
@@ -136,8 +186,21 @@ class FixiaApp extends StatefulWidget {
     required this.authRepository,
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
+    this.listOpportunities,
+    this.applyToServiceRequest,
+    this.demoFlow,
     this.sessionStore,
   });
+
+  /// Solicitudes compatibles y postulación reales (ms-services). Si son
+  /// `null` la pantalla de oportunidades usa datos locales de demostración.
+  final ListCompatibleOpportunities? listOpportunities;
+  final ApplyToServiceRequest? applyToServiceRequest;
+
+  /// Datos en memoria compartidos entre técnico y cliente para recorrer el
+  /// flujo de postulación y cotización mientras no exista el backend. Si es
+  /// null se crean unos propios.
+  final DemoFlow? demoFlow;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -159,6 +222,7 @@ class FixiaApp extends StatefulWidget {
 
 class _FixiaAppState extends State<FixiaApp> {
   late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
+  late final DemoFlow _demo = widget.demoFlow ?? DemoFlow();
 
   /// Ruta protegida que un visitante intentó abrir sin sesión (GC-315). Tras
   /// iniciar sesión se vuelve a ella; si no es para su rol, la guarda de la
@@ -188,6 +252,7 @@ class _FixiaAppState extends State<FixiaApp> {
     }
     _wasAuthenticated = authenticated;
   }
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -330,7 +395,71 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
+      onOpenApplicants: () => Navigator.of(context)
+          .pushNamed(AppRoutes.clientApplicants, arguments: DemoFlow.requestId),
+      onReviewQuote: () => Navigator.of(context).pushNamed(
+        AppRoutes.clientQuotation,
+        arguments: DemoFlow.receivedQuotes.first.requestId,
+      ),
+      receivedQuotes: DemoFlow.receivedQuotes,
+      onOpenQuote: (requestId) => Navigator.of(context)
+          .pushNamed(AppRoutes.clientQuotation, arguments: requestId),
+      onOpenTechnicianProfile: (providerId) => Navigator.of(context)
+          .pushNamed(AppRoutes.clientProviderProfile, arguments: providerId),
       onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  String _requestIdOf(BuildContext context) =>
+      ModalRoute.of(context)?.settings.arguments as String? ??
+      DemoFlow.requestId;
+
+  void _expireSession(BuildContext context) {
+    _sessionStore.clear();
+    _goToLogin(context);
+  }
+
+  Widget _clientApplicantsPage(BuildContext context) {
+    return ApplicantsPage(
+      requestId: _requestIdOf(context),
+      listApplicants: ListApplicants(_demo.requests),
+      selectProvider: SelectProvider(_demo.requests),
+      getProfile: GetProviderPublicProfile(_demo.profiles),
+      onSessionExpired: () => _expireSession(context),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+
+  Widget _clientProviderProfilePage(BuildContext context) {
+    return ProviderPublicProfilePage(
+      providerId: _requestIdOf(context),
+      getProfile: GetProviderPublicProfile(_demo.profiles),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+
+  Widget _clientQuotationPage(BuildContext context) {
+    final requestId = _requestIdOf(context);
+    final summary = DemoFlow.summaryOf(requestId);
+    return QuotationDetailPage(
+      serviceRequestId: requestId,
+      listQuotations: ListRequestQuotations(_demo.quotations),
+      serviceSummary: summary.title,
+      providerName: summary.providerName,
+      acceptQuotation: AcceptQuotation(_demo.quotations),
+      rejectQuotation: RejectQuotation(_demo.quotations),
+      onSessionExpired: () => _expireSession(context),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+
+  Widget _technicianQuotationPage(BuildContext context) {
+    return QuotationFormPage(
+      serviceRequestId: _requestIdOf(context),
+      sendQuotation: SendQuotation(_demo.quotations),
+      serviceSummary: DemoFlow.requestSummary,
+      onSessionExpired: () => _expireSession(context),
+      onBack: () => Navigator.of(context).maybePop(),
     );
   }
 
@@ -382,6 +511,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
       onOpenOpportunities: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onApplyToOpportunity: (_) =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -392,8 +523,26 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  Future<OpportunityFlowState> _loadFlowState() async {
+    final applications = await ListMyApplications(_demo.applications)();
+    return OpportunityFlowState(
+      applied: {for (final a in applications) a.serviceRequest.id},
+      selected: await _demo.selectedRequestIds(),
+    );
+  }
+
   Widget _technicianOpportunitiesPage(BuildContext context) {
     return TechnicianOpportunitiesPage(
+      listOpportunities: widget.listOpportunities,
+      applyToServiceRequest: widget.applyToServiceRequest,
+      demoApplyToServiceRequest: ApplyToServiceRequest(_demo.applications),
+      loadFlowState: _loadFlowState,
+      onSendQuotation: (requestId) => Navigator.of(context)
+          .pushNamed(AppRoutes.technicianQuotation, arguments: requestId),
+      onSessionExpired: () {
+        _sessionStore.clear();
+        _goToLogin(context);
+      },
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
@@ -445,8 +594,14 @@ class _FixiaAppState extends State<FixiaApp> {
       title: 'Fixia',
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
-      initialRoute: AppRoutes.home,
+      initialRoute:
+          ApiConfig.devFlowSandbox ? AppRoutes.devFlowSandbox : AppRoutes.home,
       routes: {
+        AppRoutes.devFlowSandbox: (context) => FlowSandboxPage(
+              flow: _demo,
+              onBack: () => Navigator.of(context)
+                  .pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
+            ),
         // El inicio autenticado se selecciona según el rol de la cuenta.
         AppRoutes.home: (context) => _sessionStore.isAuthenticated
             ? _sessionPage(context)
@@ -505,6 +660,14 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.professional, _technicianOpportunitiesPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
+        AppRoutes.clientApplicants:
+            _guard(RouteAccess.client, _clientApplicantsPage),
+        AppRoutes.clientQuotation:
+            _guard(RouteAccess.client, _clientQuotationPage),
+        AppRoutes.clientProviderProfile:
+            _guard(RouteAccess.client, _clientProviderProfilePage),
+        AppRoutes.technicianQuotation:
+            _guard(RouteAccess.professional, _technicianQuotationPage),
       },
       // Una URL que no existe lleva al inicio en vez de mostrar un error.
       onUnknownRoute: (settings) => MaterialPageRoute<void>(
@@ -547,6 +710,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.firstName,
     required this.onOpenSettings,
     required this.onOpenOpportunities,
+    required this.onApplyToOpportunity,
     required this.onOpenSpecialties,
     required this.onLogout,
     required this.onSessionExpired,
@@ -556,6 +720,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final String firstName;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
+  final ValueChanged<String> onApplyToOpportunity;
   final VoidCallback onOpenSpecialties;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
@@ -651,8 +816,10 @@ class _TechnicianDashboardLoaderState
         return TechnicianDashboardPage(
           firstName: widget.firstName,
           verificationStatus: verificationStatus,
+          allowDemoApply: true,
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
+          onApplyToOpportunity: widget.onApplyToOpportunity,
           onOpenSpecialties: widget.onOpenSpecialties,
           onLogout: widget.onLogout,
         );

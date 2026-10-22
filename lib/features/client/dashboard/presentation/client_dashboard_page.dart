@@ -15,6 +15,10 @@ class ClientDashboardPage extends StatefulWidget {
     this.onRequestTechnician,
     this.onOpenChat,
     this.onReviewQuote,
+    this.onOpenApplicants,
+    this.onOpenTechnicianProfile,
+    this.receivedQuotes = const [],
+    this.onOpenQuote,
     this.onConfirmClosure,
   });
 
@@ -27,6 +31,17 @@ class ClientDashboardPage extends StatefulWidget {
   final ValueChanged<String>? onRequestTechnician;
   final VoidCallback? onOpenChat;
   final VoidCallback? onReviewQuote;
+
+  /// Abre los postulantes de la solicitud publicada (GC-349).
+  final VoidCallback? onOpenApplicants;
+
+  /// Abre el perfil público de un técnico recomendado (GC-350).
+  final ValueChanged<String>? onOpenTechnicianProfile;
+
+  /// Cotizaciones recibidas por el cliente y acción para abrir cada una
+  /// (GC-355 y GC-360).
+  final List<ReceivedQuoteSummary> receivedQuotes;
+  final ValueChanged<String>? onOpenQuote;
   final VoidCallback? onConfirmClosure;
 
   static const _technicians = [
@@ -195,6 +210,10 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
                 data: _visibleTechnicians[index],
                 onRequest: () => widget.onRequestTechnician
                     ?.call(_visibleTechnicians[index].id),
+                onOpenProfile: widget.onOpenTechnicianProfile == null
+                    ? null
+                    : () => widget.onOpenTechnicianProfile!
+                        .call(_visibleTechnicians[index].id),
               ),
               if (index < _visibleTechnicians.length - 1)
                 const SizedBox(height: 12),
@@ -208,7 +227,7 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
             ),
           ),
           const SizedBox(height: 12),
-          const _RequestSummaryCard(),
+          _RequestSummaryCard(onOpenApplicants: widget.onOpenApplicants),
           const SizedBox(height: 26),
           DashboardSectionHeading(
             title: 'Tus servicios en curso',
@@ -241,6 +260,18 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
             icon: Icons.task_alt_rounded,
             onPressed: widget.onConfirmClosure,
           ),
+          if (widget.receivedQuotes.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const DashboardSectionHeading(title: 'Cotizaciones recibidas'),
+            const SizedBox(height: 12),
+            for (final quote in widget.receivedQuotes) ...[
+              _ReceivedQuoteCard(
+                quote: quote,
+                onOpen: () => widget.onOpenQuote?.call(quote.requestId),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ],
           const SizedBox(height: 20),
         ],
       ),
@@ -405,31 +436,32 @@ class _CategoryFilters extends StatelessWidget {
       child: ScrollConfiguration(
         behavior: const DragScrollBehavior(),
         child: ListView.separated(
-        key: const ValueKey('client-technician-categories'),
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final selected = categories[index] == selectedCategory;
-          return ChoiceChip(
-            key: ValueKey('client-category-${categories[index]}'),
-            label: Text(categories[index]),
-            selected: selected,
-            onSelected: (_) => onSelected(categories[index]),
-            showCheckmark: false,
-            selectedColor: FixiaColors.secondary,
-            backgroundColor: FixiaColors.white,
-            side: BorderSide(
-              color: selected ? FixiaColors.secondary : const Color(0xFFDCE5F0),
-            ),
-            labelStyle: TextStyle(
-              color: selected ? FixiaColors.white : FixiaColors.textSecondary,
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-          );
-        },
+          key: const ValueKey('client-technician-categories'),
+          scrollDirection: Axis.horizontal,
+          itemCount: categories.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final selected = categories[index] == selectedCategory;
+            return ChoiceChip(
+              key: ValueKey('client-category-${categories[index]}'),
+              label: Text(categories[index]),
+              selected: selected,
+              onSelected: (_) => onSelected(categories[index]),
+              showCheckmark: false,
+              selectedColor: FixiaColors.secondary,
+              backgroundColor: FixiaColors.white,
+              side: BorderSide(
+                color:
+                    selected ? FixiaColors.secondary : const Color(0xFFDCE5F0),
+              ),
+              labelStyle: TextStyle(
+                color: selected ? FixiaColors.white : FixiaColors.textSecondary,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+            );
+          },
         ),
       ),
     );
@@ -459,10 +491,15 @@ class _NoTechniciansFound extends StatelessWidget {
 }
 
 class _TechnicianCard extends StatelessWidget {
-  const _TechnicianCard({required this.data, required this.onRequest});
+  const _TechnicianCard({
+    required this.data,
+    required this.onRequest,
+    this.onOpenProfile,
+  });
 
   final _TechnicianCardData data;
   final VoidCallback onRequest;
+  final VoidCallback? onOpenProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -517,6 +554,16 @@ class _TechnicianCard extends StatelessWidget {
           _RatingAndDistance(data: data),
           const SizedBox(height: 12),
           const Divider(height: 1, color: FixiaColors.supportBackground),
+          if (onOpenProfile != null)
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                key: ValueKey('client-technician-profile-${data.id}'),
+                onPressed: onOpenProfile,
+                icon: const Icon(Icons.person_search_outlined),
+                label: const Text('Ver perfil'),
+              ),
+            ),
           const SizedBox(height: 11),
           Row(
             children: [
@@ -672,6 +719,64 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
+/// Resumen de una cotización recibida para mostrarla en el inicio.
+class ReceivedQuoteSummary {
+  const ReceivedQuoteSummary({
+    required this.requestId,
+    required this.title,
+    required this.providerName,
+  });
+
+  final String requestId;
+  final String title;
+  final String providerName;
+}
+
+class _ReceivedQuoteCard extends StatelessWidget {
+  const _ReceivedQuoteCard({required this.quote, required this.onOpen});
+
+  final ReceivedQuoteSummary quote;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return DashboardCard(
+      child: Row(
+        children: [
+          const Icon(
+            Icons.request_quote_outlined,
+            color: FixiaColors.secondary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  quote.title,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Cotización de ${quote.providerName}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            key: ValueKey('client-quote-${quote.requestId}'),
+            onPressed: onOpen,
+            child: const Text('Ver cotización'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ActiveServiceCard extends StatelessWidget {
   const _ActiveServiceCard({
     required this.title,
@@ -730,7 +835,9 @@ class _ActiveServiceCard extends StatelessWidget {
 }
 
 class _RequestSummaryCard extends StatelessWidget {
-  const _RequestSummaryCard();
+  const _RequestSummaryCard({this.onOpenApplicants});
+
+  final VoidCallback? onOpenApplicants;
 
   @override
   Widget build(BuildContext context) {
@@ -773,6 +880,18 @@ class _RequestSummaryCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onOpenApplicants != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('client-view-applicants'),
+                onPressed: onOpenApplicants,
+                icon: const Icon(Icons.people_alt_outlined),
+                label: const Text('Ver postulantes'),
+              ),
+            ),
+          ],
         ],
       ),
     );

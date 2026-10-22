@@ -23,11 +23,20 @@ enum QuotationStatus {
   }
 }
 
+/// Material que el prestador cobra aparte de la mano de obra.
+class QuotationMaterial {
+  const QuotationMaterial({required this.name, required this.amountInCents});
+
+  final String name;
+  final int amountInCents;
+}
+
 /// Cotización del prestador seleccionado para una solicitud (GC-300,
 /// RF-017): valor, alcance, condiciones y fecha acordada.
 ///
 /// El valor se guarda en centavos para no arrastrar errores de punto
-/// flotante (el backend admite hasta dos decimales).
+/// flotante (el backend admite hasta dos decimales). [amountInCents] es el
+/// total: mano de obra más [materials].
 class Quotation {
   const Quotation({
     required this.id,
@@ -41,7 +50,10 @@ class Quotation {
     required this.validUntil,
     required this.status,
     required this.statusName,
+    this.materials = const [],
     this.isExpired = false,
+    this.rejectionReason,
+    this.counterOfferInCents,
     this.respondedAt,
     this.createdAt,
     this.updatedAt,
@@ -61,12 +73,27 @@ class Quotation {
   /// Nombre del estado en español, tal como lo envía el backend.
   final String statusName;
 
+  /// Desglose de materiales; vacío si el backend no lo envía.
+  final List<QuotationMaterial> materials;
+
   /// Sigue enviada pero su vigencia ya pasó: el cliente ya no puede
   /// aceptarla.
   final bool isExpired;
+
+  /// Motivo opcional que escribió el cliente al rechazar.
+  final String? rejectionReason;
+
+  /// Valor que el cliente propone al rechazar (contraoferta), en centavos.
+  final int? counterOfferInCents;
   final DateTime? respondedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  int get materialsInCents =>
+      materials.fold(0, (total, item) => total + item.amountInCents);
+
+  /// Valor de la mano de obra: el total menos los materiales.
+  int get laborInCents => amountInCents - materialsInCents;
 
   /// El cliente todavía puede responderla.
   bool get isOpen => status == QuotationStatus.sent && !isExpired;
@@ -81,17 +108,19 @@ class NewQuotation {
     required this.conditions,
     required this.agreedAt,
     required this.validUntil,
+    this.materials = const [],
     this.currency = 'COP',
   });
 
   final String serviceRequestId;
 
-  /// `null` si el texto del valor no se pudo leer (ver
-  /// `QuotationRules.parseAmount`).
+  /// Total (mano de obra más materiales). `null` si el texto del valor no se
+  /// pudo leer (ver `QuotationRules.parseAmount`).
   final int? amountInCents;
   final String scope;
   final String conditions;
   final DateTime? agreedAt;
   final DateTime? validUntil;
+  final List<QuotationMaterial> materials;
   final String currency;
 }
