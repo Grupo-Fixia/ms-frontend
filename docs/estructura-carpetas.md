@@ -52,6 +52,7 @@ ms-frontend/
 1. **¿La usan varios roles?** (login, registro, perfil común, notificaciones) → `features/auth/` o una carpeta común con nombre del dominio. Ejemplo: cliente y técnico se registran con los mismos datos, así que comparten `features/auth/registration/` y solo cambian los textos y el endpoint según el rol (`AccountRole`).
 2. **¿Es de un solo actor?** → `features/client/<funcionalidad>/` o `features/technician/<funcionalidad>/`.
 3. **¿Es infraestructura transversal sin pantalla propia?** (tema, cliente HTTP, constantes) → `core/`.
+4. **¿Es una herramienta de desarrollo que cruza roles?** → `features/dev_sandbox/`. Hoy solo existe `FlowSandboxPage` (`/dev/flujo-e2e`), que recorre postulación (GC-344) → postulantes y perfil (GC-349/350) → selección → cotización (GC-355) → aceptar/rechazar (GC-360) con los mocks en memoria de cada funcionalidad. Se abre con `flutter run --dart-define=DEV_FLOW_SANDBOX=true`; no se enlaza desde la interfaz de producción.
 
 ## 3. Capas dentro de cada funcionalidad
 

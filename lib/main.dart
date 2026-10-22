@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'features/dev_sandbox/presentation/flow_sandbox_page.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
@@ -63,6 +64,7 @@ abstract final class AppRoutes {
   static const technicianSpecialties = '/tecnico/especialidades';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
+  static const devFlowSandbox = '/dev/flujo-e2e';
 }
 
 Future<void> main() async {
@@ -432,8 +434,13 @@ class _FixiaAppState extends State<FixiaApp> {
       title: 'Fixia',
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
-      initialRoute: AppRoutes.home,
+      initialRoute:
+          ApiConfig.devFlowSandbox ? AppRoutes.devFlowSandbox : AppRoutes.home,
       routes: {
+        AppRoutes.devFlowSandbox: (context) => FlowSandboxPage(
+              onBack: () => Navigator.of(context)
+                  .pushNamedAndRemoveUntil(AppRoutes.home, (_) => false),
+            ),
         // El inicio autenticado se selecciona según el rol de la cuenta.
         AppRoutes.home: (context) => _sessionStore.isAuthenticated
             ? _sessionPage(context)
