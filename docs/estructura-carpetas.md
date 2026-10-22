@@ -39,6 +39,7 @@ ms-frontend/
 │       │   └── service_requests/   # publicar y consultar solicitudes (GC-296)
 │       └── technician/     #   funcionalidades solo del técnico
 │           ├── applications/   # postulaciones a solicitudes (GC-298)
+│           ├── availability/   # disponibilidad y zona de atención (GC-295)
 │           ├── profile/    #     perfil profesional (GC-237)
 │           └── specialties/    # especialidades y servicios (GC-294)
 ├── test/                   # Espejo de lib/: misma ruta que el archivo probado
