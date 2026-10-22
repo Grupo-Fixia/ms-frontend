@@ -290,8 +290,10 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
               ),
               FilledButton(
                 key: const ValueKey('reject-confirm'),
-                onPressed: () => Navigator.of(context)
-                    .pop((reason: reasonController.text, counter: null)),
+                onPressed: counterText.isNotEmpty
+                    ? null
+                    : () => Navigator.of(context)
+                        .pop((reason: reasonController.text, counter: null)),
                 child: const Text('Rechazar'),
               ),
               FilledButton(

@@ -149,6 +149,12 @@ void main() {
     await tester.enterText(
         find.byKey(const ValueKey('counter-offer-amount')), '250000');
     await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('reject-confirm')))
+          .onPressed,
+      isNull,
+    );
     await tester.tap(find.byKey(const ValueKey('counter-offer-confirm')));
     await tester.pumpAndSettle();
 
