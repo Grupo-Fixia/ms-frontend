@@ -1,6 +1,7 @@
 import '../domain/quotation.dart';
 import '../domain/quotation_exceptions.dart';
 import '../domain/quotation_rules.dart';
+import 'ports/quotation_decision_repository.dart';
 import 'ports/quotation_repository.dart';
 
 /// Caso de uso: crear y enviar una cotización al cliente (GC-300). Valida los
@@ -24,6 +25,7 @@ class SendQuotation {
         serviceRequestId: quotation.serviceRequestId.trim(),
         amountInCents: quotation.amountInCents,
         currency: quotation.currency,
+        materials: quotation.materials,
         scope: quotation.scope.trim(),
         conditions: quotation.conditions.trim(),
         agreedAt: quotation.agreedAt,
@@ -61,4 +63,28 @@ class ListRequestQuotations {
 
   Future<List<Quotation>> call(String serviceRequestId) =>
       _repository.listForRequest(serviceRequestId);
+}
+
+/// Caso de uso: el cliente acepta la cotización recibida (GC-360).
+class AcceptQuotation {
+  const AcceptQuotation(this._repository);
+
+  final QuotationDecisionRepository _repository;
+
+  Future<Quotation> call(String quotationId) => _repository.accept(quotationId);
+}
+
+/// Caso de uso: el cliente rechaza la cotización recibida (GC-360).
+class RejectQuotation {
+  const RejectQuotation(this._repository);
+
+  final QuotationDecisionRepository _repository;
+
+  Future<Quotation> call(String quotationId, {String? reason}) {
+    final trimmed = reason?.trim();
+    return _repository.reject(
+      quotationId,
+      reason: trimmed == null || trimmed.isEmpty ? null : trimmed,
+    );
+  }
 }

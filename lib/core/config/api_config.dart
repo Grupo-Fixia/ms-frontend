@@ -14,4 +14,11 @@ abstract final class ApiConfig {
     'SERVICES_API_BASE_URL',
     defaultValue: usersBaseUrl,
   );
+
+  /// Usa datos locales en lugar de ms-services para oportunidades y
+  /// postulaciones (pruebas sin red): `--dart-define=USE_MOCK_APPLICATIONS=true`.
+  static const useMockApplications = bool.fromEnvironment(
+    'USE_MOCK_APPLICATIONS',
+    defaultValue: false,
+  );
 }
