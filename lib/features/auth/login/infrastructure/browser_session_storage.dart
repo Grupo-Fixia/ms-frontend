@@ -19,11 +19,16 @@ class BrowserSessionStorage implements SessionStorage {
 
   static const key = 'fixia.refresh_token';
 
+  /// El persistente va primero: todas las pestañas con "Mantener sesión
+  /// iniciada" lo comparten y cada renovación lo reemplaza, así que siempre
+  /// es el más nuevo. La copia de la pestaña puede haber quedado vieja si otra
+  /// pestaña renovó el token (es de un solo uso).
   @override
   Future<String?> readRefreshToken() async {
+    final persisted = _persistent.read(key);
+    if (persisted != null && persisted.isNotEmpty) return persisted;
     final token = _tab.read(key);
-    if (token != null && token.isNotEmpty) return token;
-    return _persistent.read(key);
+    return token != null && token.isNotEmpty ? token : null;
   }
 
   @override

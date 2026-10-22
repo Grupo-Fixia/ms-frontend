@@ -57,11 +57,25 @@ void main() {
   });
 
   group('readRefreshToken', () {
-    test('prefiere el token de la pestaña', () async {
-      tab.write(key, 'pestaña');
+    test('prefiere el persistente, que es el más nuevo entre pestañas',
+        () async {
+      tab.write(key, 'copia-vieja-de-la-pestaña');
       persistent.write(key, 'persistente');
 
+      expect(await storage.readRefreshToken(), 'persistente');
+    });
+
+    test('sin persistente usa el de la pestaña', () async {
+      tab.write(key, 'pestaña');
+
       expect(await storage.readRefreshToken(), 'pestaña');
+    });
+
+    test('ignora tokens vacíos en ambos alcances', () async {
+      tab.write(key, '');
+      persistent.write(key, '');
+
+      expect(await storage.readRefreshToken(), isNull);
     });
 
     test('en una pestaña nueva usa el persistente', () async {
@@ -70,11 +84,11 @@ void main() {
       expect(await storage.readRefreshToken(), 'persistente');
     });
 
-    test('ignora un token vacío en la pestaña', () async {
-      tab.write(key, '');
-      persistent.write(key, 'persistente');
+    test('ignora un persistente vacío', () async {
+      tab.write(key, 'pestaña');
+      persistent.write(key, '');
 
-      expect(await storage.readRefreshToken(), 'persistente');
+      expect(await storage.readRefreshToken(), 'pestaña');
     });
   });
 

@@ -7,7 +7,8 @@
 /// - **Persistente** (`localStorage`): solo con "Mantener sesión iniciada". La
 ///   sesión sobrevive a cerrar el navegador.
 abstract interface class SessionStorage {
-  /// Token de la pestaña o, si no hay, el persistente.
+  /// El token persistente o, si no hay, el de la pestaña. El persistente va
+  /// primero porque lo comparten todas las pestañas y siempre es el más nuevo.
   Future<String?> readRefreshToken();
 
   /// Guarda el token de una sesión nueva. Con [persist] también lo guarda en
