@@ -14,6 +14,7 @@ Future<SessionStore> _pump(
   WidgetTester tester,
   FakeAuthRepository repository, {
   VoidCallback? onLoggedOut,
+  VoidCallback? onOpenProfile,
 }) async {
   tester.view.physicalSize = const Size(1024, 1000);
   tester.view.devicePixelRatio = 1;
@@ -26,6 +27,7 @@ Future<SessionStore> _pump(
         store: store,
         logoutUser: LogoutUser(repository, store, FakeSessionStorage()),
         onLoggedOut: onLoggedOut,
+        onOpenProfile: onOpenProfile,
       ),
     ),
   );
@@ -44,6 +46,22 @@ void main() {
     expect(find.text('Ana Pérez'), findsOneWidget);
     expect(find.text('ana@fixia.com'), findsOneWidget);
     expect(find.text('Cliente'), findsOneWidget);
+  });
+
+  testWidgets('ofrece acceso al perfil editable para clientes autenticados',
+      (tester) async {
+    var openProfileCalls = 0;
+    await _pump(
+      tester,
+      FakeAuthRepository(),
+      onOpenProfile: () => openProfileCalls++,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('session-open-client-profile')),
+    );
+
+    expect(openProfileCalls, 1);
   });
 
   testWidgets('cerrar sesión llama al backend, limpia la sesión y avisa',

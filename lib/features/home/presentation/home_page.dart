@@ -634,8 +634,8 @@ class _Step extends StatelessWidget {
           ),
           child: Text(
             '$number',
-            style: theme.textTheme.labelLarge
-                ?.copyWith(color: FixiaColors.white),
+            style:
+                theme.textTheme.labelLarge?.copyWith(color: FixiaColors.white),
           ),
         ),
         const SizedBox(width: 16),
@@ -843,8 +843,8 @@ class _Footer extends StatelessWidget {
       children: [
         Text(
           'Fixia',
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(color: FixiaColors.white),
+          style:
+              theme.textTheme.headlineSmall?.copyWith(color: FixiaColors.white),
         ),
         const SizedBox(height: 6),
         Text(

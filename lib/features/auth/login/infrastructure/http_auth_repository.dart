@@ -112,12 +112,14 @@ class HttpAuthRepository implements AuthRepository {
       final id = json?['id'];
       final email = json?['email'];
       if (id is String && email is String) {
+        final phone = json?['phone'];
         return UserProfile(
           id: id,
           email: email,
           firstName: _string(json?['firstName']),
           lastName: _string(json?['lastName']),
           role: UserRole.fromApi(_nullableString(json?['role'])),
+          phone: phone is String ? phone : null,
         );
       }
     }
