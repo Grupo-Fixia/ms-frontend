@@ -121,4 +121,95 @@ void main() {
       throwsA(isA<BackendUnreachableException>()),
     );
   });
+
+  group('renovaciones simultáneas (hallazgo de QA en #35)', () {
+    /// Sesión como la real: el refresh token sirve una vez, así que una
+    /// segunda renovación con el mismo token falla.
+    late String token;
+    late int renewCalls;
+    late Set<String> usedRefreshTokens;
+    late String refreshToken;
+
+    setUp(() {
+      token = 'vencido';
+      renewCalls = 0;
+      usedRefreshTokens = {};
+      refreshToken = 'r1';
+    });
+
+    Future<bool> renew() async {
+      renewCalls++;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      if (!usedRefreshTokens.add(refreshToken)) return false;
+      refreshToken = 'r${renewCalls + 1}';
+      token = 'nuevo-$renewCalls';
+      return true;
+    }
+
+    AuthorizedHttp client() =>
+        AuthorizedHttp(accessToken: () => token, renewSession: renew);
+
+    Future<http.Response> backend(Map<String, String> headers) async {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      return http.Response(
+        '',
+        headers['Authorization'] == 'Bearer vencido' ? 401 : 200,
+      );
+    }
+
+    test(
+        'cinco peticiones con 401 a la vez: una renovación, ninguna pierde '
+        'la sesión', () async {
+      final authorized = client();
+
+      final responses =
+          await Future.wait(List.generate(5, (_) => authorized.send(backend)));
+
+      expect(responses.map((r) => r.statusCode), everyElement(200));
+      expect(renewCalls, 1);
+    });
+
+    test('una petición que salió con el token viejo reintenta sin renovar',
+        () async {
+      final authorized = client();
+      // Otra petición ya renovó mientras esta viajaba.
+      final response = await authorized.send((headers) async {
+        final sentWith = headers['Authorization'];
+        if (sentWith == 'Bearer vencido') {
+          token = 'renovado-por-otra';
+          return _status(401);
+        }
+        return _status(sentWith == 'Bearer renovado-por-otra' ? 200 : 500);
+      });
+
+      expect(response.statusCode, 200);
+      expect(renewCalls, 0);
+    });
+
+    test('terminada una renovación, la siguiente vez se puede volver a renovar',
+        () async {
+      final authorized = client();
+      await authorized.send(backend);
+      token = 'vencido';
+
+      final response = await authorized.send(backend);
+
+      expect(response.statusCode, 200);
+      expect(renewCalls, 2);
+    });
+
+    test('si la renovación lanza un error, la sesión expiró', () async {
+      final authorized = AuthorizedHttp(
+        accessToken: () => 'vencido',
+        renewSession: () => throw StateError('falla'),
+      );
+
+      await expectLater(
+        authorized.send(backend),
+        throwsA(isA<SessionExpiredException>()),
+      );
+    });
+  });
 }
+
+http.Response _status(int status) => http.Response('', status);
