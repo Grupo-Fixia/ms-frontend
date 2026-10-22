@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
+import 'core/http/authorized_http.dart';
 import 'core/theme/fixia_theme.dart';
 import 'features/auth/login/application/login_user.dart';
 import 'features/auth/login/application/logout_user.dart';
@@ -22,8 +23,19 @@ import 'features/auth/registration/infrastructure/http_account_registration_repo
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
+import 'features/client/profile/domain/client_profile_update.dart';
+import 'features/client/profile/presentation/client_profile_page.dart';
+import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
+import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
+import 'features/technician/specialties/application/get_service_catalog.dart';
+import 'features/technician/specialties/application/get_technician_specialties.dart';
+import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
+import 'features/technician/specialties/application/update_technician_specialties.dart';
+import 'features/technician/specialties/infrastructure/demo_technician_specialties_repository.dart';
+import 'features/technician/specialties/infrastructure/http_technician_specialties_repository.dart';
+import 'features/technician/specialties/presentation/technician_specialties_page.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
 import 'features/technician/profile/application/ports/technician_profile_repository.dart';
 import 'features/technician/profile/application/update_technician_profile.dart';
@@ -42,6 +54,10 @@ abstract final class AppRoutes {
   static const technicianRegistration = '/registro-tecnico';
   static const clientDashboard = '/demo/inicio-cliente';
   static const technicianDashboard = '/demo/inicio-tecnico';
+  static const clientServiceRequest = '/cliente/publicar-problema';
+  static const technicianOpportunities = '/tecnico/solicitudes';
+  static const technicianSpecialties = '/tecnico/especialidades';
+  static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
 
@@ -85,6 +101,18 @@ Future<void> main() async {
           sessionStorage,
         ).renew,
       ),
+      technicianSpecialtiesRepository: HttpTechnicianSpecialtiesRepository(
+        client: httpClient,
+        baseUrl: usersApiBaseUrl,
+        authorizedHttp: AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).call,
+        ),
+      ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -100,6 +128,7 @@ class FixiaApp extends StatefulWidget {
     required this.technicianProfileRepository,
     required this.authRepository,
     required this.sessionStorage,
+    this.technicianSpecialtiesRepository,
     this.sessionStore,
   });
 
@@ -108,6 +137,10 @@ class FixiaApp extends StatefulWidget {
   final TechnicianProfileRepository technicianProfileRepository;
   final AuthRepository authRepository;
   final SessionStorage sessionStorage;
+
+  /// Repositorio de especialidades del técnico con sesión. Si es `null` se usa
+  /// uno en memoria.
+  final TechnicianSpecialtiesRepository? technicianSpecialtiesRepository;
 
   /// Sesión de la app. Si es `null` se crea una vacía. Llega con la sesión ya
   /// iniciada cuando se restauró desde el almacenamiento.
@@ -119,6 +152,29 @@ class FixiaApp extends StatefulWidget {
 
 class _FixiaAppState extends State<FixiaApp> {
   late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
+  late final TechnicianSpecialtiesRepository _specialtiesRepository =
+      widget.technicianSpecialtiesRepository ??
+          DemoTechnicianSpecialtiesRepository();
+
+  Widget _technicianSpecialtiesPage(BuildContext context) {
+    final repository = _specialtiesRepository;
+    return TechnicianSpecialtiesPage(
+      getCatalog: GetServiceCatalog(repository),
+      getSpecialties: GetTechnicianSpecialties(repository),
+      updateSpecialties: UpdateTechnicianSpecialties(repository),
+      onSessionExpired: () {
+        _sessionStore.clear();
+        _goToLogin(context);
+      },
+      onCancel: () => Navigator.of(context).maybePop(),
+      onOpenHome: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenOpportunities: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianOpportunities),
+      onOpenProfile: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianProfile),
+    );
+  }
 
   @override
   void dispose() {
@@ -200,7 +256,50 @@ class _FixiaAppState extends State<FixiaApp> {
     final profile = _sessionStore.profile!;
     return ClientDashboardPage(
       firstName: profile.firstName,
+      onPublishProblem: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
+      onOpenProfile: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientProfile),
       onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  Widget _clientServiceRequestPage(BuildContext context) {
+    return ServiceRequestPage(
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
+      onOpenProfile: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientProfile),
+    );
+  }
+
+  Widget _clientProfilePage(BuildContext context) {
+    final profile = _sessionStore.profile;
+    if (!_sessionStore.isAuthenticated ||
+        profile == null ||
+        profile.role != UserRole.client) {
+      return _loginPage(context);
+    }
+    return ClientProfilePage(
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: profile.email,
+      phone: profile.phone,
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () =>
+          Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
+      onOpenPublish: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.clientServiceRequest),
+      onSaved: (ClientProfileUpdate update) {
+        _sessionStore.updateProfile(
+          profile.copyWith(
+            firstName: update.firstName,
+            lastName: update.lastName,
+            phone: update.phone,
+          ),
+        );
+      },
     );
   }
 
@@ -211,11 +310,27 @@ class _FixiaAppState extends State<FixiaApp> {
       firstName: profile.firstName,
       onOpenSettings: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
+      onOpenOpportunities: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onOpenSpecialties: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
         _goToLogin(context);
       },
+    );
+  }
+
+  Widget _technicianOpportunitiesPage(BuildContext context) {
+    return TechnicianOpportunitiesPage(
+      onBack: () => Navigator.of(context).maybePop(),
+      onOpenHome: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenSpecialties: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianSpecialties),
+      onOpenProfile: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianProfile),
     );
   }
 
@@ -234,6 +349,8 @@ class _FixiaAppState extends State<FixiaApp> {
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
+      onOpenOpportunities: () => Navigator.of(context)
+          .pushReplacementNamed(AppRoutes.technicianOpportunities),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -311,6 +428,13 @@ class _FixiaAppState extends State<FixiaApp> {
             _forRole(UserRole.client, _clientDashboardPage),
         AppRoutes.technicianDashboard:
             _forRole(UserRole.professional, _technicianDashboardPage),
+        AppRoutes.clientProfile: _forRole(UserRole.client, _clientProfilePage),
+        AppRoutes.clientServiceRequest:
+            _forRole(UserRole.client, _clientServiceRequestPage),
+        AppRoutes.technicianOpportunities:
+            _forRole(UserRole.professional, _technicianOpportunitiesPage),
+        AppRoutes.technicianSpecialties:
+            _forRole(UserRole.professional, _technicianSpecialtiesPage),
       },
     );
   }
@@ -347,6 +471,8 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.getProfile,
     required this.firstName,
     required this.onOpenSettings,
+    required this.onOpenOpportunities,
+    required this.onOpenSpecialties,
     required this.onLogout,
     required this.onSessionExpired,
   });
@@ -354,6 +480,8 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final GetTechnicianProfile getProfile;
   final String firstName;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenOpportunities;
+  final VoidCallback onOpenSpecialties;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -449,6 +577,8 @@ class _TechnicianDashboardLoaderState
           firstName: widget.firstName,
           verificationStatus: verificationStatus,
           onOpenSettings: widget.onOpenSettings,
+          onOpenOpportunities: widget.onOpenOpportunities,
+          onOpenSpecialties: widget.onOpenSpecialties,
           onLogout: widget.onLogout,
         );
       },
