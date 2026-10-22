@@ -1,3 +1,4 @@
+import '../application/ports/quotation_decision_repository.dart';
 import '../application/ports/quotation_repository.dart';
 import '../domain/quotation.dart';
 import '../domain/quotation_exceptions.dart';
@@ -5,7 +6,8 @@ import '../domain/quotation_exceptions.dart';
 /// Cotizaciones en memoria para pruebas sin red y para el flujo E2E
 /// (GC-355). Imita al backend: al enviar una nueva, la anterior que seguía
 /// enviada queda reemplazada.
-class MockQuotationRepository implements QuotationRepository {
+class MockQuotationRepository
+    implements QuotationRepository, QuotationDecisionRepository {
   MockQuotationRepository({
     required this.providerId,
     DateTime Function()? now,
@@ -72,6 +74,35 @@ class MockQuotationRepository implements QuotationRepository {
       List.unmodifiable(
         _items.where((q) => q.serviceRequestId == serviceRequestId).map(_view),
       );
+
+  @override
+  Future<Quotation> accept(String quotationId) =>
+      _decide(quotationId, QuotationStatus.accepted);
+
+  @override
+  Future<Quotation> reject(String quotationId, {String? reason}) =>
+      _decide(quotationId, QuotationStatus.rejected, reason: reason);
+
+  Future<Quotation> _decide(
+    String id,
+    QuotationStatus status, {
+    String? reason,
+  }) async {
+    final index = _items.indexWhere((q) => q.id == id);
+    if (index < 0) {
+      throw const QuotationFailure('No encontramos esa cotización.');
+    }
+    if (!_view(_items[index]).isOpen) {
+      throw const QuotationFailure(
+          'La cotización ya no está disponible para responder.');
+    }
+    return _items[index] = _copy(
+      _items[index],
+      status: status,
+      rejectionReason: reason,
+      respondedAt: _now(),
+    );
+  }
 
   /// Simula que pasó la vigencia (para probar el estado "Vencida").
   void expire(String id) {

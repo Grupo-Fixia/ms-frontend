@@ -16,6 +16,8 @@ class QuotationDetailPage extends StatefulWidget {
     required this.listQuotations,
     this.serviceSummary,
     this.providerName,
+    this.acceptQuotation,
+    this.rejectQuotation,
     this.onSessionExpired,
     this.onBack,
   });
@@ -26,6 +28,10 @@ class QuotationDetailPage extends StatefulWidget {
   /// Descripción corta del servicio solicitado.
   final String? serviceSummary;
   final String? providerName;
+
+  /// Si se envían ambos, el cliente puede aceptar o rechazar (GC-360).
+  final AcceptQuotation? acceptQuotation;
+  final RejectQuotation? rejectQuotation;
   final VoidCallback? onSessionExpired;
   final VoidCallback? onBack;
 
@@ -36,6 +42,7 @@ class QuotationDetailPage extends StatefulWidget {
 class _QuotationDetailPageState extends State<QuotationDetailPage> {
   Quotation? _quotation;
   bool _loading = true;
+  bool _busy = false;
   String? _error;
 
   @override
@@ -108,12 +115,157 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
     return SingleChildScrollView(
       key: const ValueKey('quotation-detail'),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      child: QuotationSummary(
-        quotation: quotation,
-        serviceSummary: widget.serviceSummary,
-        providerName: widget.providerName,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          QuotationSummary(
+            quotation: quotation,
+            serviceSummary: widget.serviceSummary,
+            providerName: widget.providerName,
+          ),
+          const SizedBox(height: 20),
+          _buildDecision(context, quotation),
+        ],
       ),
     );
+  }
+
+  Widget _buildDecision(BuildContext context, Quotation quotation) {
+    final canDecide =
+        widget.acceptQuotation != null && widget.rejectQuotation != null;
+    if (quotation.isOpen && canDecide) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              key: const ValueKey('quotation-accept'),
+              onPressed: _busy ? null : () => _accept(quotation),
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Aceptar Cotización'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              key: const ValueKey('quotation-reject'),
+              onPressed: _busy ? null : () => _reject(quotation),
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Rechazar Cotización'),
+            ),
+          ),
+        ],
+      );
+    }
+    final next = _nextStep(quotation);
+    if (next == null) return const SizedBox.shrink();
+    return DashboardCard(
+      child: Row(
+        key: const ValueKey('quotation-next-step'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.flag_outlined, color: FixiaColors.primary),
+          const SizedBox(width: 12),
+          Expanded(child: Text(next)),
+        ],
+      ),
+    );
+  }
+
+  String? _nextStep(Quotation quotation) {
+    if (quotation.status == QuotationStatus.accepted) {
+      return 'Cotización aceptada. Siguiente paso: coordina con el prestador '
+          'la ejecución del servicio para la fecha acordada.';
+    }
+    if (quotation.status == QuotationStatus.rejected) {
+      return 'Cotización rechazada. Siguiente paso: puedes esperar una nueva '
+          'cotización del prestador o elegir a otro postulante.';
+    }
+    if (quotation.status == QuotationStatus.expired || quotation.isExpired) {
+      return 'La cotización venció. Siguiente paso: pide al prestador que '
+          'envíe una nueva cotización vigente.';
+    }
+    return null;
+  }
+
+  Future<void> _accept(Quotation quotation) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('accept-dialog'),
+        title: const Text('¿Aceptar la cotización?'),
+        content: Text(
+          'Aceptarás ${formatMoney(quotation.amountInCents)} por el '
+          'servicio descrito.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            key: const ValueKey('accept-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _decide(() => widget.acceptQuotation!(quotation.id));
+  }
+
+  Future<void> _reject(Quotation quotation) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('reject-dialog'),
+        title: const Text('¿Rechazar la cotización?'),
+        content: TextField(
+          key: const ValueKey('reject-reason'),
+          controller: controller,
+          maxLines: 3,
+          maxLength: 300,
+          decoration: const InputDecoration(
+            labelText: 'Motivo (opcional)',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            key: const ValueKey('reject-confirm'),
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Rechazar'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    await _decide(() => widget.rejectQuotation!(quotation.id, reason: reason));
+  }
+
+  Future<void> _decide(Future<Quotation> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      final updated = await action();
+      if (!mounted) return;
+      setState(() {
+        _quotation = updated;
+        _busy = false;
+      });
+    } on QuotationFailure catch (failure) {
+      if (!mounted) return;
+      if (failure.isSessionExpired) widget.onSessionExpired?.call();
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(failure.message)));
+    }
   }
 }
 

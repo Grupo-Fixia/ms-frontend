@@ -59,12 +59,14 @@ void main() {
     await tester.enterText(
         find.byKey(const ValueKey('quotation-conditions')), 'Garantía 30 días');
 
-    await tester.ensureVisible(find.byKey(const ValueKey('quotation-valid-until')));
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('quotation-valid-until')));
     await tester.tap(find.byKey(const ValueKey('quotation-valid-until')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('quotation-agreed-at')));
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('quotation-agreed-at')));
     await tester.tap(find.byKey(const ValueKey('quotation-agreed-at')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('OK'));
