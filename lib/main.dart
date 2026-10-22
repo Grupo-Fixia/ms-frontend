@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/config/api_config.dart';
 import 'core/theme/fixia_theme.dart';
@@ -12,7 +11,8 @@ import 'features/auth/login/application/refresh_session.dart';
 import 'features/auth/login/application/restore_session.dart';
 import 'features/auth/login/application/session_store.dart';
 import 'features/auth/login/infrastructure/http_auth_repository.dart';
-import 'features/auth/login/infrastructure/shared_preferences_session_storage.dart';
+import 'features/auth/login/infrastructure/browser_key_value_store.dart';
+import 'features/auth/login/infrastructure/browser_session_storage.dart';
 import 'features/auth/login/presentation/login_page.dart';
 import 'features/auth/login/presentation/session_page.dart';
 import 'features/auth/registration/application/ports/account_registration_repository.dart';
@@ -46,11 +46,13 @@ Future<void> main() async {
     client: httpClient,
     baseUrl: usersApiBaseUrl,
   );
-  final sessionStorage =
-      SharedPreferencesSessionStorage(await SharedPreferences.getInstance());
+  final sessionStorage = BrowserSessionStorage(
+    tab: tabKeyValueStore(),
+    persistent: persistentKeyValueStore(),
+  );
 
-  // "Mantener sesión iniciada": si hay un refresh token guardado, la sesión
-  // se restaura antes de mostrar la primera pantalla.
+  // Si hay un refresh token guardado (recarga de la pestaña o "Mantener sesión
+  // iniciada"), la sesión se restaura antes de mostrar la primera pantalla.
   final sessionStore = SessionStore();
   await RestoreSession(authRepository, sessionStore, sessionStorage)();
 
