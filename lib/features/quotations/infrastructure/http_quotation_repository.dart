@@ -16,7 +16,11 @@ import '../domain/quotation_exceptions.dart';
 ///   - `GET /api/services/quotations[?serviceRequestId=]` y
 ///     `GET /api/services/quotations/{id}` (`404` si no es suya).
 /// - Cliente (`ROLE_CLIENT`): `GET /api/services/requests/{id}/quotations`
-///   (`404` si la solicitud no es suya).
+///   (`404` si la solicitud no es suya), y para responderlas (GC-358/GC-361)
+///   `POST /api/services/requests/{id}/quotations/{quotationId}/acceptance` o
+///   `/rejection` → `200` con la cotización ya `ACCEPTED` o `REJECTED`
+///   (idempotente). `409` si ya no se puede responder (no es del prestador
+///   seleccionado, ya hay una aceptada, o no está vigente en `SENT`).
 /// - `400` con `errors[{field, message}]` o, para reglas de negocio (fechas),
 ///   solo con `detail`.
 class HttpQuotationRepository implements QuotationRepository {
@@ -42,6 +46,9 @@ class HttpQuotationRepository implements QuotationRepository {
   static const notAllowedMessage =
       'Ya no puedes cotizar esta solicitud: no eres el prestador seleccionado '
       'o ya tiene una cotización aceptada.';
+  static const responseNotAllowedMessage =
+      'Esta cotización ya no se puede responder: venció, fue reemplazada o '
+      'la solicitud ya tiene una cotización aceptada.';
   static const unexpectedErrorMessage =
       'No pudimos completar la acción. Inténtalo más tarde.';
 
@@ -111,6 +118,35 @@ class HttpQuotationRepository implements QuotationRepository {
         ),
       );
 
+  @override
+  Future<Quotation> accept(String serviceRequestId, String quotationId) =>
+      _respond(serviceRequestId, quotationId, 'acceptance');
+
+  @override
+  Future<Quotation> reject(String serviceRequestId, String quotationId) =>
+      _respond(serviceRequestId, quotationId, 'rejection');
+
+  Future<Quotation> _respond(
+    String serviceRequestId,
+    String quotationId,
+    String decision,
+  ) async {
+    final uri = _requests.replace(
+      pathSegments: [
+        ..._requests.pathSegments,
+        serviceRequestId,
+        'quotations',
+        quotationId,
+        decision,
+      ],
+    );
+    final response = await _send(
+      (headers) => _client.post(uri, headers: headers),
+    );
+    _throwOnError(response, conflictMessage: responseNotAllowedMessage);
+    return _require(_decode(response));
+  }
+
   Future<List<Quotation>> _list(Uri uri) async {
     final response = await _send(
       (headers) => _client.get(uri, headers: headers),
@@ -142,7 +178,11 @@ class HttpQuotationRepository implements QuotationRepository {
     }
   }
 
-  void _throwOnError(http.Response response, {int success = 200}) {
+  void _throwOnError(
+    http.Response response, {
+    int success = 200,
+    String conflictMessage = notAllowedMessage,
+  }) {
     if (response.statusCode == success) return;
     final body = _decode(response);
     switch (response.statusCode) {
@@ -164,7 +204,7 @@ class HttpQuotationRepository implements QuotationRepository {
         throw QuotationFailure(
           detail is String && detail.trim().isNotEmpty
               ? detail.trim()
-              : notAllowedMessage,
+              : conflictMessage,
         );
       default:
         throw const QuotationFailure(unexpectedErrorMessage);

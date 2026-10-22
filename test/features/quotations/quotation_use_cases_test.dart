@@ -56,6 +56,34 @@ class _FakeRepository implements QuotationRepository {
     requestId = serviceRequestId;
     return const [];
   }
+
+  final responses = <String>[];
+
+  @override
+  Future<Quotation> accept(String serviceRequestId, String quotationId) async {
+    responses.add('accept $serviceRequestId $quotationId');
+    return _answered(QuotationStatus.accepted);
+  }
+
+  @override
+  Future<Quotation> reject(String serviceRequestId, String quotationId) async {
+    responses.add('reject $serviceRequestId $quotationId');
+    return _answered(QuotationStatus.rejected);
+  }
+
+  Quotation _answered(QuotationStatus status) => Quotation(
+        id: 'q-1',
+        serviceRequestId: 'req-1',
+        providerId: 'p-1',
+        amountInCents: 100,
+        currency: 'COP',
+        scope: 's',
+        conditions: 'c',
+        agreedAt: _now,
+        validUntil: _now,
+        status: status,
+        statusName: status.label,
+      );
 }
 
 void main() {
@@ -129,5 +157,41 @@ void main() {
     expect(repository.filter, 'req-1');
     expect(repository.requested, 'q-9');
     expect(repository.requestId, 'req-2');
+  });
+
+  group('responder una cotización (GC-361)', () {
+    test('acepta con los ids sin espacios', () async {
+      final repository = _FakeRepository();
+
+      final accepted = await AcceptQuotation(repository)(' req-1 ', ' q-1 ');
+
+      expect(repository.responses, ['accept req-1 q-1']);
+      expect(accepted.status, QuotationStatus.accepted);
+    });
+
+    test('rechaza con los ids sin espacios', () async {
+      final repository = _FakeRepository();
+
+      final rejected = await RejectQuotation(repository)('req-1', 'q-1');
+
+      expect(repository.responses, ['reject req-1 q-1']);
+      expect(rejected.status, QuotationStatus.rejected);
+    });
+
+    test('sin solicitud o sin cotización no llama al backend', () async {
+      final repository = _FakeRepository();
+
+      await expectLater(
+        AcceptQuotation(repository)(' ', 'q-1'),
+        throwsA(isA<QuotationFailure>().having((f) => f.message, 'message',
+            'Falta la solicitud de la cotización.')),
+      );
+      await expectLater(
+        RejectQuotation(repository)('req-1', ''),
+        throwsA(isA<QuotationFailure>().having((f) => f.message, 'message',
+            'Elige la cotización que quieres responder.')),
+      );
+      expect(repository.responses, isEmpty);
+    });
   });
 }
