@@ -113,9 +113,13 @@ class FakeAuthRepository implements AuthRepository {
 /// Almacenamiento de prueba en memoria; puede simular un navegador que no
 /// deja leer ni escribir.
 class FakeSessionStorage implements SessionStorage {
-  FakeSessionStorage({this.refreshToken, this.failing = false});
+  FakeSessionStorage({this.refreshToken, this.persisted, this.failing = false});
 
+  /// Token visible para la sesión (pestaña o, si no hay, persistente).
   String? refreshToken;
+
+  /// `true` si el token se guardó con "Mantener sesión iniciada".
+  bool? persisted;
   final bool failing;
   int clearCalls = 0;
 
@@ -130,7 +134,14 @@ class FakeSessionStorage implements SessionStorage {
   }
 
   @override
-  Future<void> saveRefreshToken(String token) async {
+  Future<void> saveRefreshToken(String token, {bool persist = false}) async {
+    _check();
+    refreshToken = token;
+    persisted = persist;
+  }
+
+  @override
+  Future<void> replaceRefreshToken(String token) async {
     _check();
     refreshToken = token;
   }
@@ -140,5 +151,6 @@ class FakeSessionStorage implements SessionStorage {
     clearCalls++;
     _check();
     refreshToken = null;
+    persisted = null;
   }
 }
