@@ -1,24 +1,27 @@
 /// Puerto de salida: dónde se guarda el refresh token para recuperar la sesión
-/// al recargar la página (GC-394). El access token nunca se guarda.
+/// (GC-394). El access token nunca se guarda.
 ///
-/// Hay dos alcances:
-/// - **Pestaña** (`sessionStorage`): siempre. La sesión sobrevive a un F5 y se
-///   borra sola al cerrar la pestaña.
-/// - **Persistente** (`localStorage`): solo con "Mantener sesión iniciada". La
-///   sesión sobrevive a cerrar el navegador.
+/// La sesión es una sola en todo el navegador: una pestaña nueva entra con la
+/// sesión ya iniciada. "Mantener sesión iniciada" decide si sobrevive a cerrar
+/// el navegador. Cada pestaña guarda además una copia para recargar (F5).
 abstract interface class SessionStorage {
-  /// El token persistente o, si no hay, el de la pestaña. El persistente va
-  /// primero porque lo comparten todas las pestañas y siempre es el más nuevo.
+  /// El token de la sesión del navegador o, si no hay, la copia de la
+  /// pestaña. Es el más nuevo: lo comparten todas las pestañas.
   Future<String?> readRefreshToken();
 
-  /// Guarda el token de una sesión nueva. Con [persist] también lo guarda en
-  /// el alcance persistente; sin él borra cualquier token persistente viejo.
+  /// Guarda el token de una sesión nueva, que pasa a ser la del navegador.
+  /// Con [persist] sobrevive a cerrar el navegador.
   Future<void> saveRefreshToken(String refreshToken, {bool persist = false});
 
-  /// Reemplaza el token tras rotarlo (es de un solo uso) sin cambiar el
-  /// alcance que eligió el usuario al iniciar sesión.
+  /// Reemplaza el token tras rotarlo (es de un solo uso), si esta pestaña
+  /// sigue siendo de la sesión del navegador.
   Future<void> replaceRefreshToken(String refreshToken);
 
-  /// Borra el token de ambos alcances.
+  /// Cierra la sesión: borra la copia de la pestaña y, si es de la sesión
+  /// del navegador, también esa.
   Future<void> clear();
+
+  /// Otra pestaña cambió la sesión del navegador: si la copia de esta
+  /// pestaña era de la sesión anterior, se descarta sin tocar la nueva.
+  Future<void> discardStaleTabCopy();
 }

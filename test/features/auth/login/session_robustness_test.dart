@@ -109,7 +109,11 @@ void main() {
     store = SessionStore();
     tab = InMemoryKeyValueStore();
     local = InMemoryKeyValueStore();
-    storage = BrowserSessionStorage(tab: tab, persistent: local);
+    storage = BrowserSessionStorage(
+      tab: tab,
+      shared: local,
+      browserSession: InMemoryKeyValueStore(),
+    );
   });
 
   Future<void> login({bool remember = true}) => LoginUser(
