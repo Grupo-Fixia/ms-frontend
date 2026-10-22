@@ -1,3 +1,4 @@
+import '../domain/applicant.dart';
 import '../domain/service_request.dart';
 import '../domain/service_request_exceptions.dart';
 import '../domain/service_request_rules.dart';
@@ -61,4 +62,37 @@ class GetMyServiceRequest {
   final ServiceRequestRepository _repository;
 
   Future<ServiceRequest> call(String id) => _repository.getMine(id);
+}
+
+/// Caso de uso: consultar los postulantes de una solicitud (GC-299).
+class ListApplicants {
+  const ListApplicants(this._repository);
+
+  final ServiceRequestRepository _repository;
+
+  Future<List<Applicant>> call(String requestId) =>
+      _repository.listApplicants(requestId);
+}
+
+/// Caso de uso: seleccionar al prestador entre los postulantes (GC-299).
+///
+/// Solo se puede elegir uno: el backend rechaza a los demás. Repetir la
+/// selección sobre la misma postulación no cambia nada.
+class SelectProvider {
+  const SelectProvider(this._repository);
+
+  static const missingApplicantMessage = 'Elige al prestador que quieres.';
+
+  final ServiceRequestRepository _repository;
+
+  Future<ServiceRequest> call(String requestId, String applicationId) async {
+    final applicant = applicationId.trim();
+    if (applicant.isEmpty) {
+      throw const ServiceRequestFailure(
+        missingApplicantMessage,
+        fieldErrors: {'applicationId': missingApplicantMessage},
+      );
+    }
+    return _repository.selectProvider(requestId.trim(), applicant);
+  }
 }

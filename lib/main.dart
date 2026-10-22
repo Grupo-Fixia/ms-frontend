@@ -10,6 +10,7 @@ import 'features/auth/login/application/ports/auth_repository.dart';
 import 'features/auth/login/application/ports/session_storage.dart';
 import 'features/auth/login/application/refresh_session.dart';
 import 'features/auth/login/application/restore_session.dart';
+import 'features/auth/login/application/route_guard.dart';
 import 'features/auth/login/application/session_store.dart';
 import 'features/auth/login/infrastructure/http_auth_repository.dart';
 import 'features/auth/login/infrastructure/browser_key_value_store.dart';
@@ -29,11 +30,14 @@ import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
+<<<<<<< HEAD
 import 'features/technician/availability/application/availability_use_cases.dart';
 import 'features/technician/availability/application/ports/technician_availability_repository.dart';
 import 'features/technician/availability/infrastructure/demo_technician_availability_repository.dart';
 import 'features/technician/availability/infrastructure/http_technician_availability_repository.dart';
 import 'features/technician/availability/presentation/technician_availability_page.dart';
+=======
+>>>>>>> develop
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
@@ -62,7 +66,10 @@ abstract final class AppRoutes {
   static const clientServiceRequest = '/cliente/publicar-problema';
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianSpecialties = '/tecnico/especialidades';
+<<<<<<< HEAD
   static const technicianAvailability = '/tecnico/disponibilidad';
+=======
+>>>>>>> develop
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 }
@@ -119,6 +126,7 @@ Future<void> main() async {
           ).call,
         ),
       ),
+<<<<<<< HEAD
       technicianAvailabilityRepository: HttpTechnicianAvailabilityRepository(
         client: httpClient,
         baseUrl: usersApiBaseUrl,
@@ -131,6 +139,8 @@ Future<void> main() async {
           ).call,
         ),
       ),
+=======
+>>>>>>> develop
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -147,7 +157,10 @@ class FixiaApp extends StatefulWidget {
     required this.authRepository,
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
+<<<<<<< HEAD
     this.technicianAvailabilityRepository,
+=======
+>>>>>>> develop
     this.sessionStore,
   });
 
@@ -161,10 +174,13 @@ class FixiaApp extends StatefulWidget {
   /// uno en memoria.
   final TechnicianSpecialtiesRepository? technicianSpecialtiesRepository;
 
+<<<<<<< HEAD
   /// Repositorio de disponibilidad y zona con sesión. Si es `null` se usa uno
   /// en memoria.
   final TechnicianAvailabilityRepository? technicianAvailabilityRepository;
 
+=======
+>>>>>>> develop
   /// Sesión de la app. Si es `null` se crea una vacía. Llega con la sesión ya
   /// iniciada cuando se restauró desde el almacenamiento.
   final SessionStore? sessionStore;
@@ -178,6 +194,7 @@ class _FixiaAppState extends State<FixiaApp> {
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
+<<<<<<< HEAD
   late final TechnicianAvailabilityRepository _availabilityRepository =
       widget.technicianAvailabilityRepository ??
           DemoTechnicianAvailabilityRepository();
@@ -202,6 +219,8 @@ class _FixiaAppState extends State<FixiaApp> {
           .pushReplacementNamed(AppRoutes.technicianProfile),
     );
   }
+=======
+>>>>>>> develop
 
   Widget _technicianSpecialtiesPage(BuildContext context) {
     final repository = _specialtiesRepository;
@@ -263,16 +282,35 @@ class _FixiaAppState extends State<FixiaApp> {
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
 
-  /// Solo deja ver la pantalla al rol indicado. Sin sesión redirige al login
-  /// y con otro rol, al inicio de su propia cuenta.
-  WidgetBuilder _forRole(UserRole role, WidgetBuilder builder) => (context) {
-        final current = _sessionStore.profile?.role;
-        if (!_sessionStore.isAuthenticated || current == null) {
+  /// Aplica la regla de acceso de la ruta (GC-314, `RouteGuard`). Las rutas
+  /// protegidas escuchan la sesión: si se cierra o vence mientras están
+  /// abiertas, llevan al login. Login y registro no la escuchan, para no
+  /// interrumpir el inicio de sesión automático después de registrarse.
+  WidgetBuilder _guard(RouteAccess access, WidgetBuilder builder) {
+    Widget decide(BuildContext context) {
+      final decision = RouteGuard.decide(
+        access,
+        isAuthenticated: _sessionStore.isAuthenticated,
+        role: _sessionStore.profile?.role,
+      );
+      switch (decision) {
+        case RouteDecision.allow:
+          return builder(context);
+        case RouteDecision.toLogin:
           return const _RedirectTo(AppRoutes.login);
-        }
-        if (current != role) return const _RedirectTo(AppRoutes.home);
-        return builder(context);
-      };
+        case RouteDecision.toHome:
+          return const _RedirectTo(AppRoutes.home);
+      }
+    }
+
+    if (access == RouteAccess.public || access == RouteAccess.guestOnly) {
+      return decide;
+    }
+    return (context) => ListenableBuilder(
+          listenable: _sessionStore,
+          builder: (context, _) => decide(context),
+        );
+  }
 
   /// Abre el inicio correspondiente al rol de la cuenta autenticada.
   Widget _sessionPage(BuildContext context) {
@@ -361,8 +399,11 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
+<<<<<<< HEAD
       onOpenAvailability: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianAvailability),
+=======
+>>>>>>> develop
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -384,12 +425,7 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   Widget _technicianProfilePage(BuildContext context) {
-    final profile = _sessionStore.profile;
-    if (!_sessionStore.isAuthenticated ||
-        profile == null ||
-        profile.role != UserRole.professional) {
-      return _loginPage(context);
-    }
+    final profile = _sessionStore.profile!;
     final repository = widget.technicianProfileRepository;
     return TechnicianProfilePage(
       getProfile: GetTechnicianProfile(repository),
@@ -444,38 +480,39 @@ class _FixiaAppState extends State<FixiaApp> {
                     .pushNamed(AppRoutes.technicianRegistration),
                 onLogin: () => Navigator.of(context).pushNamed(AppRoutes.login),
               ),
-        AppRoutes.login: _loginPage,
+        AppRoutes.login: _guard(RouteAccess.guestOnly, _loginPage),
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
-        AppRoutes.session: (context) => ListenableBuilder(
-              listenable: _sessionStore,
-              builder: (context, _) => _sessionStore.isAuthenticated
-                  ? _sessionPage(context)
-                  : _loginPage(context),
-            ),
-        AppRoutes.technicianProfile: _technicianProfilePage,
-        AppRoutes.clientRegistration: (context) => RegistrationPage(
-              registerAccount:
-                  RegisterAccount(widget.clientRegistrationRepository),
-              onGoToLogin: () =>
-                  Navigator.of(context).pushReplacementNamed(AppRoutes.login),
-              onSwitchRole: () => Navigator.of(context)
-                  .pushReplacementNamed(AppRoutes.technicianRegistration),
-            ),
-        AppRoutes.technicianRegistration: (context) => RegistrationPage(
-              role: AccountRole.technician,
-              // Paso 1 → paso 2 sin volver a escribir la contraseña.
-              onAutoLogin: (email, password) =>
-                  _signInAfterRegistration(context, email, password),
-              registerAccount:
-                  RegisterAccount(widget.technicianRegistrationRepository),
-              onGoToLogin: () =>
-                  Navigator.of(context).pushReplacementNamed(AppRoutes.login),
-              onSwitchRole: () => Navigator.of(context)
-                  .pushReplacementNamed(AppRoutes.clientRegistration),
-            ),
+        AppRoutes.session: _guard(RouteAccess.authenticated, _sessionPage),
+        AppRoutes.technicianProfile:
+            _guard(RouteAccess.professional, _technicianProfilePage),
+        AppRoutes.clientRegistration: _guard(
+            RouteAccess.guestOnly,
+            (context) => RegistrationPage(
+                  registerAccount:
+                      RegisterAccount(widget.clientRegistrationRepository),
+                  onGoToLogin: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.login),
+                  onSwitchRole: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.technicianRegistration),
+                )),
+        AppRoutes.technicianRegistration: _guard(
+            RouteAccess.guestOnly,
+            (context) => RegistrationPage(
+                  role: AccountRole.technician,
+                  // Paso 1 → paso 2 sin volver a escribir la contraseña.
+                  onAutoLogin: (email, password) =>
+                      _signInAfterRegistration(context, email, password),
+                  registerAccount:
+                      RegisterAccount(widget.technicianRegistrationRepository),
+                  onGoToLogin: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.login),
+                  onSwitchRole: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.clientRegistration),
+                )),
         AppRoutes.clientDashboard:
-            _forRole(UserRole.client, _clientDashboardPage),
+            _guard(RouteAccess.client, _clientDashboardPage),
         AppRoutes.technicianDashboard:
+<<<<<<< HEAD
             _forRole(UserRole.professional, _technicianDashboardPage),
         AppRoutes.clientProfile: _forRole(UserRole.client, _clientProfilePage),
         AppRoutes.clientServiceRequest:
@@ -486,7 +523,22 @@ class _FixiaAppState extends State<FixiaApp> {
             _forRole(UserRole.professional, _technicianSpecialtiesPage),
         AppRoutes.technicianAvailability:
             _forRole(UserRole.professional, _technicianAvailabilityPage),
+=======
+            _guard(RouteAccess.professional, _technicianDashboardPage),
+        AppRoutes.clientProfile: _guard(RouteAccess.client, _clientProfilePage),
+        AppRoutes.clientServiceRequest:
+            _guard(RouteAccess.client, _clientServiceRequestPage),
+        AppRoutes.technicianOpportunities:
+            _guard(RouteAccess.professional, _technicianOpportunitiesPage),
+        AppRoutes.technicianSpecialties:
+            _guard(RouteAccess.professional, _technicianSpecialtiesPage),
+>>>>>>> develop
       },
+      // Una URL que no existe lleva al inicio en vez de mostrar un error.
+      onUnknownRoute: (settings) => MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => const _RedirectTo(AppRoutes.home),
+      ),
     );
   }
 }
@@ -506,10 +558,10 @@ class _RedirectToState extends State<_RedirectTo> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Navigator.of(context)
-            .pushNamedAndRemoveUntil(widget.route, (_) => false);
-      }
+      // Si otra acción ya navegó (por ejemplo, cerrar sesión lleva al login
+      // al mismo tiempo), no se navega dos veces.
+      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(widget.route, (_) => false);
     });
   }
 
@@ -524,7 +576,10 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenSettings,
     required this.onOpenOpportunities,
     required this.onOpenSpecialties,
+<<<<<<< HEAD
     required this.onOpenAvailability,
+=======
+>>>>>>> develop
     required this.onLogout,
     required this.onSessionExpired,
   });
@@ -534,7 +589,10 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
   final VoidCallback onOpenSpecialties;
+<<<<<<< HEAD
   final VoidCallback onOpenAvailability;
+=======
+>>>>>>> develop
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -632,7 +690,10 @@ class _TechnicianDashboardLoaderState
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenSpecialties: widget.onOpenSpecialties,
+<<<<<<< HEAD
           onOpenAvailability: widget.onOpenAvailability,
+=======
+>>>>>>> develop
           onLogout: widget.onLogout,
         );
       },
