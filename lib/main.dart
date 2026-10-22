@@ -29,6 +29,7 @@ import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/application/client_profile_use_cases.dart';
+import 'features/client/profile/domain/client_profile.dart';
 import 'features/client/profile/domain/client_profile_exceptions.dart';
 import 'features/client/profile/domain/client_profile_update.dart';
 import 'features/client/profile/presentation/client_profile_page.dart';
@@ -465,6 +466,31 @@ class _FixiaAppState extends State<FixiaApp> {
       return _loginPage(context);
     }
     final backend = widget.backend;
+    if (backend == null) return _clientProfileView(context, profile, null);
+    // Los datos se cargan del servidor: la sesión no siempre trae el teléfono
+    // y, como es obligatorio, sin él no se podría guardar ningún cambio.
+    return _ClientProfileLoader(
+      load: () => GetClientProfile(backend.clientProfile)(),
+      onSessionExpired: () => _endExpiredSession(context),
+      builder: (context, saved) => _clientProfileView(
+        context,
+        saved == null
+            ? profile
+            : profile.copyWith(
+                firstName: saved.firstName,
+                lastName: saved.lastName,
+                phone: saved.phone,
+              ),
+        backend,
+      ),
+    );
+  }
+
+  Widget _clientProfileView(
+    BuildContext context,
+    UserProfile profile,
+    BackendIntegrations? backend,
+  ) {
     return ClientProfilePage(
       saveProfile: backend == null
           ? null
@@ -890,4 +916,67 @@ class _UserMessage implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Carga el perfil del cliente del servidor antes de mostrar la pantalla
+/// (GC-320). Si no se puede cargar, la pantalla abre con los datos de la
+/// sesión; si la sesión venció, se vuelve al login.
+class _ClientProfileLoader extends StatefulWidget {
+  const _ClientProfileLoader({
+    required this.load,
+    required this.onSessionExpired,
+    required this.builder,
+  });
+
+  final Future<ClientProfile> Function() load;
+  final VoidCallback onSessionExpired;
+  final Widget Function(BuildContext context, ClientProfile? saved) builder;
+
+  @override
+  State<_ClientProfileLoader> createState() => _ClientProfileLoaderState();
+}
+
+class _ClientProfileLoaderState extends State<_ClientProfileLoader> {
+  ClientProfile? _saved;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    ClientProfile? saved;
+    try {
+      saved = await widget.load();
+    } on ClientProfileFailure catch (failure) {
+      if (failure.isSessionExpired) {
+        if (mounted) widget.onSessionExpired();
+        return;
+      }
+    } catch (_) {
+      // Sin conexión u otro error: se usan los datos de la sesión.
+    }
+    if (mounted) {
+      setState(() {
+        _saved = saved;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            key: ValueKey('client-profile-loading'),
+          ),
+        ),
+      );
+    }
+    return widget.builder(context, _saved);
+  }
 }
