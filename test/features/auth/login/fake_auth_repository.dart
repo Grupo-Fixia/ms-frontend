@@ -153,4 +153,7 @@ class FakeSessionStorage implements SessionStorage {
     refreshToken = null;
     persisted = null;
   }
+
+  @override
+  Future<void> discardStaleTabCopy() async => _check();
 }

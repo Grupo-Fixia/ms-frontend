@@ -152,7 +152,8 @@ void main() {
 
       await _open(tester, AppRoutes.legacyTechnicianDashboard);
       expect(_key('client-dashboard-greeting'), findsOneWidget,
-          reason: 'un cliente que abre la ruta vieja del técnico queda en su panel');
+          reason:
+              'un cliente que abre la ruta vieja del técnico queda en su panel');
     });
 
     testWidgets('para el técnico llevan a su panel', (tester) async {
@@ -179,6 +180,8 @@ void main() {
     testWidgets('el inicio muestra la cuenta y no un panel de rol',
         (tester) async {
       await _pump(tester, profile: _unknownRole);
+      await tester.tap(_key('home-login'));
+      await tester.pumpAndSettle();
 
       expect(_key('client-dashboard-greeting'), findsNothing);
       expect(_key('technician-dashboard-greeting'), findsNothing);
