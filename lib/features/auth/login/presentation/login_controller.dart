@@ -9,6 +9,9 @@ class LoginController extends ChangeNotifier {
 
   final LoginUser _loginUser;
 
+  static const unexpectedErrorMessage =
+      'No fue posible iniciar sesión. Inténtalo más tarde.';
+
   bool _isSubmitting = false;
   bool _rememberSession = false;
   String? _errorMessage;
@@ -56,6 +59,11 @@ class LoginController extends ChangeNotifier {
     } on AuthFailure catch (failure) {
       _errorMessage = failure.message;
       _fieldErrors = failure.fieldErrors;
+      return false;
+    } catch (_) {
+      // Cualquier otra falla (respuesta inesperada, almacenamiento) no debe
+      // dejar la pantalla colgada.
+      _errorMessage = unexpectedErrorMessage;
       return false;
     } finally {
       _isSubmitting = false;
