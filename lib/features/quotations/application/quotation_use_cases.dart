@@ -24,6 +24,7 @@ class SendQuotation {
         serviceRequestId: quotation.serviceRequestId.trim(),
         amountInCents: quotation.amountInCents,
         currency: quotation.currency,
+        materials: quotation.materials,
         scope: quotation.scope.trim(),
         conditions: quotation.conditions.trim(),
         agreedAt: quotation.agreedAt,
