@@ -24,11 +24,24 @@ import 'features/auth/registration/infrastructure/http_account_registration_repo
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
+import 'features/client/profile/application/client_profile_use_cases.dart';
+import 'features/client/profile/domain/client_profile_exceptions.dart';
 import 'features/client/profile/domain/client_profile_update.dart';
 import 'features/client/profile/presentation/client_profile_page.dart';
+import 'features/client/service_request/domain/service_request_draft.dart';
 import 'features/client/service_request/presentation/service_request_page.dart';
+import 'features/client/service_requests/application/service_request_use_cases.dart';
+import 'features/client/service_requests/domain/service_request.dart';
+import 'features/client/service_requests/domain/service_request_exceptions.dart';
+import 'backend_integrations.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
+import 'features/technician/applications/application/application_use_cases.dart';
+import 'features/technician/applications/domain/application_exceptions.dart';
+import 'features/technician/opportunities/application/list_compatible_opportunities.dart';
+import 'features/technician/opportunities/domain/opportunity_exceptions.dart';
+import 'features/technician/opportunities/domain/service_opportunity.dart';
+import 'features/technician/opportunities/presentation/opportunity_view.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
@@ -108,6 +121,19 @@ Future<void> main() async {
           sessionStorage,
         ).renew,
       ),
+      backend: BackendIntegrations.http(
+        client: httpClient,
+        usersBaseUrl: usersApiBaseUrl,
+        servicesBaseUrl: Uri.parse(ApiConfig.servicesBaseUrl),
+        authorizedHttp: AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).renew,
+        ),
+      ),
       technicianSpecialtiesRepository: HttpTechnicianSpecialtiesRepository(
         client: httpClient,
         baseUrl: usersApiBaseUrl,
@@ -130,6 +156,7 @@ Future<void> main() async {
 class FixiaApp extends StatefulWidget {
   const FixiaApp({
     super.key,
+    this.backend,
     required this.clientRegistrationRepository,
     required this.technicianRegistrationRepository,
     required this.technicianProfileRepository,
@@ -138,6 +165,11 @@ class FixiaApp extends StatefulWidget {
     this.technicianSpecialtiesRepository,
     this.sessionStore,
   });
+
+  /// Conexión de perfil del cliente, solicitudes, oportunidades y
+  /// postulaciones con el backend. Si es `null`, esas pantallas usan datos de
+  /// demostración.
+  final BackendIntegrations? backend;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -188,6 +220,7 @@ class _FixiaAppState extends State<FixiaApp> {
     }
     _wasAuthenticated = authenticated;
   }
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -335,7 +368,11 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   Widget _clientServiceRequestPage(BuildContext context) {
+    final backend = widget.backend;
     return ServiceRequestPage(
+      publish: backend == null
+          ? null
+          : (draft) => _publishServiceRequest(context, backend, draft),
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
@@ -351,7 +388,11 @@ class _FixiaAppState extends State<FixiaApp> {
         profile.role != UserRole.client) {
       return _loginPage(context);
     }
+    final backend = widget.backend;
     return ClientProfilePage(
+      saveProfile: backend == null
+          ? null
+          : (update) => _saveClientProfile(context, backend, update),
       firstName: profile.firstName,
       lastName: profile.lastName,
       email: profile.email,
@@ -393,7 +434,13 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   Widget _technicianOpportunitiesPage(BuildContext context) {
+    final backend = widget.backend;
     return TechnicianOpportunitiesPage(
+      loadOpportunities:
+          backend == null ? null : () => _loadOpportunities(context, backend),
+      applyTo: backend == null
+          ? null
+          : (id) => _applyToOpportunity(context, backend, id),
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
@@ -402,6 +449,98 @@ class _FixiaAppState extends State<FixiaApp> {
       onOpenProfile: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianProfile),
     );
+  }
+
+  /// GC-320: guarda nombre, apellido y teléfono del cliente en ms-users.
+  Future<void> _saveClientProfile(
+    BuildContext context,
+    BackendIntegrations backend,
+    ClientProfileUpdate update,
+  ) async {
+    try {
+      await UpdateClientProfile(backend.clientProfile)(update);
+    } on ClientProfileFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(
+        failure.fieldErrors.isEmpty
+            ? failure.message
+            : failure.fieldErrors.values.join(' '),
+      );
+    }
+  }
+
+  /// GC-335: publica la solicitud del cliente en ms-services.
+  Future<void> _publishServiceRequest(
+    BuildContext context,
+    BackendIntegrations backend,
+    ServiceRequestDraft draft,
+  ) async {
+    try {
+      await PublishServiceRequest(backend.serviceRequests)(
+        NewServiceRequest(
+          category: draft.category,
+          description: draft.description,
+          approximateLocation: ApproximateLocation(
+            city: draft.city,
+            zone: draft.zone,
+          ),
+          expectedAt: draft.expectedAt,
+        ),
+      );
+    } on ServiceRequestFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(
+        failure.fieldErrors.isEmpty
+            ? failure.message
+            : failure.fieldErrors.values.join(' '),
+      );
+    }
+  }
+
+  /// GC-340: solicitudes compatibles con el técnico, desde ms-services.
+  Future<List<ServiceOpportunity>> _loadOpportunities(
+    BuildContext context,
+    BackendIntegrations backend,
+  ) async {
+    try {
+      final page = await ListCompatibleOpportunities(backend.opportunities)();
+      return [for (final item in page.items) opportunityView(item)];
+    } on OpportunityFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(failure.message);
+    }
+  }
+
+  /// GC-345: postulación del técnico a una solicitud, en ms-services.
+  Future<void> _applyToOpportunity(
+    BuildContext context,
+    BackendIntegrations backend,
+    String opportunityId,
+  ) async {
+    try {
+      await ApplyToServiceRequest(backend.applications)(opportunityId);
+    } on ApplicationFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(
+        failure.reasons.isEmpty
+            ? failure.message
+            : failure.reasons.map((reason) => reason.message).join(' '),
+      );
+    }
+  }
+
+  /// La sesión venció mientras se usaba una pantalla: se vuelve al login.
+  void _endExpiredSession(BuildContext context) {
+    _sessionStore.clear();
+    _goToLogin(context);
   }
 
   Widget _technicianProfilePage(BuildContext context) {
@@ -659,4 +798,14 @@ class _TechnicianDashboardLoaderState
       },
     );
   }
+}
+
+/// Error con un texto listo para mostrarle al usuario.
+class _UserMessage implements Exception {
+  const _UserMessage(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

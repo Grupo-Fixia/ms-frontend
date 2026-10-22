@@ -15,6 +15,8 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
     this.onOpenSpecialties,
     this.onOpenProfile,
     this.onOpenWallet,
+    this.loadOpportunities,
+    this.applyTo,
   });
 
   final ValueChanged<String>? onApply;
@@ -23,6 +25,15 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
   final VoidCallback? onOpenSpecialties;
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenWallet;
+
+  /// Consulta las solicitudes compatibles en el servidor (GC-340). Si es
+  /// `null`, se muestran solicitudes de ejemplo.
+  final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
+
+  /// Envía la postulación al servidor (GC-345). Si es `null`, la postulación
+  /// es solo de demostración. Si falla, lanza una excepción con el mensaje
+  /// para el usuario.
+  final Future<void> Function(String opportunityId)? applyTo;
 
   @override
   State<TechnicianOpportunitiesPage> createState() =>
@@ -33,8 +44,35 @@ class _TechnicianOpportunitiesPageState
     extends State<TechnicianOpportunitiesPage> {
   ServiceCategory? _selectedCategory;
   final Set<String> _appliedIds = {};
+  List<ServiceOpportunity>? _loaded;
+  Object? _loadError;
 
-  List<ServiceOpportunity> get _visibleOpportunities => mockServiceOpportunities
+  bool get _live => widget.loadOpportunities != null;
+
+  bool get _loading => _live && _loaded == null && _loadError == null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_live) _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loaded = null;
+      _loadError = null;
+    });
+    try {
+      final items = await widget.loadOpportunities!();
+      if (mounted) setState(() => _loaded = items);
+    } catch (error) {
+      if (mounted) setState(() => _loadError = error);
+    }
+  }
+
+  List<ServiceOpportunity> get _visibleOpportunities => (_live
+          ? _loaded ?? const <ServiceOpportunity>[]
+          : mockServiceOpportunities)
       .where(
         (opportunity) =>
             _selectedCategory == null ||
@@ -62,7 +100,9 @@ class _TechnicianOpportunitiesPageState
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    'Solicitudes de ejemplo para explorar y postularte localmente.',
+                    _live
+                        ? 'Solicitudes compatibles con tus especialidades, zona y disponibilidad.'
+                        : 'Solicitudes de ejemplo para explorar y postularte localmente.',
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
@@ -119,11 +159,47 @@ class _TechnicianOpportunitiesPageState
               ),
             ),
           ),
-          if (_visibleOpportunities.isEmpty)
+          if (_loading)
             const SliverFillRemaining(
               hasScrollBody: false,
-              child:
-                  Center(child: Text('No hay solicitudes en esta categoría.')),
+              child: Center(
+                child: CircularProgressIndicator(
+                  key: ValueKey('technician-opportunities-loading'),
+                ),
+              ),
+            )
+          else if (_loadError != null)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$_loadError',
+                      key: const ValueKey('technician-opportunities-error'),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      key: const ValueKey('technician-opportunities-retry'),
+                      onPressed: _load,
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_visibleOpportunities.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  _live && _selectedCategory == null
+                      ? 'Por ahora no hay solicitudes compatibles contigo.'
+                      : 'No hay solicitudes en esta categoría.',
+                ),
+              ),
             )
           else
             SliverPadding(
@@ -211,16 +287,43 @@ class _TechnicianOpportunitiesPageState
       builder: (context) => _OpportunityDetailsSheet(
         opportunity: opportunity,
         applied: _appliedIds.contains(opportunity.id),
+        live: widget.applyTo != null,
         onApply: () {
-          setState(() => _appliedIds.add(opportunity.id));
-          widget.onApply?.call(opportunity.id);
           Navigator.of(context).pop();
-          ScaffoldMessenger.of(this.context).showSnackBar(
-            const SnackBar(
-              content: Text('Postulación enviada en esta demostración.'),
-            ),
-          );
+          _apply(opportunity);
         },
+      ),
+    );
+  }
+
+  Future<void> _apply(ServiceOpportunity opportunity) async {
+    final applyTo = widget.applyTo;
+    final messenger = ScaffoldMessenger.of(context);
+    if (applyTo != null) {
+      try {
+        await applyTo(opportunity.id);
+      } catch (error) {
+        if (!mounted) return;
+        messenger.showSnackBar(
+          SnackBar(
+            key: const ValueKey('technician-apply-error'),
+            content: Text('$error'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+    }
+    setState(() => _appliedIds.add(opportunity.id));
+    widget.onApply?.call(opportunity.id);
+    messenger.showSnackBar(
+      SnackBar(
+        key: const ValueKey('technician-apply-done'),
+        content: Text(
+          applyTo != null
+              ? 'Postulación enviada. El cliente la verá entre sus postulantes.'
+              : 'Postulación enviada en esta demostración.',
+        ),
       ),
     );
   }
@@ -408,11 +511,15 @@ class _OpportunityDetailsSheet extends StatelessWidget {
     required this.opportunity,
     required this.applied,
     required this.onApply,
+    this.live = false,
   });
 
   final ServiceOpportunity opportunity;
   final bool applied;
   final VoidCallback onApply;
+
+  /// La postulación se envía al servidor.
+  final bool live;
 
   @override
   Widget build(BuildContext context) {
@@ -494,12 +601,14 @@ class _OpportunityDetailsSheet extends StatelessWidget {
                 ),
                 label: Text(applied ? 'Postulación enviada' : 'Postularse'),
               ),
-              const SizedBox(height: 5),
-              Text(
-                'Demostración local: la postulación no se envía a un servidor.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              if (!live) ...[
+                const SizedBox(height: 5),
+                Text(
+                  'Demostración local: la postulación no se envía a un servidor.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
           ),
         ),

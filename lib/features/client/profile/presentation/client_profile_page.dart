@@ -17,6 +17,7 @@ class ClientProfilePage extends StatefulWidget {
     this.onBack,
     this.onOpenHome,
     this.onOpenPublish,
+    this.saveProfile,
   });
 
   final String firstName;
@@ -27,6 +28,11 @@ class ClientProfilePage extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
   final VoidCallback? onOpenPublish;
+
+  /// Guarda los cambios en el servidor (GC-320). Si es `null`, los cambios
+  /// se conservan solo en esta vista. Si falla, lanza una excepción con el
+  /// mensaje para el usuario.
+  final Future<void> Function(ClientProfileUpdate update)? saveProfile;
 
   @override
   State<ClientProfilePage> createState() => _ClientProfilePageState();
@@ -43,6 +49,7 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
   late String? _phone = widget.phone;
   bool _isEditing = false;
   bool _justSavedLocally = false;
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -74,21 +81,48 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
     }
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _save() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
     final update = ClientProfileUpdate(
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
       phone: _phoneController.text.trim(),
     );
+    final saveProfile = widget.saveProfile;
+    if (saveProfile != null) {
+      setState(() => _saving = true);
+      try {
+        await saveProfile(update);
+      } catch (error) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            key: const ValueKey('client-profile-save-error'),
+            content: Text('$error'),
+          ),
+        );
+        return;
+      }
+      if (!mounted) return;
+    }
     widget.onSaved?.call(update);
     setState(() {
+      _saving = false;
       _firstName = update.firstName;
       _lastName = update.lastName;
       _phone = update.phone;
       _isEditing = false;
-      _justSavedLocally = true;
+      _justSavedLocally = saveProfile == null;
     });
+    if (saveProfile != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          key: ValueKey('client-profile-saved'),
+          content: Text('Tus datos se guardaron.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -281,7 +315,7 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
             decoration: InputDecoration(
               labelText: 'Teléfono',
               prefixIcon: const Icon(Icons.phone_outlined),
-              helperText: widget.phone == null
+              helperText: widget.phone == null && widget.saveProfile == null
                   ? 'No disponible en la sesión actual; se conserva solo en esta vista.'
                   : null,
             ),
@@ -290,8 +324,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
           const SizedBox(height: 8),
           FilledButton(
             key: const ValueKey('client-profile-save'),
-            onPressed: _save,
-            child: const Text('Guardar cambios'),
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? 'Guardando…' : 'Guardar cambios'),
           ),
         ],
       ),
