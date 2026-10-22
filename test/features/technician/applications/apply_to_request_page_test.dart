@@ -4,6 +4,9 @@ import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/technician/applications/application/application_use_cases.dart';
 import 'package:ms_frontend/features/technician/applications/domain/application_exceptions.dart';
 import 'package:ms_frontend/features/technician/applications/infrastructure/mock_application_repository.dart';
+import 'package:ms_frontend/features/technician/opportunities/application/list_compatible_opportunities.dart';
+import 'package:ms_frontend/features/technician/opportunities/application/ports/opportunity_repository.dart';
+import 'package:ms_frontend/features/technician/opportunities/domain/opportunity.dart';
 import 'package:ms_frontend/features/technician/opportunities/presentation/technician_opportunities_page.dart';
 
 Future<void> _openApplyConfirmation(WidgetTester tester) async {
@@ -105,4 +108,34 @@ void main() {
 
     expect(expired, 1);
   });
+
+  testWidgets('sin solicitudes reales muestra las de ejemplo y postula local',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repository = MockApplicationRepository(latency: Duration.zero);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FixiaTheme.light,
+        home: TechnicianOpportunitiesPage(
+          listOpportunities: ListCompatibleOpportunities(_EmptyRepository()),
+          applyToServiceRequest: ApplyToServiceRequest(repository),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openApplyConfirmation(tester);
+
+    expect(find.text('Postulada'), findsOneWidget);
+    expect(await repository.listMine(), isEmpty);
+  });
+}
+
+class _EmptyRepository implements OpportunityRepository {
+  @override
+  Future<OpportunityPage> fetchPage(
+          {required int limit, String? cursor}) async =>
+      const OpportunityPage(items: <Opportunity>[]);
 }

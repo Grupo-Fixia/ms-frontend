@@ -700,14 +700,12 @@ class _TechnicianDashboardLoaderState
             ),
           );
         }
-        // Con postulaciones simuladas no hay backend que valide RF-014, así que
-        // se habilita el botón para poder probar el flujo.
-        final verificationStatus = ApiConfig.useMockApplications
-            ? VerificationStatus.valid
-            : snapshot.data?.verificationStatus ?? VerificationStatus.pending;
+        final verificationStatus =
+            snapshot.data?.verificationStatus ?? VerificationStatus.pending;
         return TechnicianDashboardPage(
           firstName: widget.firstName,
           verificationStatus: verificationStatus,
+          allowDemoApply: true,
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
           onApplyToOpportunity: widget.onApplyToOpportunity,
