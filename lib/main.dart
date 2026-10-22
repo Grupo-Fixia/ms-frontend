@@ -9,6 +9,7 @@ import 'features/auth/login/application/ports/auth_repository.dart';
 import 'features/auth/login/application/ports/session_storage.dart';
 import 'features/auth/login/application/refresh_session.dart';
 import 'features/auth/login/application/restore_session.dart';
+import 'features/auth/login/application/route_guard.dart';
 import 'features/auth/login/application/session_store.dart';
 import 'features/auth/login/infrastructure/http_auth_repository.dart';
 import 'features/auth/login/infrastructure/browser_key_value_store.dart';
@@ -160,16 +161,35 @@ class _FixiaAppState extends State<FixiaApp> {
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
 
-  /// Solo deja ver la pantalla al rol indicado. Sin sesión redirige al login
-  /// y con otro rol, al inicio de su propia cuenta.
-  WidgetBuilder _forRole(UserRole role, WidgetBuilder builder) => (context) {
-        final current = _sessionStore.profile?.role;
-        if (!_sessionStore.isAuthenticated || current == null) {
+  /// Aplica la regla de acceso de la ruta (GC-314, `RouteGuard`). Las rutas
+  /// protegidas escuchan la sesión: si se cierra o vence mientras están
+  /// abiertas, llevan al login. Login y registro no la escuchan, para no
+  /// interrumpir el inicio de sesión automático después de registrarse.
+  WidgetBuilder _guard(RouteAccess access, WidgetBuilder builder) {
+    Widget decide(BuildContext context) {
+      final decision = RouteGuard.decide(
+        access,
+        isAuthenticated: _sessionStore.isAuthenticated,
+        role: _sessionStore.profile?.role,
+      );
+      switch (decision) {
+        case RouteDecision.allow:
+          return builder(context);
+        case RouteDecision.toLogin:
           return const _RedirectTo(AppRoutes.login);
-        }
-        if (current != role) return const _RedirectTo(AppRoutes.home);
-        return builder(context);
-      };
+        case RouteDecision.toHome:
+          return const _RedirectTo(AppRoutes.home);
+      }
+    }
+
+    if (access == RouteAccess.public || access == RouteAccess.guestOnly) {
+      return decide;
+    }
+    return (context) => ListenableBuilder(
+          listenable: _sessionStore,
+          builder: (context, _) => decide(context),
+        );
+  }
 
   /// Abre el inicio correspondiente al rol de la cuenta autenticada.
   Widget _sessionPage(BuildContext context) {
@@ -220,12 +240,7 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   Widget _technicianProfilePage(BuildContext context) {
-    final profile = _sessionStore.profile;
-    if (!_sessionStore.isAuthenticated ||
-        profile == null ||
-        profile.role != UserRole.professional) {
-      return _loginPage(context);
-    }
+    final profile = _sessionStore.profile!;
     final repository = widget.technicianProfileRepository;
     return TechnicianProfilePage(
       getProfile: GetTechnicianProfile(repository),
@@ -278,40 +293,45 @@ class _FixiaAppState extends State<FixiaApp> {
                     .pushNamed(AppRoutes.technicianRegistration),
                 onLogin: () => Navigator.of(context).pushNamed(AppRoutes.login),
               ),
-        AppRoutes.login: _loginPage,
+        AppRoutes.login: _guard(RouteAccess.guestOnly, _loginPage),
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
-        AppRoutes.session: (context) => ListenableBuilder(
-              listenable: _sessionStore,
-              builder: (context, _) => _sessionStore.isAuthenticated
-                  ? _sessionPage(context)
-                  : _loginPage(context),
-            ),
-        AppRoutes.technicianProfile: _technicianProfilePage,
-        AppRoutes.clientRegistration: (context) => RegistrationPage(
-              registerAccount:
-                  RegisterAccount(widget.clientRegistrationRepository),
-              onGoToLogin: () =>
-                  Navigator.of(context).pushReplacementNamed(AppRoutes.login),
-              onSwitchRole: () => Navigator.of(context)
-                  .pushReplacementNamed(AppRoutes.technicianRegistration),
-            ),
-        AppRoutes.technicianRegistration: (context) => RegistrationPage(
-              role: AccountRole.technician,
-              // Paso 1 → paso 2 sin volver a escribir la contraseña.
-              onAutoLogin: (email, password) =>
-                  _signInAfterRegistration(context, email, password),
-              registerAccount:
-                  RegisterAccount(widget.technicianRegistrationRepository),
-              onGoToLogin: () =>
-                  Navigator.of(context).pushReplacementNamed(AppRoutes.login),
-              onSwitchRole: () => Navigator.of(context)
-                  .pushReplacementNamed(AppRoutes.clientRegistration),
-            ),
+        AppRoutes.session: _guard(RouteAccess.authenticated, _sessionPage),
+        AppRoutes.technicianProfile:
+            _guard(RouteAccess.professional, _technicianProfilePage),
+        AppRoutes.clientRegistration: _guard(
+            RouteAccess.guestOnly,
+            (context) => RegistrationPage(
+                  registerAccount:
+                      RegisterAccount(widget.clientRegistrationRepository),
+                  onGoToLogin: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.login),
+                  onSwitchRole: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.technicianRegistration),
+                )),
+        AppRoutes.technicianRegistration: _guard(
+            RouteAccess.guestOnly,
+            (context) => RegistrationPage(
+                  role: AccountRole.technician,
+                  // Paso 1 → paso 2 sin volver a escribir la contraseña.
+                  onAutoLogin: (email, password) =>
+                      _signInAfterRegistration(context, email, password),
+                  registerAccount:
+                      RegisterAccount(widget.technicianRegistrationRepository),
+                  onGoToLogin: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.login),
+                  onSwitchRole: () => Navigator.of(context)
+                      .pushReplacementNamed(AppRoutes.clientRegistration),
+                )),
         AppRoutes.clientDashboard:
-            _forRole(UserRole.client, _clientDashboardPage),
+            _guard(RouteAccess.client, _clientDashboardPage),
         AppRoutes.technicianDashboard:
-            _forRole(UserRole.professional, _technicianDashboardPage),
+            _guard(RouteAccess.professional, _technicianDashboardPage),
       },
+      // Una URL que no existe lleva al inicio en vez de mostrar un error.
+      onUnknownRoute: (settings) => MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => const _RedirectTo(AppRoutes.home),
+      ),
     );
   }
 }
@@ -331,10 +351,10 @@ class _RedirectToState extends State<_RedirectTo> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Navigator.of(context)
-            .pushNamedAndRemoveUntil(widget.route, (_) => false);
-      }
+      // Si otra acción ya navegó (por ejemplo, cerrar sesión lleva al login
+      // al mismo tiempo), no se navega dos veces.
+      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(widget.route, (_) => false);
     });
   }
 
