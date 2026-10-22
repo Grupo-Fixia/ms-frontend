@@ -4,6 +4,7 @@ import 'package:ms_frontend/features/auth/login/application/session_store.dart';
 import 'package:ms_frontend/features/auth/login/domain/auth_exceptions.dart';
 import 'package:ms_frontend/features/auth/login/domain/user_profile.dart';
 import 'package:ms_frontend/features/technician/profile/domain/technician_profile_exceptions.dart';
+import 'package:ms_frontend/features/technician/profile/domain/verification_status.dart';
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
@@ -27,8 +28,8 @@ Future<FakeAuthRepository> _pumpApp(
   await tester.pumpWidget(
     FixiaApp(
       clientRegistrationRepository: FakeAccountRegistrationRepository(),
-      technicianRegistrationRepository: technicianRepository ??
-          FakeAccountRegistrationRepository(),
+      technicianRegistrationRepository:
+          technicianRepository ?? FakeAccountRegistrationRepository(),
       technicianProfileRepository: profileRepository ??
           FakeTechnicianProfileRepository(profile: emptyProfile),
       authRepository: repository,
@@ -54,6 +55,70 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-title')), findsOneWidget);
     expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('home-preview-availability')), findsNothing);
+  });
+
+  testWidgets('sin sesión las rutas de cliente y técnico llevan al login',
+      (tester) async {
+    for (final route in [
+      AppRoutes.clientDashboard,
+      AppRoutes.technicianDashboard,
+    ]) {
+      await _pumpApp(tester, openLogin: false);
+      tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(route);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+      expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+          findsNothing);
+    }
+  });
+
+  testWidgets('un técnico no puede abrir la ruta del cliente', (tester) async {
+    final store = SessionStore()..start(fixtureSession, _technicianProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.clientDashboard);
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('client-dashboard-greeting')), findsNothing);
+    expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsOneWidget);
+  });
+
+  testWidgets('un cliente no puede abrir la ruta del técnico', (tester) async {
+    final store = SessionStore()..start(fixtureSession, fixtureProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.technicianDashboard);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+        findsOneWidget);
+  });
+
+  testWidgets('con sesión de técnico, su ruta abre el dashboard',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, _technicianProfile);
+    await _pumpApp(tester, sessionStore: store);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.technicianDashboard);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsOneWidget);
   });
 
   testWidgets('de la página de inicio se llega al login y al registro',
@@ -71,7 +136,8 @@ void main() {
     expect(find.text('Crea tu cuenta'), findsOneWidget);
   });
 
-  testWidgets('"Soy técnico" abre el registro de técnico y se puede cambiar '
+  testWidgets(
+      '"Soy técnico" abre el registro de técnico y se puede cambiar '
       'a cliente', (tester) async {
     await _pumpApp(tester, openLogin: false);
 
@@ -150,7 +216,8 @@ void main() {
         .pushNamed(AppRoutes.technicianRegistration);
     await tester.pumpAndSettle();
 
-    Finder field(String name) => find.byKey(ValueKey('registration-$name-field'));
+    Finder field(String name) =>
+        find.byKey(ValueKey('registration-$name-field'));
     await tester.enterText(field('firstName'), 'Luis');
     await tester.enterText(field('lastName'), 'Gómez');
     await tester.tap(field('documentType'));
@@ -177,11 +244,17 @@ void main() {
     expect(find.byKey(const ValueKey('registration-success')), findsNothing);
   });
 
-  testWidgets('un técnico con sesión llega a completar su perfil (paso 2)',
+  testWidgets('un técnico autenticado llega a su inicio y abre su perfil',
       (tester) async {
     final store = SessionStore()..start(fixtureSession, _technicianProfile);
     await _pumpApp(tester, sessionStore: store);
 
+    expect(find.byKey(const ValueKey('technician-dashboard-greeting')),
+        findsOneWidget);
+    expect(find.text('Luis'), findsOneWidget);
+    await tester
+        .tap(find.byKey(const ValueKey('technician-dashboard-settings')));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<Text>(find.byKey(const ValueKey('technician-profile-title')))
@@ -189,6 +262,18 @@ void main() {
       'Completa tu perfil profesional',
     );
     expect(find.text('Hola, Ana'), findsNothing);
+  });
+
+  testWidgets('el dashboard técnico usa el estado cargado desde su perfil',
+      (tester) async {
+    final store = SessionStore()..start(fixtureSession, _technicianProfile);
+    final repository = FakeTechnicianProfileRepository(
+      profile: completeProfile(status: VerificationStatus.valid),
+    );
+    await _pumpApp(tester, sessionStore: store, profileRepository: repository);
+
+    expect(repository.fetchCalls, 1);
+    expect(find.text('VIGENTE'), findsOneWidget);
   });
 
   testWidgets('el técnico con perfil completo ve su resumen y puede salir',
@@ -201,16 +286,23 @@ void main() {
           FakeTechnicianProfileRepository(profile: completeProfile()),
     );
 
+    expect(find.text('Luis'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('technician-dashboard-settings')));
+    await tester.pumpAndSettle();
     expect(find.text('Hola, Luis'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('technician-profile-logout')));
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('technician-dashboard-logout')));
     await tester.pumpAndSettle();
 
     expect(repository.logoutCalls, 1);
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
-  testWidgets('con sesión iniciada, la página de inicio muestra la sesión',
+  testWidgets('con sesión iniciada, la página de inicio muestra el dashboard',
       (tester) async {
     final store = SessionStore()..start(fixtureSession, fixtureProfile);
     await _pumpApp(tester, sessionStore: store);
@@ -221,6 +313,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-title')), findsNothing);
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+        findsOneWidget);
     expect(find.text('Hola, Ana'), findsOneWidget);
   });
 
@@ -236,7 +330,7 @@ void main() {
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
-  testWidgets('flujo completo: login, cuenta en pantalla y cierre de sesión',
+  testWidgets('flujo completo: login, inicio del rol y cierre de sesión',
       (tester) async {
     final repository = await _pumpApp(tester);
 
@@ -251,10 +345,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('login-submit')));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+        findsOneWidget);
     expect(find.text('Hola, Ana'), findsOneWidget);
-    expect(find.text('ana@fixia.com'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('session-logout')));
+    await tester.tap(find.byKey(const ValueKey('client-dashboard-logout')));
     await tester.pumpAndSettle();
 
     expect(repository.logoutCalls, 1);
@@ -262,12 +357,14 @@ void main() {
     expect(find.text('Hola, Ana'), findsNothing);
   });
 
-  testWidgets('con una sesión restaurada la app abre en la pantalla de sesión',
+  testWidgets('con una sesión restaurada la app abre en el inicio del rol',
       (tester) async {
     final store = SessionStore()..start(fixtureSession, fixtureProfile);
 
     await _pumpApp(tester, sessionStore: store);
 
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+        findsOneWidget);
     expect(find.text('Hola, Ana'), findsOneWidget);
     expect(find.byKey(const ValueKey('login-submit')), findsNothing);
   });
@@ -283,7 +380,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('login-submit')), findsNothing);
-    expect(find.text('Hola, Ana'), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+        findsOneWidget);
   });
 
   testWidgets('"mantener sesión": se guarda al entrar y se borra al salir',
@@ -304,10 +402,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('login-submit')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Hola, Ana'), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-dashboard-greeting')),
+        findsOneWidget);
     expect(storage.refreshToken, fixtureSession.refreshToken);
 
-    await tester.tap(find.byKey(const ValueKey('session-logout')));
+    await tester.tap(find.byKey(const ValueKey('client-dashboard-logout')));
     await tester.pumpAndSettle();
 
     expect(storage.refreshToken, isNull);

@@ -7,7 +7,8 @@ import 'session_store.dart';
 /// Caso de uso: cerrar sesión (GC-236, RF-005).
 ///
 /// La sesión local y el token guardado se descartan siempre, aunque el
-/// backend no responda: el usuario debe poder salir.
+/// backend no responda: el usuario debe poder salir. Si había una renovación
+/// en curso, primero se espera para revocar el token más nuevo.
 class LogoutUser {
   const LogoutUser(this._repository, this._store, this._storage);
 
@@ -16,6 +17,13 @@ class LogoutUser {
   final SessionStorage _storage;
 
   Future<void> call() async {
+    // Si hay una renovación en curso, se espera para revocar el token nuevo
+    // y no dejarlo vivo en el backend.
+    try {
+      await _store.pendingRenewal;
+    } catch (_) {
+      // Da igual cómo terminó: se cierra sesión con lo que haya.
+    }
     final session = _store.session;
     try {
       if (session != null) await _revokeOnServer(session);

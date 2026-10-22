@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../application/logout_user.dart';
 import '../application/session_store.dart';
+import '../domain/user_profile.dart';
 
 /// Pantalla mínima de sesión iniciada (GC-236): muestra la cuenta que
 /// devolvió `/me` y permite cerrar sesión. Hasta que exista el inicio de la
@@ -13,6 +14,7 @@ class SessionPage extends StatefulWidget {
     required this.store,
     required this.logoutUser,
     this.onLoggedOut,
+    this.onOpenProfile,
   });
 
   final SessionStore store;
@@ -20,6 +22,7 @@ class SessionPage extends StatefulWidget {
 
   /// Se llama cuando la sesión ya se cerró.
   final VoidCallback? onLoggedOut;
+  final VoidCallback? onOpenProfile;
 
   @override
   State<SessionPage> createState() => _SessionPageState();
@@ -90,6 +93,16 @@ class _SessionPageState extends State<SessionPage> {
                       _Detail(label: 'Correo', value: profile?.email),
                       _Detail(label: 'Rol', value: profile?.role?.label),
                       const SizedBox(height: 24),
+                      if (profile?.role == UserRole.client &&
+                          widget.onOpenProfile != null) ...[
+                        OutlinedButton.icon(
+                          key: const ValueKey('session-open-client-profile'),
+                          onPressed: widget.onOpenProfile,
+                          icon: const Icon(Icons.person_outline_rounded),
+                          label: const Text('Consultar y editar mi perfil'),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       FilledButton(
                         key: const ValueKey('session-logout'),
                         onPressed: _isLoggingOut ? null : _logout,

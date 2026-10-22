@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/technician_steps.dart';
+import '../../../home/presentation/widgets/dashboard_components.dart';
 import '../application/get_technician_profile.dart';
 import '../application/update_technician_profile.dart';
 import '../domain/technician_profile.dart';
@@ -24,6 +25,9 @@ class TechnicianProfilePage extends StatefulWidget {
     this.firstName,
     this.onLogout,
     this.onSessionExpired,
+    this.onBack,
+    this.onOpenHome,
+    this.onOpenOpportunities,
   });
 
   final GetTechnicianProfile getProfile;
@@ -37,6 +41,9 @@ class TechnicianProfilePage extends StatefulWidget {
 
   /// La sesión venció mientras se usaba el perfil.
   final VoidCallback? onSessionExpired;
+  final VoidCallback? onBack;
+  final VoidCallback? onOpenHome;
+  final VoidCallback? onOpenOpportunities;
 
   @override
   State<TechnicianProfilePage> createState() => _TechnicianProfilePageState();
@@ -112,6 +119,48 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage> {
                 justSaved: _controller.justSaved,
                 onEdit: _controller.startEditing,
               );
+    }
+    if (widget.onBack != null) {
+      return MobileFeatureShell(
+        title: 'Perfil profesional',
+        onBack: widget.onBack!,
+        bottomNavigationItems: [
+          MobileNavigationItem(
+            icon: Icons.home_rounded,
+            label: 'Inicio',
+            onPressed:
+                widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
+          ),
+          MobileNavigationItem(
+            icon: Icons.work_outline_rounded,
+            label: 'Trabajos',
+            onPressed: widget.onOpenOpportunities ??
+                () => Navigator.of(context).maybePop(),
+          ),
+          MobileNavigationItem(
+            icon: Icons.account_balance_wallet_outlined,
+            label: 'Billetera',
+            onPressed:
+                widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
+          ),
+          MobileNavigationItem(
+            icon: Icons.person_outline_rounded,
+            label: 'Perfil',
+            selected: true,
+            onPressed: () {},
+          ),
+        ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(18),
+          child: DecoratedBox(
+            decoration: FixiaDecorations.card,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: content,
+            ),
+          ),
+        ),
+      );
     }
     return Scaffold(
       body: SafeArea(
