@@ -43,8 +43,10 @@ class AuthorizedHttp {
   /// Renovación en curso; `null` si no hay ninguna.
   Future<bool>? _renewal;
 
-  /// Lanza [SessionExpiredException] o [BackendUnreachableException]; las
-  /// demás respuestas (incluidos 4xx/5xx) se devuelven tal cual.
+  /// Lanza [SessionExpiredException] (no se pudo renovar la sesión) o
+  /// [BackendUnreachableException]; las demás respuestas (incluidos 4xx/5xx,
+  /// y un 401 que se repite con el token recién renovado) se devuelven tal
+  /// cual.
   Future<http.Response> send(
     Future<http.Response> Function(Map<String, String> headers) request,
   ) async {
@@ -58,9 +60,11 @@ class AuthorizedHttp {
     if (!alreadyRenewed && !await _renewOnce()) {
       throw const SessionExpiredException();
     }
-    final retried = await _send(request, _currentToken());
-    if (retried.statusCode == 401) throw const SessionExpiredException();
-    return retried;
+    // Si ms-users acaba de renovar la sesión y el servicio vuelve a responder
+    // 401, la sesión no venció: ese servicio no acepta el token (por ejemplo,
+    // una llave pública mal configurada). Se devuelve la respuesta para que el
+    // repositorio muestre un error, sin sacar al usuario de su sesión.
+    return _send(request, _currentToken());
   }
 
   /// Una sola renovación a la vez: las demás esperan la que está en curso.

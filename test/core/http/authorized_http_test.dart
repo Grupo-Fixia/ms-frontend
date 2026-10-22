@@ -69,20 +69,21 @@ void main() {
     );
   });
 
-  test('si el reintento también es 401, la sesión expiró (sin bucles)',
-      () async {
+  test(
+      'si el reintento con el token recién renovado también es 401, no saca '
+      'al usuario: devuelve la respuesta (sin bucles)', () async {
     final session = _Session(renewTo: 'token-2');
     var calls = 0;
 
-    await expectLater(
-      _http(session).send((_) async {
-        calls++;
-        return http.Response('', 401);
-      }),
-      throwsA(isA<SessionExpiredException>()),
-    );
+    final response = await _http(session).send((_) async {
+      calls++;
+      return http.Response('', 401);
+    });
+
+    expect(response.statusCode, 401);
     expect(calls, 2);
     expect(session.renewCalls, 1);
+    expect(session.token, 'token-2', reason: 'la sesión sigue viva');
   });
 
   test('sin token no envía nada', () async {

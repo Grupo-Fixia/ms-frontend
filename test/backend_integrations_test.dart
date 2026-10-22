@@ -46,9 +46,14 @@ const _technician = UserProfile(
 class _Profiles implements ClientProfileRepository {
   ClientProfileUpdate? saved;
   Object? failure;
+  Object? fetchFailure;
+  ClientProfile? stored;
 
   @override
-  Future<ClientProfile> fetchProfile() => throw UnimplementedError();
+  Future<ClientProfile> fetchProfile() async {
+    if (fetchFailure != null) throw fetchFailure!;
+    return stored ?? (throw StateError('sin perfil guardado'));
+  }
 
   @override
   Future<ClientProfile> updateProfile(ClientProfileUpdate update) async {
@@ -262,6 +267,47 @@ void main() {
       expect(store.profile?.firstName, fixtureProfile.firstName);
       expect(key('client-profile-form'), findsOneWidget,
           reason: 'sigue editando');
+    });
+
+    testWidgets(
+        'carga del servidor el teléfono que la sesión no trae y deja guardar '
+        'sin volver a escribirlo', (tester) async {
+      profiles.stored = const ClientProfile(
+        id: 'cli',
+        email: 'ana@fixia.com',
+        firstName: 'Ana',
+        lastName: 'Pérez',
+        phone: '3009998877',
+      );
+      await pump(
+        tester,
+        fixtureProfile.copyWith(phone: ''),
+        AppRoutes.clientProfile,
+      );
+      expect(find.text('3009998877'), findsOneWidget);
+
+      await tester.tap(key('client-profile-edit'));
+      await tester.pumpAndSettle();
+      await tester.enterText(key('client-profile-first-name'), 'Ana María');
+      await tester.ensureVisible(key('client-profile-save'));
+      await tester.tap(key('client-profile-save'));
+      await tester.pumpAndSettle();
+
+      expect(profiles.saved?.phone, '3009998877');
+      expect(profiles.saved?.firstName, 'Ana María');
+      expect(find.textContaining('/16'), findsNothing,
+          reason: 'sin el contador de 16 que confundía');
+    });
+
+    testWidgets('si la sesión venció al cargar el perfil, lleva al login',
+        (tester) async {
+      profiles.fetchFailure =
+          const ClientProfileFailure('Sesión vencida', isSessionExpired: true);
+
+      final store = await pump(tester, fixtureProfile, AppRoutes.clientProfile);
+
+      expect(store.isAuthenticated, isFalse);
+      expect(key('login-submit'), findsOneWidget);
     });
 
     testWidgets('si la sesión venció, lleva al login', (tester) async {

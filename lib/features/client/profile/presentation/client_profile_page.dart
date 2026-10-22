@@ -314,6 +314,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
             maxLength: 16,
             decoration: InputDecoration(
               labelText: 'Teléfono',
+              // Admite el «+» y hasta 15 dígitos: el contador de 16 confundía.
+              counterText: '',
               prefixIcon: const Icon(Icons.phone_outlined),
               helperText: widget.phone == null && widget.saveProfile == null
                   ? 'No disponible en la sesión actual; se conserva solo en esta vista.'

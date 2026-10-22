@@ -338,4 +338,27 @@ void main() {
       );
     });
   });
+
+  test(
+      'si ms-services rechaza el token recién renovado, es un error y no una '
+      'sesión vencida', () async {
+    var token = 'token-1';
+    final repository = HttpServiceRequestRepository(
+      client: MockClient((_) async => _json(401, {})),
+      baseUrl: Uri.parse('http://localhost'),
+      authorizedHttp: AuthorizedHttp(
+        accessToken: () => token,
+        renewSession: () async {
+          token = 'token-2';
+          return true;
+        },
+      ),
+    );
+
+    await expectLater(
+      repository.listMine(),
+      throwsA(isA<ServiceRequestFailure>()
+          .having((f) => f.isSessionExpired, 'isSessionExpired', isFalse)),
+    );
+  });
 }
