@@ -9,5 +9,9 @@ abstract interface class QuotationDecisionRepository {
   Future<Quotation> accept(String quotationId);
 
   /// Rechaza la cotización enviada y vigente, con motivo opcional.
-  Future<Quotation> reject(String quotationId, {String? reason});
+  Future<Quotation> reject(
+    String quotationId, {
+    String? reason,
+    int? counterOfferInCents,
+  });
 }

@@ -80,11 +80,16 @@ class RejectQuotation {
 
   final QuotationDecisionRepository _repository;
 
-  Future<Quotation> call(String quotationId, {String? reason}) {
+  Future<Quotation> call(
+    String quotationId, {
+    String? reason,
+    int? counterOfferInCents,
+  }) {
     final trimmed = reason?.trim();
     return _repository.reject(
       quotationId,
       reason: trimmed == null || trimmed.isEmpty ? null : trimmed,
+      counterOfferInCents: counterOfferInCents,
     );
   }
 }

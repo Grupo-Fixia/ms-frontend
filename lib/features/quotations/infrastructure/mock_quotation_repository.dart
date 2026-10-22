@@ -83,13 +83,23 @@ class MockQuotationRepository
       _decide(quotationId, QuotationStatus.accepted);
 
   @override
-  Future<Quotation> reject(String quotationId, {String? reason}) =>
-      _decide(quotationId, QuotationStatus.rejected, reason: reason);
+  Future<Quotation> reject(
+    String quotationId, {
+    String? reason,
+    int? counterOfferInCents,
+  }) =>
+      _decide(
+        quotationId,
+        QuotationStatus.rejected,
+        reason: reason,
+        counterOfferInCents: counterOfferInCents,
+      );
 
   Future<Quotation> _decide(
     String id,
     QuotationStatus status, {
     String? reason,
+    int? counterOfferInCents,
   }) async {
     final index = _items.indexWhere((q) => q.id == id);
     if (index < 0) {
@@ -103,6 +113,7 @@ class MockQuotationRepository
       _items[index],
       status: status,
       rejectionReason: reason,
+      counterOfferInCents: counterOfferInCents,
       respondedAt: _now(),
     );
   }
@@ -135,6 +146,7 @@ class MockQuotationRepository
     QuotationStatus? status,
     bool? isExpired,
     String? rejectionReason,
+    int? counterOfferInCents,
     DateTime? respondedAt,
   }) {
     final newStatus = status ?? q.status;
@@ -153,6 +165,7 @@ class MockQuotationRepository
       materials: q.materials,
       isExpired: isExpired ?? q.isExpired,
       rejectionReason: rejectionReason ?? q.rejectionReason,
+      counterOfferInCents: counterOfferInCents ?? q.counterOfferInCents,
       respondedAt: respondedAt ?? q.respondedAt,
       createdAt: q.createdAt,
       updatedAt: _now(),

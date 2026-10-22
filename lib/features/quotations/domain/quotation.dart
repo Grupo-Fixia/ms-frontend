@@ -53,6 +53,7 @@ class Quotation {
     this.materials = const [],
     this.isExpired = false,
     this.rejectionReason,
+    this.counterOfferInCents,
     this.respondedAt,
     this.createdAt,
     this.updatedAt,
@@ -81,6 +82,9 @@ class Quotation {
 
   /// Motivo opcional que escribió el cliente al rechazar.
   final String? rejectionReason;
+
+  /// Valor que el cliente propone al rechazar (contraoferta), en centavos.
+  final int? counterOfferInCents;
   final DateTime? respondedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;

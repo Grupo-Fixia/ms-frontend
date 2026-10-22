@@ -5,6 +5,7 @@ import '../../home/presentation/widgets/dashboard_components.dart';
 import '../application/quotation_use_cases.dart';
 import '../domain/quotation.dart';
 import '../domain/quotation_exceptions.dart';
+import '../domain/quotation_rules.dart';
 import 'quotation_formatters.dart';
 
 /// Cotización recibida por el cliente (GC-355): desglose económico,
@@ -179,6 +180,11 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
       return 'Cotización aceptada. Siguiente paso: coordina con el prestador '
           'la ejecución del servicio para la fecha acordada.';
     }
+    if (quotation.status == QuotationStatus.rejected &&
+        quotation.counterOfferInCents != null) {
+      return 'Contraoferta enviada. Siguiente paso: el prestador debe aceptarla '
+          'o enviarte una nueva cotización.';
+    }
     if (quotation.status == QuotationStatus.rejected) {
       return 'Cotización rechazada. Siguiente paso: puedes esperar una nueva '
           'cotización del prestador o elegir a otro postulante.';
@@ -218,36 +224,97 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
   }
 
   Future<void> _reject(Quotation quotation) async {
-    final controller = TextEditingController();
-    final reason = await showDialog<String>(
+    final reasonController = TextEditingController();
+    final counterController = TextEditingController();
+    final result = await showDialog<({String reason, int? counter})>(
       context: context,
-      builder: (context) => AlertDialog(
-        key: const ValueKey('reject-dialog'),
-        title: const Text('¿Rechazar la cotización?'),
-        content: TextField(
-          key: const ValueKey('reject-reason'),
-          controller: controller,
-          maxLines: 3,
-          maxLength: 300,
-          decoration: const InputDecoration(
-            labelText: 'Motivo (opcional)',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            key: const ValueKey('reject-confirm'),
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Rechazar'),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final counter = QuotationRules.parseAmount(counterController.text);
+          final counterText = counterController.text.trim();
+          final counterInvalid =
+              counterText.isNotEmpty && (counter == null || counter <= 0);
+          final canCounter = counter != null && counter > 0;
+          return AlertDialog(
+            key: const ValueKey('reject-dialog'),
+            title: const Text('Responder la cotización'),
+            scrollable: true,
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  key: const ValueKey('reject-reason'),
+                  controller: reasonController,
+                  maxLines: 3,
+                  maxLength: 300,
+                  decoration: const InputDecoration(
+                    labelText: 'Motivo (opcional)',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text(
+                  'Contraoferta',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Si prefieres negociar, propón un valor total al prestador '
+                  'en lugar de rechazar sin más. Cotización actual: '
+                  '${formatMoney(quotation.amountInCents)}.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  key: const ValueKey('counter-offer-amount'),
+                  controller: counterController,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: 'Valor de la contraoferta (COP)',
+                    prefixText: '\$ ',
+                    errorText: counterInvalid
+                        ? 'Ingresa un valor mayor a cero.'
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+            actionsOverflowDirection: VerticalDirection.down,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+              OutlinedButton(
+                key: const ValueKey('reject-confirm'),
+                onPressed: () => Navigator.of(context)
+                    .pop((reason: reasonController.text, counter: null)),
+                child: const Text('Rechazar'),
+              ),
+              FilledButton(
+                key: const ValueKey('counter-offer-confirm'),
+                onPressed: canCounter
+                    ? () => Navigator.of(context)
+                        .pop((reason: reasonController.text, counter: counter))
+                    : null,
+                child: const Text('Enviar contraoferta'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    if (reason == null) return;
-    await _decide(() => widget.rejectQuotation!(quotation.id, reason: reason));
+    if (result == null) return;
+    await _decide(
+      () => widget.rejectQuotation!(
+        quotation.id,
+        reason: result.reason,
+        counterOfferInCents: result.counter,
+      ),
+    );
   }
 
   Future<void> _decide(Future<Quotation> Function() action) async {
@@ -353,6 +420,13 @@ class QuotationSummary extends StatelessWidget {
           title: 'Condiciones',
           text: quotation.conditions,
         ),
+        if (quotation.counterOfferInCents != null)
+          _InfoBlock(
+            icon: Icons.price_change_outlined,
+            title: 'Contraoferta enviada',
+            text: '${formatMoney(quotation.counterOfferInCents!)}. Queda a la '
+                'espera de que el prestador responda.',
+          ),
         if (quotation.rejectionReason != null &&
             quotation.rejectionReason!.isNotEmpty)
           _InfoBlock(

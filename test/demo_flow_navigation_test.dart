@@ -134,6 +134,28 @@ void main() {
     expect(find.text('Seleccionar prestador'), findsNothing);
   });
 
+  testWidgets('el cliente envía una contraoferta al rechazar', (tester) async {
+    await _pump(tester, DemoFlow(latency: Duration.zero), _clientProfile);
+
+    await _tapKey(tester, 'client-quote-lamparas-sala');
+    await _tapKey(tester, 'quotation-reject');
+    expect(
+      tester
+          .widget<FilledButton>(
+              find.byKey(const ValueKey('counter-offer-confirm')))
+          .onPressed,
+      isNull,
+    );
+    await tester.enterText(
+        find.byKey(const ValueKey('counter-offer-amount')), '250000');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('counter-offer-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('RECHAZADA'), findsOneWidget);
+    expect(find.text('Contraoferta enviada'), findsOneWidget);
+    expect(find.textContaining('250.000'), findsWidgets);
+  });
   testWidgets('el cliente rechaza y acepta cotizaciones de ejemplo',
       (tester) async {
     await _pump(tester, DemoFlow(latency: Duration.zero), _clientProfile);
