@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -9,12 +11,14 @@ import 'features/auth/login/application/logout_user.dart';
 import 'features/auth/login/application/ports/auth_repository.dart';
 import 'features/auth/login/application/ports/session_storage.dart';
 import 'features/auth/login/application/refresh_session.dart';
+import 'features/auth/login/application/follow_shared_session.dart';
 import 'features/auth/login/application/restore_session.dart';
 import 'features/auth/login/application/route_guard.dart';
 import 'features/auth/login/application/session_store.dart';
 import 'features/auth/login/infrastructure/http_auth_repository.dart';
 import 'features/auth/login/infrastructure/browser_key_value_store.dart';
 import 'features/auth/login/infrastructure/browser_session_storage.dart';
+import 'features/auth/login/infrastructure/open_tabs.dart';
 import 'features/auth/login/presentation/login_page.dart';
 import 'features/auth/login/presentation/session_page.dart';
 import 'features/auth/registration/application/ports/account_registration_repository.dart';
@@ -24,11 +28,24 @@ import 'features/auth/registration/infrastructure/http_account_registration_repo
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
+import 'features/client/profile/application/client_profile_use_cases.dart';
+import 'features/client/profile/domain/client_profile_exceptions.dart';
 import 'features/client/profile/domain/client_profile_update.dart';
 import 'features/client/profile/presentation/client_profile_page.dart';
+import 'features/client/service_request/domain/service_request_draft.dart';
 import 'features/client/service_request/presentation/service_request_page.dart';
+import 'features/client/service_requests/application/service_request_use_cases.dart';
+import 'features/client/service_requests/domain/service_request.dart';
+import 'features/client/service_requests/domain/service_request_exceptions.dart';
+import 'backend_integrations.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
+import 'features/technician/applications/application/application_use_cases.dart';
+import 'features/technician/applications/domain/application_exceptions.dart';
+import 'features/technician/opportunities/application/list_compatible_opportunities.dart';
+import 'features/technician/opportunities/domain/opportunity_exceptions.dart';
+import 'features/technician/opportunities/domain/service_opportunity.dart';
+import 'features/technician/opportunities/presentation/opportunity_view.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
@@ -53,8 +70,14 @@ abstract final class AppRoutes {
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
   static const technicianRegistration = '/registro-tecnico';
-  static const clientDashboard = '/demo/inicio-cliente';
-  static const technicianDashboard = '/demo/inicio-tecnico';
+  static const clientDashboard = '/cliente/inicio';
+  static const technicianDashboard = '/tecnico/inicio';
+
+  /// Rutas anteriores de los paneles, cuando se llamaban «demo». Ya no se
+  /// anuncian, pero siguen abriendo el inicio del rol para no romper enlaces
+  /// ni marcadores guardados (GC-315).
+  static const legacyClientDashboard = '/demo/inicio-cliente';
+  static const legacyTechnicianDashboard = '/demo/inicio-tecnico';
   static const clientServiceRequest = '/cliente/publicar-problema';
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianSpecialties = '/tecnico/especialidades';
@@ -71,15 +94,19 @@ Future<void> main() async {
     client: httpClient,
     baseUrl: usersApiBaseUrl,
   );
+  final openTabs = OpenTabs(persistentKeyValueStore());
   final sessionStorage = BrowserSessionStorage(
     tab: tabKeyValueStore(),
-    persistent: persistentKeyValueStore(),
+    shared: persistentKeyValueStore(),
+    browserSession: browserSessionKeyValueStore(),
+    openTabs: openTabs,
   );
 
-  // Si hay un refresh token guardado (recarga de la pestaña o "Mantener sesión
-  // iniciada"), la sesión se restaura antes de mostrar la primera pantalla.
+  // Si hay una sesión en el navegador (otra pestaña, una recarga o "Mantener
+  // sesión iniciada"), se restaura antes de mostrar la primera pantalla.
   final sessionStore = SessionStore();
   await RestoreSession(authRepository, sessionStore, sessionStorage)();
+  _keepTabAlive(openTabs);
 
   runApp(
     FixiaApp(
@@ -102,6 +129,19 @@ Future<void> main() async {
           sessionStorage,
         ).renew,
       ),
+      backend: BackendIntegrations.http(
+        client: httpClient,
+        usersBaseUrl: usersApiBaseUrl,
+        servicesBaseUrl: Uri.parse(ApiConfig.servicesBaseUrl),
+        authorizedHttp: AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).renew,
+        ),
+      ),
       technicianSpecialtiesRepository: HttpTechnicianSpecialtiesRepository(
         client: httpClient,
         baseUrl: usersApiBaseUrl,
@@ -117,13 +157,37 @@ Future<void> main() async {
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
+      sessionChangesFromOtherTabs:
+          sharedSessionChanges(BrowserSessionStorage.sessionIdKey),
     ),
+  );
+}
+
+/// Sin "Mantener sesión iniciada", la sesión dura mientras quede abierta
+/// alguna pestaña de Fixia: esta pestaña avisa que sigue abierta y, al
+/// cerrarse, deja de contar (GC-394). Si el navegador bloquea el
+/// almacenamiento, no se hace nada.
+void _keepTabAlive(OpenTabs openTabs) {
+  void quietly(void Function() action) {
+    try {
+      action();
+    } catch (_) {
+      // Sin `localStorage` no hay sesión compartida que mantener.
+    }
+  }
+
+  quietly(openTabs.markAlive);
+  Timer.periodic(OpenTabs.heartbeat, (_) => quietly(openTabs.markAlive));
+  onTabClosed(
+    () => quietly(openTabs.markClosed),
+    () => quietly(openTabs.markAlive),
   );
 }
 
 class FixiaApp extends StatefulWidget {
   const FixiaApp({
     super.key,
+    this.backend,
     required this.clientRegistrationRepository,
     required this.technicianRegistrationRepository,
     required this.technicianProfileRepository,
@@ -131,7 +195,13 @@ class FixiaApp extends StatefulWidget {
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
     this.sessionStore,
+    this.sessionChangesFromOtherTabs,
   });
+
+  /// Conexión de perfil del cliente, solicitudes, oportunidades y
+  /// postulaciones con el backend. Si es `null`, esas pantallas usan datos de
+  /// demostración.
+  final BackendIntegrations? backend;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -147,12 +217,74 @@ class FixiaApp extends StatefulWidget {
   /// iniciada cuando se restauró desde el almacenamiento.
   final SessionStore? sessionStore;
 
+  /// Avisa cuando otra pestaña inicia o cierra sesión: la sesión es una sola
+  /// en todo el navegador y esta pestaña la sigue (GC-394).
+  final Stream<void>? sessionChangesFromOtherTabs;
+
   @override
   State<FixiaApp> createState() => _FixiaAppState();
 }
 
 class _FixiaAppState extends State<FixiaApp> {
   late final SessionStore _sessionStore = widget.sessionStore ?? SessionStore();
+
+  /// Ruta protegida que un visitante intentó abrir sin sesión (GC-315). Tras
+  /// iniciar sesión se vuelve a ella; si no es para su rol, la guarda de la
+  /// propia ruta lo lleva a su inicio.
+  String? _returnTo;
+
+  /// Hubo una sesión que ya terminó (cierre o vencimiento). Entonces no se
+  /// recuerda la ruta que se estaba viendo: otra persona podría ingresar después
+  /// y no debe heredar el destino de la anterior.
+  bool _sessionEnded = false;
+  bool _wasAuthenticated = false;
+
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<void>? _otherTabs;
+  late final _followSharedSession = FollowSharedSession(
+    widget.authRepository,
+    _sessionStore,
+    widget.sessionStorage,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _wasAuthenticated = _sessionStore.isAuthenticated;
+    _sessionStore.addListener(_onSessionChanged);
+    _otherTabs =
+        widget.sessionChangesFromOtherTabs?.listen((_) => _followOtherTabs());
+  }
+
+  /// Otra pestaña inició o cerró sesión: esta pestaña queda con la misma
+  /// sesión. Si se cerró, va al login; si ahora es otra cuenta, a su inicio.
+  Future<void> _followOtherTabs() async {
+    final change = await _followSharedSession();
+    final navigator = _navigatorKey.currentState;
+    if (!mounted || navigator == null) return;
+    switch (change) {
+      case SharedSessionChange.sameAccount:
+        return;
+      case SharedSessionChange.signedOut:
+        _returnTo = null;
+        navigator.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+      case SharedSessionChange.otherAccount:
+        _returnTo = null;
+        navigator.pushNamedAndRemoveUntil(_accountHome, (_) => false);
+    }
+  }
+
+  void _onSessionChanged() {
+    final authenticated = _sessionStore.isAuthenticated;
+    if (authenticated) {
+      _sessionEnded = false;
+    } else if (_wasAuthenticated) {
+      _sessionEnded = true;
+      _returnTo = null;
+    }
+    _wasAuthenticated = authenticated;
+  }
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -179,6 +311,8 @@ class _FixiaAppState extends State<FixiaApp> {
 
   @override
   void dispose() {
+    _otherTabs?.cancel();
+    _sessionStore.removeListener(_onSessionChanged);
     if (widget.sessionStore == null) _sessionStore.dispose();
     super.dispose();
   }
@@ -205,10 +339,11 @@ class _FixiaAppState extends State<FixiaApp> {
     } catch (_) {
       return false;
     }
+    _returnTo = null;
     if (context.mounted) {
       final route = _sessionStore.profile?.role == UserRole.professional
           ? AppRoutes.technicianProfile
-          : AppRoutes.home;
+          : _accountHome;
       Navigator.of(context).pushNamedAndRemoveUntil(route, (_) => false);
     }
     return true;
@@ -216,6 +351,28 @@ class _FixiaAppState extends State<FixiaApp> {
 
   void _goToLogin(BuildContext context) => Navigator.of(context)
       .pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+
+  /// Inicio de la cuenta con sesión según su rol. La raíz (`/`) es siempre
+  /// la página de bienvenida, también con sesión iniciada.
+  String get _accountHome => switch (_sessionStore.profile?.role) {
+        UserRole.client => AppRoutes.clientDashboard,
+        UserRole.professional => AppRoutes.technicianDashboard,
+        _ => AppRoutes.session,
+      };
+
+  /// Después de iniciar sesión: al inicio del rol y, si el visitante había
+  /// pedido una ruta protegida, a esa ruta (GC-315). La guarda de la ruta
+  /// decide si es para su rol; si no, queda en su inicio.
+  void _goAfterLogin(BuildContext context) {
+    final target = _returnTo;
+    _returnTo = null;
+    final navigator = Navigator.of(context);
+    final home = _accountHome;
+    navigator.pushNamedAndRemoveUntil(home, (_) => false);
+    if (target != null && target != AppRoutes.home && target != home) {
+      navigator.pushNamed(target);
+    }
+  }
 
   /// Aplica la regla de acceso de la ruta (GC-314, `RouteGuard`). Las rutas
   /// protegidas escuchan la sesión: si se cierra o vence mientras están
@@ -232,9 +389,11 @@ class _FixiaAppState extends State<FixiaApp> {
         case RouteDecision.allow:
           return builder(context);
         case RouteDecision.toLogin:
+          // Un visitante que pide una ruta protegida vuelve a ella al ingresar.
+          if (!_sessionEnded) _returnTo = ModalRoute.of(context)?.settings.name;
           return const _RedirectTo(AppRoutes.login);
         case RouteDecision.toHome:
-          return const _RedirectTo(AppRoutes.home);
+          return _RedirectTo(_accountHome);
       }
     }
 
@@ -285,7 +444,11 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   Widget _clientServiceRequestPage(BuildContext context) {
+    final backend = widget.backend;
     return ServiceRequestPage(
+      publish: backend == null
+          ? null
+          : (draft) => _publishServiceRequest(context, backend, draft),
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
@@ -301,7 +464,11 @@ class _FixiaAppState extends State<FixiaApp> {
         profile.role != UserRole.client) {
       return _loginPage(context);
     }
+    final backend = widget.backend;
     return ClientProfilePage(
+      saveProfile: backend == null
+          ? null
+          : (update) => _saveClientProfile(context, backend, update),
       firstName: profile.firstName,
       lastName: profile.lastName,
       email: profile.email,
@@ -343,7 +510,13 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   Widget _technicianOpportunitiesPage(BuildContext context) {
+    final backend = widget.backend;
     return TechnicianOpportunitiesPage(
+      loadOpportunities:
+          backend == null ? null : () => _loadOpportunities(context, backend),
+      applyTo: backend == null
+          ? null
+          : (id) => _applyToOpportunity(context, backend, id),
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
@@ -352,6 +525,98 @@ class _FixiaAppState extends State<FixiaApp> {
       onOpenProfile: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianProfile),
     );
+  }
+
+  /// GC-320: guarda nombre, apellido y teléfono del cliente en ms-users.
+  Future<void> _saveClientProfile(
+    BuildContext context,
+    BackendIntegrations backend,
+    ClientProfileUpdate update,
+  ) async {
+    try {
+      await UpdateClientProfile(backend.clientProfile)(update);
+    } on ClientProfileFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(
+        failure.fieldErrors.isEmpty
+            ? failure.message
+            : failure.fieldErrors.values.join(' '),
+      );
+    }
+  }
+
+  /// GC-335: publica la solicitud del cliente en ms-services.
+  Future<void> _publishServiceRequest(
+    BuildContext context,
+    BackendIntegrations backend,
+    ServiceRequestDraft draft,
+  ) async {
+    try {
+      await PublishServiceRequest(backend.serviceRequests)(
+        NewServiceRequest(
+          category: draft.category,
+          description: draft.description,
+          approximateLocation: ApproximateLocation(
+            city: draft.city,
+            zone: draft.zone,
+          ),
+          expectedAt: draft.expectedAt,
+        ),
+      );
+    } on ServiceRequestFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(
+        failure.fieldErrors.isEmpty
+            ? failure.message
+            : failure.fieldErrors.values.join(' '),
+      );
+    }
+  }
+
+  /// GC-340: solicitudes compatibles con el técnico, desde ms-services.
+  Future<List<ServiceOpportunity>> _loadOpportunities(
+    BuildContext context,
+    BackendIntegrations backend,
+  ) async {
+    try {
+      final page = await ListCompatibleOpportunities(backend.opportunities)();
+      return [for (final item in page.items) opportunityView(item)];
+    } on OpportunityFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(failure.message);
+    }
+  }
+
+  /// GC-345: postulación del técnico a una solicitud, en ms-services.
+  Future<void> _applyToOpportunity(
+    BuildContext context,
+    BackendIntegrations backend,
+    String opportunityId,
+  ) async {
+    try {
+      await ApplyToServiceRequest(backend.applications)(opportunityId);
+    } on ApplicationFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(
+        failure.reasons.isEmpty
+            ? failure.message
+            : failure.reasons.map((reason) => reason.message).join(' '),
+      );
+    }
+  }
+
+  /// La sesión venció mientras se usaba una pantalla: se vuelve al login.
+  void _endExpiredSession(BuildContext context) {
+    _sessionStore.clear();
+    _goToLogin(context);
   }
 
   Widget _technicianProfilePage(BuildContext context) {
@@ -383,10 +648,7 @@ class _FixiaAppState extends State<FixiaApp> {
         _sessionStore,
         widget.sessionStorage,
       ),
-      onLoggedIn: () => Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.home,
-        (_) => false,
-      ),
+      onLoggedIn: () => _goAfterLogin(context),
       onGoToRegistration: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.clientRegistration),
     );
@@ -395,21 +657,24 @@ class _FixiaAppState extends State<FixiaApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Fixia',
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
       initialRoute: AppRoutes.home,
       routes: {
-        // El inicio autenticado se selecciona según el rol de la cuenta.
-        AppRoutes.home: (context) => _sessionStore.isAuthenticated
-            ? _sessionPage(context)
-            : HomePage(
-                onRegisterClient: () => Navigator.of(context)
-                    .pushNamed(AppRoutes.clientRegistration),
-                onRegisterTechnician: () => Navigator.of(context)
-                    .pushNamed(AppRoutes.technicianRegistration),
-                onLogin: () => Navigator.of(context).pushNamed(AppRoutes.login),
-              ),
+        // La bienvenida se ve siempre, también con sesión iniciada (por
+        // ejemplo, al abrir otra pestaña). Con sesión, «Iniciar sesión» lleva
+        // directo al inicio de la cuenta en vez de pedir las credenciales.
+        AppRoutes.home: (context) => HomePage(
+              onRegisterClient: () =>
+                  Navigator.of(context).pushNamed(AppRoutes.clientRegistration),
+              onRegisterTechnician: () => Navigator.of(context)
+                  .pushNamed(AppRoutes.technicianRegistration),
+              onLogin: () => _sessionStore.isAuthenticated
+                  ? Navigator.of(context).pushNamed(_accountHome)
+                  : Navigator.of(context).pushNamed(AppRoutes.login),
+            ),
         AppRoutes.login: _guard(RouteAccess.guestOnly, _loginPage),
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
         AppRoutes.session: _guard(RouteAccess.authenticated, _sessionPage),
@@ -418,6 +683,9 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.clientRegistration: _guard(
             RouteAccess.guestOnly,
             (context) => RegistrationPage(
+                  // Como el técnico: tras crear la cuenta se inicia sesión.
+                  onAutoLogin: (email, password) =>
+                      _signInAfterRegistration(context, email, password),
                   registerAccount:
                       RegisterAccount(widget.clientRegistrationRepository),
                   onGoToLogin: () => Navigator.of(context)
@@ -441,6 +709,11 @@ class _FixiaAppState extends State<FixiaApp> {
                 )),
         AppRoutes.clientDashboard:
             _guard(RouteAccess.client, _clientDashboardPage),
+        // Rutas anteriores («demo»): llevan al inicio del rol, o al login.
+        AppRoutes.legacyClientDashboard:
+            _guard(RouteAccess.authenticated, (_) => _RedirectTo(_accountHome)),
+        AppRoutes.legacyTechnicianDashboard:
+            _guard(RouteAccess.authenticated, (_) => _RedirectTo(_accountHome)),
         AppRoutes.technicianDashboard:
             _guard(RouteAccess.professional, _technicianDashboardPage),
         AppRoutes.clientProfile: _guard(RouteAccess.client, _clientProfilePage),
@@ -451,10 +724,13 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
       },
-      // Una URL que no existe lleva al inicio en vez de mostrar un error.
+      // Una URL que no existe lleva al inicio (el de la cuenta, con sesión)
+      // en vez de mostrar un error.
       onUnknownRoute: (settings) => MaterialPageRoute<void>(
         settings: settings,
-        builder: (_) => const _RedirectTo(AppRoutes.home),
+        builder: (_) => _RedirectTo(
+          _sessionStore.isAuthenticated ? _accountHome : AppRoutes.home,
+        ),
       ),
     );
   }
@@ -604,4 +880,14 @@ class _TechnicianDashboardLoaderState
       },
     );
   }
+}
+
+/// Error con un texto listo para mostrarle al usuario.
+class _UserMessage implements Exception {
+  const _UserMessage(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

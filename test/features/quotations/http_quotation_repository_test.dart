@@ -242,6 +242,71 @@ void main() {
     });
   });
 
+  group('respuesta del cliente (GC-361)', () {
+    for (final (decision, status, path) in [
+      ('accept', 'ACCEPTED', 'acceptance'),
+      ('reject', 'REJECTED', 'rejection'),
+    ]) {
+      test('$decision: POST a /$path y devuelve la cotización', () async {
+        late http.Request sent;
+        final repository = _repository((request) async {
+          sent = request;
+          return _json(200, _quotationJson(status: status, statusName: null));
+        });
+
+        final quotation = decision == 'accept'
+            ? await repository.accept('req-1', 'q-1')
+            : await repository.reject('req-1', 'q-1');
+
+        expect(sent.method, 'POST');
+        expect(
+          sent.url.toString(),
+          'http://localhost/api/services/requests/req-1/quotations/q-1/$path',
+        );
+        expect(sent.headers['Authorization'], 'Bearer token-1');
+        expect(quotation.status.apiValue, status);
+      });
+    }
+
+    test('409: usa el motivo del backend', () async {
+      final repository = _repository((_) async => _json(409, {
+            'detail': 'La solicitud ya tiene una cotización aceptada',
+          }));
+
+      await expectLater(
+        repository.accept('req-1', 'q-1'),
+        throwsA(_failure('La solicitud ya tiene una cotización aceptada')),
+      );
+    });
+
+    test('409 sin motivo explica que ya no se puede responder', () async {
+      final repository = _repository((_) async => _json(409, {}));
+
+      await expectLater(
+        repository.reject('req-1', 'q-1'),
+        throwsA(_failure(HttpQuotationRepository.responseNotAllowedMessage)),
+      );
+    });
+
+    test('404: la cotización o la solicitud no es suya', () async {
+      final repository = _repository((_) async => _json(404, {}));
+
+      await expectLater(
+        repository.accept('req-1', 'q-x'),
+        throwsA(_failure(HttpQuotationRepository.notFoundMessage)),
+      );
+    });
+
+    test('200 sin una cotización válida es un error', () async {
+      final repository = _repository((_) async => _json(200, {'id': 'q-1'}));
+
+      await expectLater(
+        repository.accept('req-1', 'q-1'),
+        throwsA(_failure(HttpQuotationRepository.unexpectedErrorMessage)),
+      );
+    });
+  });
+
   group('errores comunes', () {
     for (final (status, message) in [
       (403, HttpQuotationRepository.forbiddenMessage),

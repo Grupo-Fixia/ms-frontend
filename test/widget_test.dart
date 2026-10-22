@@ -302,8 +302,9 @@ void main() {
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
-  testWidgets('con sesión iniciada, la página de inicio muestra el dashboard',
-      (tester) async {
+  testWidgets(
+      'con sesión iniciada se ve la bienvenida y «Iniciar sesión» lleva al '
+      'dashboard sin pedir credenciales', (tester) async {
     final store = SessionStore()..start(fixtureSession, fixtureProfile);
     await _pumpApp(tester, sessionStore: store);
 
@@ -311,8 +312,12 @@ void main() {
         .state<NavigatorState>(find.byType(Navigator))
         .pushNamed(AppRoutes.home);
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-title')), findsOneWidget);
 
-    expect(find.byKey(const ValueKey('home-title')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('home-login')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
     expect(find.byKey(const ValueKey('client-dashboard-greeting')),
         findsOneWidget);
     expect(find.text('Hola, Ana'), findsOneWidget);
@@ -341,7 +346,8 @@ void main() {
       find.byKey(const ValueKey('client-profile-phone')),
       '+573001112233',
     );
-    await tester.ensureVisible(find.byKey(const ValueKey('client-profile-save')));
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('client-profile-save')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('client-profile-save')));
     await tester.pumpAndSettle();

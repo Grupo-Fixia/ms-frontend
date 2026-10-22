@@ -6,10 +6,16 @@ class ServiceRequestDraft {
     required this.description,
     required this.expectedAt,
     required this.photoCount,
+    this.city = '',
+    this.zone = '',
   });
 
   final ServiceCategory category;
   final String description;
   final DateTime expectedAt;
   final int photoCount;
+
+  /// Ubicación aproximada que se comparte con los técnicos (GC-335).
+  final String city;
+  final String zone;
 }
