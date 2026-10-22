@@ -288,7 +288,7 @@ class _QuotationDetailPageState extends State<QuotationDetailPage> {
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Cancelar'),
               ),
-              OutlinedButton(
+              FilledButton(
                 key: const ValueKey('reject-confirm'),
                 onPressed: () => Navigator.of(context)
                     .pop((reason: reasonController.text, counter: null)),
