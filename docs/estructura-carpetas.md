@@ -97,7 +97,7 @@ infrastructure ──► application ──► domain
 - `core/constants/` guarda valores globales; por ejemplo `dataPolicyVersion` (`v1.0`, acordada con backend) y `ServiceCategory`, las 6 categorías de servicio que acepta ms-users.
 - `core/config/api_config.dart` define la URL base del backend (`ApiConfig.usersBaseUrl`): se fija al compilar con `--dart-define=USERS_API_BASE_URL=...` y por defecto es `http://localhost`, el origen que sirve Traefik. Ninguna funcionalidad escribe URLs del backend a mano.
 - `core/validation/` guarda reglas que usan varias funcionalidades; por ejemplo `EmailRule`, que comparten el registro y el inicio de sesión.
-- `core/http/authorized_http.dart` (`AuthorizedHttp`) envía las llamadas con sesión: pone el access token y, ante un 401, renueva la sesión una sola vez y reintenta. Cada repositorio traduce el resto de respuestas a sus propios errores.
+- `core/http/authorized_http.dart` (`AuthorizedHttp`) envía las llamadas con sesión: pone el access token y, ante un 401, renueva la sesión y reintenta una vez. Si varias peticiones reciben 401 a la vez hace una sola renovación y todas la esperan, y si una petición salió con un token que ya se renovó, reintenta sin volver a renovar. La app usa una sola instancia. Cada repositorio traduce el resto de respuestas a sus propios errores.
 - `core/widgets/` guarda widgets que usan varias funcionalidades; por ejemplo `TechnicianSteps` (crear cuenta → completar perfil → verificación), que muestran el registro y el perfil del técnico.
 - Algo pasa a `core/` cuando lo necesita **más de una** funcionalidad.
 
