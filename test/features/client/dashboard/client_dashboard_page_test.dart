@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/client/dashboard/presentation/client_dashboard_page.dart';
+import 'package:ms_frontend/features/client/profile/presentation/client_profile_page.dart';
 
 void main() {
   testWidgets('muestra el catálogo de técnicos con acciones y datos mock',
@@ -153,6 +154,37 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('client-nav-perfil')));
 
     expect(profileOpens, 1);
+  });
+
+  testWidgets('navega del dashboard al perfil y de vuelta sin conexión',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FixiaTheme.light,
+        initialRoute: '/dashboard',
+        routes: {
+          '/dashboard': (context) => ClientDashboardPage(
+                onOpenProfile: () =>
+                    Navigator.of(context).pushNamed('/profile'),
+              ),
+          '/profile': (context) => ClientProfilePage(
+                firstName: 'Ana',
+                lastName: 'Pérez',
+                email: 'ana@fixia.com',
+                onOpenHome: () =>
+                    Navigator.of(context).pushReplacementNamed('/dashboard'),
+              ),
+        },
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('client-nav-perfil')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('client-profile-title')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('client-profile-nav-home')));
+    await tester.pumpAndSettle();
+    expect(find.text('Encuentra tu técnico'), findsOneWidget);
   });
 
   testWidgets('el encabezado ya no muestra la campana de notificaciones',
