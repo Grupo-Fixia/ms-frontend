@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
 import '../application/ports/service_request_repository.dart';
+import '../domain/applicant.dart';
 import '../domain/service_request.dart';
 import '../domain/service_request_exceptions.dart';
 
@@ -18,8 +19,15 @@ import '../domain/service_request_exceptions.dart';
 ///   reciente primero.
 /// - `GET /api/services/requests/{id}` → `200`; `404` si no existe o es de
 ///   otro cliente.
+/// - `GET /api/services/requests/{id}/applications` → `200` con los
+///   postulantes en orden de llegada (GC-347).
+/// - `POST /api/services/requests/{id}/applications/{applicationId}/selection`
+///   → `200` con la solicitud en `PROVIDER_SELECTED` (GC-348); `409` si ya
+///   no admite seleccionar prestador.
 /// - `400` con `errors[{field, message}]` (`approximateLocation.city`) o
 ///   solo con `detail` para reglas de negocio. `403` el rol no es cliente.
+/// - `404` con título "Postulación no encontrada" cuando la postulación no
+///   es de esa solicitud; si no, la solicitud no existe o es de otro cliente.
 class HttpServiceRequestRepository implements ServiceRequestRepository {
   HttpServiceRequestRepository({
     required http.Client client,
@@ -37,6 +45,10 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       'Tu sesión expiró. Inicia sesión de nuevo.';
   static const forbiddenMessage = 'Esta sección es solo para clientes.';
   static const notFoundMessage = 'No encontramos esa solicitud.';
+  static const applicationNotFoundMessage =
+      'Ese prestador no está entre los postulantes de la solicitud.';
+  static const notSelectableMessage =
+      'Esta solicitud ya no admite seleccionar prestador.';
   static const invalidDataMessage = 'Revisa los datos marcados.';
   static const unexpectedErrorMessage =
       'No pudimos completar la acción. Inténtalo más tarde.';
@@ -97,15 +109,46 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
 
   @override
   Future<ServiceRequest> getMine(String id) async {
-    final uri = _endpoint.replace(
-      pathSegments: [..._endpoint.pathSegments, id],
-    );
     final response = await _send(
-      (headers) => _client.get(uri, headers: headers),
+      (headers) => _client.get(_resource([id]), headers: headers),
     );
     _throwOnError(response);
     return _requireRequest(_decode(response));
   }
+
+  @override
+  Future<List<Applicant>> listApplicants(String requestId) async {
+    final response = await _send(
+      (headers) => _client.get(
+        _resource([requestId, 'applications']),
+        headers: headers,
+      ),
+    );
+    _throwOnError(response);
+    final json = _decode(response);
+    if (json is! List) {
+      throw const ServiceRequestFailure(unexpectedErrorMessage);
+    }
+    return List.unmodifiable(json.map(_parseApplicant).whereType<Applicant>());
+  }
+
+  @override
+  Future<ServiceRequest> selectProvider(
+    String requestId,
+    String applicationId,
+  ) async {
+    final response = await _send(
+      (headers) => _client.post(
+        _resource([requestId, 'applications', applicationId, 'selection']),
+        headers: headers,
+      ),
+    );
+    _throwOnError(response);
+    return _requireRequest(_decode(response));
+  }
+
+  Uri _resource(List<String> segments) =>
+      _endpoint.replace(pathSegments: [..._endpoint.pathSegments, ...segments]);
 
   Future<http.Response> _send(
     Future<http.Response> Function(Map<String, String> headers) request,
@@ -138,10 +181,45 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       case 403:
         throw const ServiceRequestFailure(forbiddenMessage);
       case 404:
-        throw const ServiceRequestFailure(notFoundMessage);
+        final title = _problemTitle(response);
+        throw ServiceRequestFailure(
+          title == 'Postulación no encontrada'
+              ? applicationNotFoundMessage
+              : notFoundMessage,
+        );
+      case 409:
+        throw const ServiceRequestFailure(notSelectableMessage);
       default:
         throw const ServiceRequestFailure(unexpectedErrorMessage);
     }
+  }
+
+  String? _problemTitle(http.Response response) {
+    final body = _decode(response);
+    final title = body is Map ? body['title'] : null;
+    return title is String ? title : null;
+  }
+
+  /// `null` si faltan datos esenciales o el estado es desconocido.
+  Applicant? _parseApplicant(Object? json) {
+    if (json is! Map) return null;
+    final id = json['id'];
+    final providerId = json['providerId'];
+    final status = ApplicationStatus.fromApi(_string(json['status']));
+    if (id is! String ||
+        id.isEmpty ||
+        providerId is! String ||
+        providerId.isEmpty ||
+        status == null) {
+      return null;
+    }
+    return Applicant(
+      id: id,
+      providerId: providerId,
+      status: status,
+      createdAt: _date(json['createdAt']),
+      updatedAt: _date(json['updatedAt']),
+    );
   }
 
   ServiceRequest _requireRequest(Object? json) {
