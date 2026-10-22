@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
+import 'package:ms_frontend/core/http/authorized_http.dart';
 import 'package:ms_frontend/features/technician/profile/domain/professional_profile_update.dart';
 import 'package:ms_frontend/features/technician/profile/domain/technician_profile_exceptions.dart';
 import 'package:ms_frontend/features/technician/profile/domain/verification_status.dart';
@@ -396,5 +397,28 @@ void main() {
     }
     expect(ServiceCategory.fromApi('OTRA'), isNull);
     expect(ServiceCategory.fromApi(null), isNull);
+  });
+
+  test('sin red al renovar la sesión: error de conexión, no sesión vencida',
+      () async {
+    final repository = HttpTechnicianProfileRepository(
+      client: MockClient((_) async => http.Response('', 401)),
+      baseUrl: Uri.parse('http://localhost'),
+      accessToken: () => 'token-1',
+      renewSession: () => throw const BackendUnreachableException(),
+    );
+
+    await expectLater(
+      repository.fetchProfile(),
+      throwsA(
+        isA<TechnicianProfileFailure>()
+            .having((f) => f.isSessionExpired, 'isSessionExpired', isFalse)
+            .having(
+              (f) => f.message,
+              'message',
+              HttpTechnicianProfileRepository.connectionErrorMessage,
+            ),
+      ),
+    );
   });
 }

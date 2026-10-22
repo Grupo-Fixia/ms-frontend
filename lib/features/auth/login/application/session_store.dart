@@ -15,6 +15,10 @@ class SessionStore extends ChangeNotifier {
   UserProfile? get profile => _profile;
   bool get isAuthenticated => _session != null && _profile != null;
 
+  /// Renovación en curso, o `null` si no hay ninguna. Cerrar sesión la espera
+  /// para revocar el token más nuevo.
+  Future<bool>? get pendingRenewal => _renewal;
+
   void start(AuthSession session, UserProfile profile) {
     _session = session;
     _profile = profile;

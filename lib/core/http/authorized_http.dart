@@ -26,6 +26,8 @@ class BackendUnreachableException implements Exception {
 ///   viajaba, se repite con el token nuevo sin volver a renovar.
 ///
 /// Para que esto aplique entre repositorios, la app usa una sola instancia.
+/// [renewSession] devuelve `false` si la sesión venció y lanza
+/// [BackendUnreachableException] si no hubo red (`RefreshSession.renew`).
 class AuthorizedHttp {
   AuthorizedHttp({
     required String? Function() accessToken,
@@ -70,9 +72,13 @@ class AuthorizedHttp {
     return renewal.whenComplete(() => _renewal = null);
   }
 
+  /// Si la renovación no pudo contactar al backend, se informa como tal: la
+  /// sesión puede seguir siendo válida y no hay que sacar al usuario.
   Future<bool> _renewSafely() async {
     try {
       return await _renewSession();
+    } on BackendUnreachableException {
+      rethrow;
     } catch (_) {
       return false;
     }

@@ -1,4 +1,3 @@
-import '../domain/auth_exceptions.dart';
 import 'ports/auth_repository.dart';
 import 'ports/session_storage.dart';
 import 'session_store.dart';
@@ -29,10 +28,10 @@ class LoginUser {
     try {
       final profile = await _repository.fetchProfile(session.accessToken);
       _store.start(session, profile);
-    } on AuthFailure {
+    } catch (_) {
       try {
         await _repository.logout(session);
-      } on AuthFailure {
+      } catch (_) {
         // Sin sesión local no hay nada más que limpiar.
       }
       rethrow;
