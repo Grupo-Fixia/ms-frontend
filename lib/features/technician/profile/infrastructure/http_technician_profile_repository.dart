@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/http/authorized_http.dart';
 import '../application/ports/technician_profile_repository.dart';
 import '../domain/professional_profile_update.dart';
 import '../domain/technician_profile.dart';
@@ -91,7 +92,7 @@ class HttpTechnicianProfileRepository implements TechnicianProfileRepository {
   ) async {
     var response = await _send(request, _accessToken());
     if (response.statusCode != 401) return response;
-    if (!await _renewSession()) {
+    if (!await _renew()) {
       throw const TechnicianProfileFailure(
         sessionExpiredMessage,
         isSessionExpired: true,
@@ -105,6 +106,16 @@ class HttpTechnicianProfileRepository implements TechnicianProfileRepository {
       );
     }
     return response;
+  }
+
+  /// Una falla de red al renovar no es una sesión vencida: se informa como
+  /// problema de conexión y el técnico no sale de su sesión.
+  Future<bool> _renew() async {
+    try {
+      return await _renewSession();
+    } on BackendUnreachableException {
+      throw const TechnicianProfileFailure(connectionErrorMessage);
+    }
   }
 
   Future<http.Response> _send(

@@ -117,7 +117,7 @@ class HttpAuthRepository implements AuthRepository {
           email: email,
           firstName: _string(json?['firstName']),
           lastName: _string(json?['lastName']),
-          role: UserRole.fromApi(json?['role'] as String?),
+          role: UserRole.fromApi(_nullableString(json?['role'])),
         );
       }
     }
@@ -163,6 +163,8 @@ class HttpAuthRepository implements AuthRepository {
   }
 
   String _string(Object? value) => value is String ? value : '';
+
+  String? _nullableString(Object? value) => value is String ? value : null;
 
   /// El cuerpo se decodifica como UTF-8 a mano: `application/problem+json`
   /// no declara charset y `response.body` lo leería como Latin-1.

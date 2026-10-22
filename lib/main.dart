@@ -75,7 +75,7 @@ Future<void> main() async {
           authRepository,
           sessionStore,
           sessionStorage,
-        ).call,
+        ).renew,
       ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
