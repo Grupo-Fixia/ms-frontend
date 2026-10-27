@@ -123,14 +123,19 @@ class _Opportunities implements OpportunityRepository {
 
 class _Applications implements ApplicationRepository {
   final applied = <String>[];
+  final saved = <ServiceApplication>[];
+  ProposedPrice? price;
   Object? failure;
 
   @override
-  Future<ServiceApplication> apply(String serviceRequestId) async {
+  Future<ServiceApplication> apply(String serviceRequestId,
+      {ProposedPrice? proposedPrice}) async {
     if (failure != null) throw failure!;
     applied.add(serviceRequestId);
-    return ServiceApplication(
+    price = proposedPrice;
+    final result = ServiceApplication(
       id: 'app-1',
+      proposedPrice: proposedPrice,
       status: ApplicationStatus.applied,
       serviceRequest: ApplicationRequestSummary(
         id: serviceRequestId,
@@ -139,10 +144,12 @@ class _Applications implements ApplicationRepository {
         zone: 'Chapinero',
       ),
     );
+    saved.add(result);
+    return result;
   }
 
   @override
-  Future<List<ServiceApplication>> listMine() => throw UnimplementedError();
+  Future<List<ServiceApplication>> listMine() async => List.unmodifiable(saved);
 
   @override
   Future<ServiceApplication> getMine(String id) => throw UnimplementedError();
@@ -468,7 +475,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Fuga en el baño principal'), findsWidgets);
       expect(find.textContaining('Demostración local'), findsNothing);
-      await tester.tap(key('technician-apply-sr-leak'));
+      final price = key('application-price');
+      await tester.ensureVisible(price);
+      await tester.enterText(price, '150000');
+      await tester.ensureVisible(key('application-price-submit'));
+      await tester.tap(key('application-price-submit'));
       await tester.pumpAndSettle();
     }
 
@@ -478,7 +489,26 @@ void main() {
       await applyTo(tester);
 
       expect(applications.applied, ['sr-leak']);
+      expect(applications.price?.amount, '150000');
       expect(key('technician-apply-done'), findsOneWidget);
+    });
+
+    testWidgets(
+        'precio confirmado se recupera al consultar y refrescar postulaciones',
+        (tester) async {
+      await pump(tester, _technician, AppRoutes.technicianOpportunities);
+      await applyTo(tester);
+      expect(find.text('Precio confirmado: 150.000 COP'), findsOneWidget);
+      await tester.tap(find.byTooltip('Cerrar detalle'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(key('open-my-applications'));
+      await tester.tap(key('open-my-applications'));
+      await tester.pumpAndSettle();
+      expect(find.text('150.000 COP'), findsOneWidget);
+      await tester.tap(find.byTooltip('Actualizar postulaciones'));
+      await tester.pumpAndSettle();
+      expect(find.text('150.000 COP'), findsOneWidget);
+      expect(applications.applied.length, 1);
     });
 
     testWidgets('si no puede postularse, explica el motivo', (tester) async {

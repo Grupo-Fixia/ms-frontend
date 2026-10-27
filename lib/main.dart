@@ -43,6 +43,8 @@ import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/applications/application/application_use_cases.dart';
 import 'features/technician/applications/domain/application_exceptions.dart';
+import 'features/technician/applications/domain/service_application.dart';
+import 'features/technician/applications/presentation/my_application_prices_page.dart';
 import 'features/technician/opportunities/application/list_compatible_opportunities.dart';
 import 'features/technician/opportunities/domain/opportunity_exceptions.dart';
 import 'features/technician/opportunities/domain/service_opportunity.dart';
@@ -542,7 +544,16 @@ class _FixiaAppState extends State<FixiaApp> {
           backend == null ? null : () => _loadOpportunities(context, backend),
       applyTo: backend == null
           ? null
-          : (id) => _applyToOpportunity(context, backend, id),
+          : (id, price) => _applyToOpportunity(context, backend, id, price),
+      onOpenMyApplications: backend == null
+          ? null
+          : () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                    builder: (_) => MyApplicationPricesPage(
+                          loadApplications: () =>
+                              _loadMyApplications(context, backend),
+                        )),
+              ),
       onBack: () => Navigator.of(context).maybePop(),
       onOpenHome: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianDashboard),
@@ -620,21 +631,44 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   /// GC-345: postulación del técnico a una solicitud, en ms-services.
-  Future<void> _applyToOpportunity(
+  Future<List<ServiceApplication>> _loadMyApplications(
+      BuildContext context, BackendIntegrations backend) async {
+    try {
+      return await ListMyApplications(backend.applications)();
+    } on ApplicationFailure catch (failure) {
+      if (failure.isSessionExpired && context.mounted) {
+        _endExpiredSession(context);
+      }
+      throw _UserMessage(failure.message);
+    }
+  }
+
+  /// Envía el precio y devuelve el importe confirmado por Backend.
+  Future<ProposedPrice> _applyToOpportunity(
     BuildContext context,
     BackendIntegrations backend,
     String opportunityId,
+    ProposedPrice price,
   ) async {
     try {
-      await ApplyToServiceRequest(backend.applications)(opportunityId);
+      final saved = await ApplyToServiceRequest(backend.applications)(
+          opportunityId,
+          proposedPrice: price);
+      if (saved.proposedPrice == null) {
+        throw const ApplicationFailure(
+            'No pudimos confirmar el precio guardado. Consulta tus postulaciones antes de reintentar.');
+      }
+      return saved.proposedPrice!;
     } on ApplicationFailure catch (failure) {
       if (failure.isSessionExpired && context.mounted) {
         _endExpiredSession(context);
       }
       throw _UserMessage(
-        failure.reasons.isEmpty
-            ? failure.message
-            : failure.reasons.map((reason) => reason.message).join(' '),
+        failure.fieldErrors.isNotEmpty
+            ? failure.fieldErrors.values.join(' ')
+            : failure.reasons.isEmpty
+                ? failure.message
+                : failure.reasons.map((reason) => reason.message).join(' '),
       );
     }
   }

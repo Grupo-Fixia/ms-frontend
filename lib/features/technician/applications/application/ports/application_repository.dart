@@ -6,7 +6,8 @@ import '../../domain/service_application.dart';
 /// solicitud o no se puede contactar.
 abstract interface class ApplicationRepository {
   /// Registra la postulación (estado `applied`).
-  Future<ServiceApplication> apply(String serviceRequestId);
+  Future<ServiceApplication> apply(String serviceRequestId,
+      {ProposedPrice? proposedPrice});
 
   /// Postulaciones del técnico, la más reciente primero.
   Future<List<ServiceApplication>> listMine();

@@ -1,8 +1,24 @@
 import '../../../../core/constants/service_category.dart';
+import 'proposed_price.dart';
+export 'proposed_price.dart';
 import '../../../../core/constants/application_status.dart';
 import '../../../../core/constants/service_request_status.dart';
 
 export '../../../../core/constants/application_status.dart';
+
+enum ApplicationProviderType {
+  independent('INDEPENDENT'),
+  company('COMPANY');
+
+  const ApplicationProviderType(this.apiValue);
+  final String apiValue;
+  static ApplicationProviderType? fromApi(String? value) {
+    for (final type in values) {
+      if (type.apiValue == value) return type;
+    }
+    return null;
+  }
+}
 
 /// Resumen de la solicitud a la que se postuló el técnico. Solo trae la
 /// ubicación aproximada: la exacta no se comparte con los postulantes.
@@ -38,6 +54,9 @@ class ServiceApplication {
     required this.serviceRequest,
     this.createdAt,
     this.updatedAt,
+    this.proposedPrice,
+    this.providerType,
+    this.technicianId,
   });
 
   final String id;
@@ -45,4 +64,9 @@ class ServiceApplication {
   final ApplicationRequestSummary serviceRequest;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  /// Ausente en registros históricos o mientras no exista contrato de lectura.
+  final ProposedPrice? proposedPrice;
+  final ApplicationProviderType? providerType;
+  final String? technicianId;
 }
