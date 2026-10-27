@@ -8,12 +8,14 @@ import '../../../../core/http/authorized_http.dart';
 import '../application/ports/application_repository.dart';
 import '../domain/application_exceptions.dart';
 import '../domain/service_application.dart';
+import 'application_json.dart';
 
 /// Postulaciones del técnico contra ms-services (GC-345, API de GC-342 y
 /// GC-343).
 ///
 /// Contrato (`docs/openapi.yaml` de ms-services):
-/// - `POST /api/services/applications` con `{serviceRequestId}` → `201`
+/// - `POST /api/services/applications` con
+///   `{serviceRequestId, proposedAmount, currency: COP}` → `201`
 ///   (`APPLIED`). El técnico sale del token.
 /// - `GET /api/services/applications` y `GET .../{id}` → `200`.
 /// - `400` datos inválidos; `403` el rol no es técnico; `404` la solicitud o
@@ -30,15 +32,20 @@ class HttpApplicationRepository implements ApplicationRepository {
         _http = authorizedHttp;
 
   static const path = '/api/services/applications';
+  static const unconfirmedPriceMessage =
+      'No pudimos confirmar el precio guardado. Consulta tus postulaciones antes de reintentar.';
 
   static const connectionErrorMessage =
       'No pudimos conectar con Fixia. Revisa tu conexión e inténtalo de nuevo.';
   static const sessionExpiredMessage =
       'Tu sesión expiró. Inicia sesión de nuevo.';
-  static const forbiddenMessage = 'Esta sección es solo para técnicos.';
+  static const forbiddenMessage =
+      'No tienes permiso para realizar esta acción.';
   static const notFoundMessage = 'No encontramos esa solicitud o postulación.';
   static const invalidDataMessage = 'Revisa los datos de la postulación.';
   static const duplicateMessage = 'Ya te postulaste a esta solicitud.';
+  static const conflictMessage =
+      'Ya existe una postulación o la solicitud no recibe más propuestas. Consulta su estado antes de reintentar.';
   static const notAvailableMessage =
       'Esta solicitud ya no recibe postulaciones.';
   static const notEligibleMessage = 'No puedes postularte a esta solicitud.';
@@ -52,7 +59,13 @@ class HttpApplicationRepository implements ApplicationRepository {
   final AuthorizedHttp _http;
 
   @override
-  Future<ServiceApplication> apply(String serviceRequestId) async {
+  Future<ServiceApplication> apply(String serviceRequestId,
+      {ProposedPrice? proposedPrice}) async {
+    if (proposedPrice == null) {
+      throw const ApplicationFailure(invalidDataMessage, fieldErrors: {
+        'proposedAmount': 'Ingresa el precio que propones en COP.'
+      });
+    }
     final response = await _send(
       (headers) => _client.post(
         _endpoint,
@@ -60,11 +73,21 @@ class HttpApplicationRepository implements ApplicationRepository {
           ...headers,
           'Content-Type': 'application/json; charset=utf-8',
         },
-        body: jsonEncode({'serviceRequestId': serviceRequestId}),
+        body: encodeApplicationJson(
+            serviceRequestId: serviceRequestId,
+            amount: proposedPrice.amount,
+            currency: ProposedPrice.currency),
       ),
     );
     _throwOnError(response, success: 201);
-    return _requireApplication(_decode(response));
+    final saved = _requireApplication(_decode(response));
+    if (saved.serviceRequest.id != serviceRequestId ||
+        saved.proposedPrice?.amount != proposedPrice.amount ||
+        saved.providerType != ApplicationProviderType.independent ||
+        saved.technicianId != null) {
+      throw const ApplicationFailure(unconfirmedPriceMessage);
+    }
+    return saved;
   }
 
   @override
@@ -130,7 +153,7 @@ class HttpApplicationRepository implements ApplicationRepository {
             existingApplicationId: existing,
           );
         }
-        throw const ApplicationFailure(notAvailableMessage);
+        throw const ApplicationFailure(conflictMessage);
       case 422:
         final raw = body is Map ? body['reasons'] : null;
         final reasons = raw is List
@@ -171,12 +194,35 @@ class HttpApplicationRepository implements ApplicationRepository {
     if (id is! String || id.isEmpty || status == null || request == null) {
       return null;
     }
+    final rawAmount = json['proposedAmount'];
+    final price = rawAmount is JsonApplicationAmount &&
+            json['currency'] == ProposedPrice.currency
+        ? ProposedPrice.tryParse(rawAmount.lexeme)
+        : null;
+    if (rawAmount != null && price == null) {
+      throw const ApplicationFailure(unconfirmedPriceMessage);
+    }
+    final rawType = json['providerType'];
+    final providerType = ApplicationProviderType.fromApi(_string(rawType));
+    final technicianId = json['technicianId'];
+    if ((rawType != null && providerType == null) ||
+        (technicianId != null &&
+            (technicianId is! String || technicianId.trim().isEmpty)) ||
+        (providerType == ApplicationProviderType.company &&
+            technicianId == null) ||
+        (providerType == ApplicationProviderType.independent &&
+            technicianId != null)) {
+      throw const ApplicationFailure(unconfirmedPriceMessage);
+    }
     return ServiceApplication(
       id: id,
       status: status,
       serviceRequest: request,
       createdAt: _date(json['createdAt']),
       updatedAt: _date(json['updatedAt']),
+      proposedPrice: price,
+      providerType: providerType,
+      technicianId: technicianId as String?,
     );
   }
 
@@ -233,7 +279,7 @@ class HttpApplicationRepository implements ApplicationRepository {
   /// Siempre UTF-8, para que las tildes no lleguen dañadas (TD V1, DEF-02).
   Object? _decode(http.Response response) {
     try {
-      return jsonDecode(utf8.decode(response.bodyBytes));
+      return decodeApplicationJson(utf8.decode(response.bodyBytes));
     } on FormatException {
       return null;
     }

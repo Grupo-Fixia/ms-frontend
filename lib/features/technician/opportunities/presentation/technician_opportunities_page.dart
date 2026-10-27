@@ -5,6 +5,8 @@ import '../../../../core/theme/fixia_theme.dart';
 import '../../../home/presentation/widgets/dashboard_components.dart';
 import '../domain/service_opportunity.dart';
 import '../infrastructure/mock_service_opportunities.dart';
+import '../../applications/domain/proposed_price.dart';
+import '../../applications/presentation/application_price_form.dart';
 
 class TechnicianOpportunitiesPage extends StatefulWidget {
   const TechnicianOpportunitiesPage({
@@ -17,9 +19,11 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
     this.onOpenWallet,
     this.loadOpportunities,
     this.applyTo,
+    this.onOpenMyApplications,
   });
 
   final ValueChanged<String>? onApply;
+  final VoidCallback? onOpenMyApplications;
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
   final VoidCallback? onOpenSpecialties;
@@ -33,7 +37,8 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
   /// Envía la postulación al servidor (GC-345). Si es `null`, la postulación
   /// es solo de demostración. Si falla, lanza una excepción con el mensaje
   /// para el usuario.
-  final Future<void> Function(String opportunityId)? applyTo;
+  final Future<ProposedPrice> Function(
+      String opportunityId, ProposedPrice price)? applyTo;
 
   @override
   State<TechnicianOpportunitiesPage> createState() =>
@@ -121,6 +126,13 @@ class _TechnicianOpportunitiesPageState
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (widget.onOpenMyApplications != null)
+                    TextButton.icon(
+                      key: const ValueKey('open-my-applications'),
+                      onPressed: widget.onOpenMyApplications,
+                      icon: const Icon(Icons.list_alt),
+                      label: const Text('Mis postulaciones'),
+                    ),
                   SizedBox(
                     height: 42,
                     child: ScrollConfiguration(
@@ -279,6 +291,8 @@ class _TechnicianOpportunitiesPageState
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: widget.applyTo == null,
+      enableDrag: widget.applyTo == null,
       constraints: const BoxConstraints(maxWidth: 440),
       backgroundColor: FixiaColors.white,
       shape: const RoundedRectangleBorder(
@@ -288,6 +302,8 @@ class _TechnicianOpportunitiesPageState
         opportunity: opportunity,
         applied: _appliedIds.contains(opportunity.id),
         live: widget.applyTo != null,
+        submitPrice: (price) async =>
+            (await _apply(opportunity, price: price))!,
         onApply: () {
           Navigator.of(context).pop();
           _apply(opportunity);
@@ -296,23 +312,23 @@ class _TechnicianOpportunitiesPageState
     );
   }
 
-  Future<void> _apply(ServiceOpportunity opportunity) async {
+  Future<ProposedPrice?> _apply(ServiceOpportunity opportunity,
+      {ProposedPrice? price}) async {
     final applyTo = widget.applyTo;
     final messenger = ScaffoldMessenger.of(context);
+    ProposedPrice? confirmedPrice;
     if (applyTo != null) {
       try {
-        await applyTo(opportunity.id);
+        if (price == null) {
+          throw const ApplicationPriceFormFailure(
+              'Ingresa el precio que propones en COP.');
+        }
+        confirmedPrice = await applyTo(opportunity.id, price);
       } catch (error) {
-        if (!mounted) return;
-        messenger.showSnackBar(
-          SnackBar(
-            key: const ValueKey('technician-apply-error'),
-            content: Text('$error'),
-          ),
-        );
-        return;
+        if (!mounted) return confirmedPrice;
+        throw ApplicationPriceFormFailure('$error');
       }
-      if (!mounted) return;
+      if (!mounted) return confirmedPrice;
     }
     setState(() => _appliedIds.add(opportunity.id));
     widget.onApply?.call(opportunity.id);
@@ -326,6 +342,7 @@ class _TechnicianOpportunitiesPageState
         ),
       ),
     );
+    return confirmedPrice;
   }
 }
 
@@ -511,12 +528,14 @@ class _OpportunityDetailsSheet extends StatelessWidget {
     required this.opportunity,
     required this.applied,
     required this.onApply,
+    required this.submitPrice,
     this.live = false,
   });
 
   final ServiceOpportunity opportunity;
   final bool applied;
   final VoidCallback onApply;
+  final Future<ProposedPrice> Function(ProposedPrice) submitPrice;
 
   /// La postulación se envía al servidor.
   final bool live;
@@ -548,6 +567,15 @@ class _OpportunityDetailsSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
+              if (live)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Cerrar detalle',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
               Text(
                 opportunity.title,
                 style: Theme.of(context).textTheme.headlineSmall,
@@ -593,14 +621,23 @@ class _OpportunityDetailsSheet extends StatelessWidget {
                     ),
               ),
               const SizedBox(height: 22),
-              FilledButton.icon(
-                key: ValueKey('technician-apply-${opportunity.id}'),
-                onPressed: applied ? null : onApply,
-                icon: Icon(
-                  applied ? Icons.check_circle_outline : Icons.send_outlined,
+              if (live && !applied)
+                ApplicationPriceForm(
+                  serviceRequestId: opportunity.id,
+                  currencyLabel: ProposedPrice.currency,
+                  validatePrice: ProposedPrice.validate,
+                  submit: (input) =>
+                      submitPrice(ProposedPrice.tryParse(input)!),
+                )
+              else
+                FilledButton.icon(
+                  key: ValueKey('technician-apply-${opportunity.id}'),
+                  onPressed: applied ? null : onApply,
+                  icon: Icon(
+                    applied ? Icons.check_circle_outline : Icons.send_outlined,
+                  ),
+                  label: Text(applied ? 'Postulación enviada' : 'Postularse'),
                 ),
-                label: Text(applied ? 'Postulación enviada' : 'Postularse'),
-              ),
               if (!live) ...[
                 const SizedBox(height: 5),
                 Text(
