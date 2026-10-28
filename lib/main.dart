@@ -38,6 +38,7 @@ import 'features/client/service_request/presentation/service_request_page.dart';
 import 'features/client/service_requests/application/service_request_use_cases.dart';
 import 'features/client/service_requests/domain/service_request.dart';
 import 'features/client/service_requests/domain/service_request_exceptions.dart';
+import 'features/client/service_requests/presentation/my_service_requests_page.dart';
 import 'backend_integrations.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
@@ -80,6 +81,7 @@ abstract final class AppRoutes {
   static const legacyClientDashboard = '/demo/inicio-cliente';
   static const legacyTechnicianDashboard = '/demo/inicio-tecnico';
   static const clientServiceRequest = '/cliente/publicar-problema';
+  static const clientServiceRequests = '/cliente/solicitudes';
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianSpecialties = '/tecnico/especialidades';
   static const clientProfile = '/cliente/perfil';
@@ -436,6 +438,8 @@ class _FixiaAppState extends State<FixiaApp> {
     final profile = _sessionStore.profile!;
     return ClientDashboardPage(
       firstName: profile.firstName,
+      onOpenHistory: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientServiceRequests),
       onPublishProblem: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
@@ -447,6 +451,8 @@ class _FixiaAppState extends State<FixiaApp> {
   Widget _clientServiceRequestPage(BuildContext context) {
     final backend = widget.backend;
     return ServiceRequestPage(
+      onOpenHistory: () =>
+          Navigator.of(context).pushNamed(AppRoutes.clientServiceRequests),
       publish: backend == null
           ? null
           : (draft) => _publishServiceRequest(context, backend, draft),
@@ -455,6 +461,31 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
       onOpenProfile: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientProfile),
+    );
+  }
+
+  Widget _myServiceRequestsPage(BuildContext context) {
+    final backend = widget.backend;
+    if (backend == null) {
+      return const Scaffold(
+          body:
+              Center(child: Text('La consulta requiere conexión con Fixia.')));
+    }
+    Future<T> query<T>(Future<T> Function() operation) async {
+      try {
+        return await operation();
+      } on ServiceRequestFailure catch (failure) {
+        if (failure.isSessionExpired && context.mounted) {
+          _endExpiredSession(context);
+        }
+        rethrow;
+      }
+    }
+
+    return MyServiceRequestsPage(
+      load: () => query(() => ListMyServiceRequests(backend.serviceRequests)()),
+      get: (id) =>
+          query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
     );
   }
 
@@ -589,6 +620,7 @@ class _FixiaAppState extends State<FixiaApp> {
             zone: draft.zone,
           ),
           expectedAt: draft.expectedAt,
+          budget: draft.budget,
         ),
       );
     } on ServiceRequestFailure catch (failure) {
@@ -745,6 +777,8 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.clientProfile: _guard(RouteAccess.client, _clientProfilePage),
         AppRoutes.clientServiceRequest:
             _guard(RouteAccess.client, _clientServiceRequestPage),
+        AppRoutes.clientServiceRequests:
+            _guard(RouteAccess.client, _myServiceRequestsPage),
         AppRoutes.technicianOpportunities:
             _guard(RouteAccess.professional, _technicianOpportunitiesPage),
         AppRoutes.technicianSpecialties:
