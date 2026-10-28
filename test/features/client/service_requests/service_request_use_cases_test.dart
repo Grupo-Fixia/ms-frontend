@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/domain/service_budget.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/features/client/service_requests/application/ports/service_request_repository.dart';
 import 'package:ms_frontend/features/client/service_requests/application/service_request_use_cases.dart';
@@ -15,6 +16,7 @@ ServiceRequest _published(NewServiceRequest request) => ServiceRequest(
       status: ServiceRequestStatus.published,
       approximateLocation: request.approximateLocation,
       expectedAt: request.expectedAt!,
+      budget: request.budget,
     );
 
 class _FakeRepository implements ServiceRequestRepository {
@@ -82,11 +84,14 @@ void main() {
         exactLocation: const ExactLocation(address: ' Calle 10 '),
         expectedAt: _now.add(const Duration(days: 1)),
         photoKeys: photos,
+        budget: ServiceBudget.tryParse('150000,25'),
       ),
     );
 
     final sent = repository.published!;
     expect(saved.status, ServiceRequestStatus.published);
+    expect(sent.budget!.amount, '150000.25');
+    expect(saved.budget!.amount, '150000.25');
     expect(sent.description, 'Fuga');
     expect(sent.approximateLocation.city, 'Bogotá');
     expect(sent.approximateLocation.zone, 'Chapinero');
@@ -105,6 +110,7 @@ void main() {
         approximateLocation:
             const ApproximateLocation(city: 'Bogotá', zone: 'Chapinero'),
         expectedAt: _now.add(const Duration(hours: 2)),
+        budget: ServiceBudget.tryParse('150000'),
       ),
     );
 
@@ -126,7 +132,7 @@ void main() {
       throwsA(isA<ServiceRequestFailure>()
           .having((f) => f.message, 'message',
               PublishServiceRequest.invalidDataMessage)
-          .having((f) => f.fieldErrors, 'fieldErrors', hasLength(5))),
+          .having((f) => f.fieldErrors, 'fieldErrors', hasLength(6))),
     );
     expect(repository.published, isNull);
   });
