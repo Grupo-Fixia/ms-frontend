@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
+import '../../../../core/domain/service_budget.dart';
 import '../application/ports/service_request_repository.dart';
 import '../domain/applicant.dart';
 import '../domain/service_request.dart';
@@ -29,6 +30,8 @@ import '../domain/service_request_exceptions.dart';
 /// - `404` con título "Postulación no encontrada" cuando la postulación no
 ///   es de esa solicitud; si no, la solicitud no existe o es de otro cliente.
 class HttpServiceRequestRepository implements ServiceRequestRepository {
+  static const budgetConfirmationMessage =
+      'No pudimos confirmar el presupuesto publicado. Consulta tus solicitudes antes de volver a enviar.';
   HttpServiceRequestRepository({
     required http.Client client,
     required Uri baseUrl,
@@ -59,10 +62,18 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
 
   @override
   Future<ServiceRequest> publish(NewServiceRequest request) async {
+    final budget = request.budget;
+    if (budget == null) {
+      throw const ServiceRequestFailure(invalidDataMessage, fieldErrors: {
+        'budgetAmount': 'Ingresa un presupuesto aproximado en COP.'
+      });
+    }
     final approximate = request.approximateLocation;
     final exact = request.exactLocation;
     final body = jsonEncode({
       'category': request.category?.apiValue,
+      'budgetAmount': budget.jsonAmount,
+      'budgetCurrency': ServiceBudget.currency,
       'description': request.description,
       'approximateLocation': {
         'city': approximate.city,
@@ -90,7 +101,11 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       ),
     );
     _throwOnError(response, success: 201);
-    return _requireRequest(_decode(response));
+    final published = _requireRequest(_decode(response));
+    if (published.budget?.amount != budget.amount) {
+      throw const ServiceRequestFailure(budgetConfirmationMessage);
+    }
+    return published;
   }
 
   @override
@@ -222,6 +237,15 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
     );
   }
 
+  ServiceBudget? _budget(Map json) {
+    try {
+      return ServiceBudget.fromJson(
+          json['budgetAmount'], json['budgetCurrency']);
+    } on FormatException {
+      throw const ServiceRequestFailure(unexpectedErrorMessage);
+    }
+  }
+
   ServiceRequest _requireRequest(Object? json) {
     final request = _parseRequest(json);
     if (request == null) {
@@ -264,6 +288,7 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       selectedProviderId: selected is String ? selected : null,
       publishedAt: _date(json['publishedAt']),
       updatedAt: _date(json['updatedAt']),
+      budget: _budget(json),
     );
   }
 

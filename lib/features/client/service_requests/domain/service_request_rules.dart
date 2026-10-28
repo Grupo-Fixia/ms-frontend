@@ -23,6 +23,10 @@ abstract final class ServiceRequestRules {
   }) {
     final errors = <String, String>{};
 
+    if (request.budget == null) {
+      errors['budgetAmount'] = 'Ingresa un presupuesto aproximado en COP.';
+    }
+
     if (request.category == null) {
       errors['category'] = 'Elige el tipo de servicio.';
     }

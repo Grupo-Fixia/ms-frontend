@@ -84,6 +84,7 @@ class _Requests implements ServiceRequestRepository {
       status: ServiceRequestStatus.published,
       approximateLocation: request.approximateLocation,
       expectedAt: request.expectedAt!,
+      budget: request.budget,
     );
   }
 
@@ -229,12 +230,14 @@ void main() {
 
   Finder key(String value) => find.byKey(ValueKey(value));
 
-  Future<void> scrollTo(WidgetTester tester, Finder target) =>
-      tester.scrollUntilVisible(
-        target,
-        240,
-        scrollable: find.byType(Scrollable).first,
-      );
+  Future<void> scrollTo(WidgetTester tester, Finder target) async {
+    await tester.scrollUntilVisible(
+      target,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
 
   group('GC-320 perfil del cliente', () {
     Future<void> editAndSave(WidgetTester tester) async {
@@ -337,7 +340,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(
           key('client-request-description'), 'Fuga en el lavaplatos');
+      await scrollTo(tester, key('client-request-budget'));
+      await tester.enterText(key('client-request-budget'), '150000');
       if (location) {
+        await scrollTo(tester, key('client-request-change-location'));
         await tester.tap(key('client-request-change-location'));
         await tester.pumpAndSettle();
         await tester.enterText(key('client-request-city'), ' Bogotá ');
@@ -345,6 +351,7 @@ void main() {
         await tester.tap(key('client-request-location-save'));
         await tester.pumpAndSettle();
       }
+      await scrollTo(tester, key('client-request-expected-at'));
       await tester.tap(key('client-request-expected-at'));
       await tester.pumpAndSettle();
       final now = DateTime.now();
@@ -407,6 +414,7 @@ void main() {
       expect(sent.approximateLocation.city, 'Bogotá');
       expect(sent.approximateLocation.zone, 'Chapinero');
       expect(sent.photoKeys, isEmpty);
+      expect(sent.budget!.amount, '150000');
       expect(find.text('Solicitud publicada'), findsOneWidget);
       expect(find.textContaining('demostración'), findsNothing);
 
@@ -430,6 +438,15 @@ void main() {
 
       expect(find.text('El momento esperado debe ser futuro.'), findsOneWidget);
       expect(find.text('Solicitud publicada'), findsNothing);
+      await scrollTo(tester, key('client-request-budget'));
+      expect(
+        tester
+            .widget<TextFormField>(key('client-request-budget'))
+            .controller!
+            .text,
+        '150000',
+        reason: 'un error no borra el presupuesto escrito',
+      );
     });
   });
 

@@ -1,4 +1,5 @@
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/domain/service_budget.dart';
 
 /// Solicitud abierta y compatible con el técnico (GC-297, RF-014): publicada,
 /// con el momento esperado por delante y a la que aún no se ha postulado.
@@ -16,6 +17,7 @@ class Opportunity {
     this.latitude,
     this.longitude,
     this.publishedAt,
+    this.budget,
   });
 
   final String id;
@@ -27,6 +29,7 @@ class Opportunity {
   final double? latitude;
   final double? longitude;
   final DateTime? publishedAt;
+  final ServiceBudget? budget;
 }
 
 /// Una página de oportunidades. [nextCursor] es `null` cuando no quedan más.

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/domain/service_budget.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/service_request.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/service_request_exceptions.dart';
@@ -15,6 +16,7 @@ NewServiceRequest _request({
   DateTime? expectedAt,
   bool noExpectedAt = false,
   List<String> photoKeys = const [],
+  bool noBudget = false,
 }) =>
     NewServiceRequest(
       category: category,
@@ -24,12 +26,17 @@ NewServiceRequest _request({
       expectedAt:
           noExpectedAt ? null : expectedAt ?? _now.add(const Duration(days: 1)),
       photoKeys: photoKeys,
+      budget: noBudget ? null : ServiceBudget.tryParse('150000'),
     );
 
 Map<String, String> _validate(NewServiceRequest request) =>
     ServiceRequestRules.validate(request, now: _now);
 
 void main() {
+  test('nuevas publicaciones requieren presupuesto; no inventa uno', () {
+    expect(_validate(_request(noBudget: true))['budgetAmount'], isNotNull);
+  });
+
   test('una solicitud completa es válida', () {
     expect(
       _validate(_request(
