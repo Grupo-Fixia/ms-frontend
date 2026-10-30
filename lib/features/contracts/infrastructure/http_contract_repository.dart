@@ -16,6 +16,12 @@ import '../domain/service_contract.dart';
 /// - Prestador (`ROLE_PROFESSIONAL`): `GET /api/services/contracts` y
 ///   `GET /api/services/contracts/{id}` (`404` si no es suya).
 /// - El monto viaja como número con hasta dos decimales.
+/// - Ciclo del servicio (GC-437, GC-441), todas responden la contratación
+///   actualizada: el técnico `POST /contracts/{id}/start` y
+///   `POST /contracts/{id}/finish`; el cliente
+///   `POST /requests/{id}/closure` y `POST /requests/{id}/closure-objection`
+///   con `{reason}`. `409` con `detail` si el estado ya no lo permite;
+///   repetir lo mismo responde `200` sin cambios.
 class HttpContractRepository implements ContractRepository {
   HttpContractRepository({
     required http.Client client,
@@ -38,6 +44,9 @@ class HttpContractRepository implements ContractRepository {
       'Esta solicitud aún no tiene una contratación.';
   static const unexpectedErrorMessage =
       'No pudimos consultar la contratación. Inténtalo más tarde.';
+  static const conflictMessage =
+      'El servicio ya no está en un estado que permita esta acción. Actualiza para ver su estado.';
+  static const invalidDataMessage = 'Revisa los datos marcados.';
 
   final http.Client _client;
   final Uri _contracts;
@@ -66,6 +75,84 @@ class HttpContractRepository implements ContractRepository {
     final json = _decode(response);
     if (json is! List) throw const ContractFailure(unexpectedErrorMessage);
     return List.unmodifiable(json.map(_parse).whereType<ServiceContract>());
+  }
+
+  @override
+  Future<ServiceContract> start(String contractId) =>
+      _transition(_resource(_contracts, [contractId, 'start']));
+
+  @override
+  Future<ServiceContract> finish(String contractId) =>
+      _transition(_resource(_contracts, [contractId, 'finish']));
+
+  @override
+  Future<ServiceContract> confirmClosure(String serviceRequestId) =>
+      _transition(_resource(_requests, [serviceRequestId, 'closure']));
+
+  @override
+  Future<ServiceContract> objectClosure(
+          String serviceRequestId, String reason) =>
+      _transition(
+        _resource(_requests, [serviceRequestId, 'closure-objection']),
+        body: {'reason': reason},
+      );
+
+  Uri _resource(Uri base, List<String> segments) =>
+      base.replace(pathSegments: [...base.pathSegments, ...segments]);
+
+  /// Cambio de estado del servicio. Ante un error no se devuelve nada: la
+  /// pantalla vuelve a consultar el estado real.
+  Future<ServiceContract> _transition(Uri uri,
+      {Map<String, Object?>? body}) async {
+    final http.Response response;
+    try {
+      response = await _http.send(
+        (headers) => _client.post(
+          uri,
+          headers: {
+            ...headers,
+            if (body != null) 'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: body == null ? null : jsonEncode(body),
+        ),
+      );
+    } on SessionExpiredException {
+      throw const ContractFailure(
+        sessionExpiredMessage,
+        isSessionExpired: true,
+      );
+    } on BackendUnreachableException {
+      throw const ContractFailure(connectionErrorMessage);
+    }
+    final json = _decode(response);
+    String? detail() {
+      final value = json is Map ? json['detail'] : null;
+      return value is String && value.trim().isNotEmpty ? value.trim() : null;
+    }
+
+    switch (response.statusCode) {
+      case 200:
+        final contract = _parse(json);
+        if (contract == null) {
+          throw const ContractFailure(unexpectedErrorMessage);
+        }
+        return contract;
+      case 400:
+        final errors = json is Map ? json['errors'] : null;
+        final first = errors is List && errors.isNotEmpty && errors.first is Map
+            ? (errors.first as Map)['message']
+            : null;
+        throw ContractFailure(
+            first is String ? first : detail() ?? invalidDataMessage);
+      case 403:
+        throw const ContractFailure(forbiddenMessage);
+      case 404:
+        throw const ContractFailure(notFoundMessage, isNotFound: true);
+      case 409:
+        throw ContractFailure(detail() ?? conflictMessage);
+      default:
+        throw const ContractFailure(unexpectedErrorMessage);
+    }
   }
 
   Future<ServiceContract> _one(Uri uri) async {

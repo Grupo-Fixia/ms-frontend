@@ -13,4 +13,18 @@ abstract interface class ContractRepository {
 
   /// Una contratación del prestador autenticado.
   Future<ServiceContract> getMine(String id);
+
+  /// El técnico contratado inicia el servicio: `contracted` → `inProgress`
+  /// (GC-437).
+  Future<ServiceContract> start(String contractId);
+
+  /// El técnico declara terminado el trabajo: `inProgress` →
+  /// `technicianFinished` (GC-441). No cierra el servicio.
+  Future<ServiceContract> finish(String contractId);
+
+  /// El cliente confirma el cierre: `technicianFinished` → `closed`.
+  Future<ServiceContract> confirmClosure(String serviceRequestId);
+
+  /// El cliente objeta con un motivo: el servicio vuelve a `inProgress`.
+  Future<ServiceContract> objectClosure(String serviceRequestId, String reason);
 }

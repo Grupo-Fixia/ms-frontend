@@ -43,6 +43,7 @@ import 'features/client/service_requests/presentation/request_progress_sections.
 import 'features/client/service_requests/presentation/service_request_detail_page.dart';
 import 'features/contracts/application/contract_use_cases.dart';
 import 'features/contracts/domain/contract_exceptions.dart';
+import 'features/contracts/presentation/service_actions.dart';
 import 'features/quotations/application/quotation_use_cases.dart';
 import 'features/quotations/domain/quotation_exceptions.dart';
 import 'features/technician/jobs/presentation/technician_contract_page.dart';
@@ -784,6 +785,20 @@ class _FixiaAppState extends State<FixiaApp> {
             key: ValueKey('contract-${request.id}-${request.status.name}'),
             load: () => _serviceCall(context,
                 () => GetRequestContract(backend.contracts)(request.id)),
+            actionsBuilder: (context, contract, reloadContract) =>
+                clientServiceActions(
+              contract: contract,
+              confirmClosure: () => _serviceCall(context,
+                  () => ConfirmServiceClosure(backend.contracts)(request.id)),
+              object: (reason) => _serviceCall(
+                  context,
+                  () => ObjectServiceClosure(backend.contracts)(
+                      request.id, reason)),
+              onDone: () {
+                reloadContract();
+                reload();
+              },
+            ),
           ),
         ];
       default:
@@ -823,6 +838,15 @@ class _FixiaAppState extends State<FixiaApp> {
           builder: (_) => TechnicianContractPage(
             load: () => _serviceCall(
                 context, () => GetMyContract(backend.contracts)(contract.id)),
+            actionsBuilder: (context, current, reload) =>
+                technicianServiceActions(
+              contract: current,
+              start: () => _serviceCall(
+                  context, () => StartService(backend.contracts)(current.id)),
+              finish: () => _serviceCall(
+                  context, () => FinishService(backend.contracts)(current.id)),
+              onDone: reload,
+            ),
           ),
         ),
       ),

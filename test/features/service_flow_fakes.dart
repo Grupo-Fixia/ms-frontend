@@ -163,4 +163,92 @@ class FakeContracts implements ContractRepository {
   @override
   Future<ServiceContract> getMine(String id) async =>
       items.firstWhere((c) => c.id == id);
+
+  /// Error que devolverá la próxima acción del ciclo (p. ej. un 409).
+  Object? actionError;
+  final actions = <String>[];
+
+  Future<ServiceContract> _move(
+    bool Function(ServiceContract c) match,
+    ServiceRequestStatus from,
+    ServiceRequestStatus to,
+    TransitionActor actor,
+    String action, {
+    String? reason,
+  }) async {
+    actions.add(action);
+    final error = actionError;
+    if (error != null) {
+      actionError = null;
+      throw error;
+    }
+    final i = items.indexWhere(match);
+    final c = items[i];
+    if (c.serviceStatus == to) return c;
+    if (c.serviceStatus != from) {
+      throw const ContractFailure('Conflicto de estado');
+    }
+    final moved = ServiceContract(
+      id: c.id,
+      serviceRequestId: c.serviceRequestId,
+      quotationId: c.quotationId,
+      clientId: c.clientId,
+      providerId: c.providerId,
+      amountInCents: c.amountInCents,
+      currency: c.currency,
+      scope: c.scope,
+      conditions: c.conditions,
+      agreedAt: c.agreedAt,
+      contractedAt: c.contractedAt,
+      request: c.request,
+      serviceStatus: to,
+      timeline: [
+        ...c.timeline,
+        ContractTransition(
+          fromStatus: from,
+          toStatus: to,
+          actor: actor,
+          reason: reason,
+          occurredAt: DateTime.utc(2030, 1, 10, 15 + c.timeline.length),
+        ),
+      ],
+    );
+    items[i] = moved;
+    return moved;
+  }
+
+  @override
+  Future<ServiceContract> start(String contractId) => _move(
+      (c) => c.id == contractId,
+      ServiceRequestStatus.contracted,
+      ServiceRequestStatus.inProgress,
+      TransitionActor.professional,
+      'start');
+
+  @override
+  Future<ServiceContract> finish(String contractId) => _move(
+      (c) => c.id == contractId,
+      ServiceRequestStatus.inProgress,
+      ServiceRequestStatus.technicianFinished,
+      TransitionActor.professional,
+      'finish');
+
+  @override
+  Future<ServiceContract> confirmClosure(String serviceRequestId) => _move(
+      (c) => c.serviceRequestId == serviceRequestId,
+      ServiceRequestStatus.technicianFinished,
+      ServiceRequestStatus.closed,
+      TransitionActor.client,
+      'closure');
+
+  @override
+  Future<ServiceContract> objectClosure(
+          String serviceRequestId, String reason) =>
+      _move(
+          (c) => c.serviceRequestId == serviceRequestId,
+          ServiceRequestStatus.technicianFinished,
+          ServiceRequestStatus.inProgress,
+          TransitionActor.client,
+          'objection',
+          reason: reason);
 }
