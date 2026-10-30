@@ -42,6 +42,8 @@ class Quotation {
     required this.status,
     required this.statusName,
     this.isExpired = false,
+    this.revision,
+    this.current,
     this.respondedAt,
     this.createdAt,
     this.updatedAt,
@@ -64,12 +66,27 @@ class Quotation {
   /// Sigue enviada pero su vigencia ya pasó: el cliente ya no puede
   /// aceptarla.
   final bool isExpired;
+
+  /// Versión dentro de la solicitud (GC-427): 1 es la primera cotización y
+  /// cada ajuste suma uno. `null` si el backend no la envía.
+  final int? revision;
+
+  /// El backend la marca como la versión vigente: sigue enviada y no ha
+  /// vencido (GC-427). `null` si el backend no lo envía.
+  final bool? current;
   final DateTime? respondedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   /// El cliente todavía puede responderla.
   bool get isOpen => status == QuotationStatus.sent && !isExpired;
+
+  /// Versión vigente según el servidor; si no lo dice, la que sigue abierta.
+  bool get isCurrent => current ?? isOpen;
+
+  /// «Versión 2», o «Cotización» si no hay número.
+  String get versionLabel =>
+      revision == null ? 'Cotización' : 'Versión $revision';
 }
 
 /// Datos que el prestador escribe para enviar una cotización.

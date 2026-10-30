@@ -6,6 +6,7 @@ import 'package:http/testing.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/http/authorized_http.dart';
 import 'package:ms_frontend/features/contracts/domain/contract_exceptions.dart';
+import 'package:ms_frontend/features/contracts/domain/service_contract.dart';
 import 'package:ms_frontend/features/contracts/infrastructure/http_contract_repository.dart';
 
 http.Response _json(int status, Object? body) => http.Response.bytes(
@@ -63,6 +64,46 @@ TypeMatcher<ContractFailure> _failure(String message) =>
     isA<ContractFailure>().having((f) => f.message, 'message', message);
 
 void main() {
+  test('trae el estado del servicio y su historial (GC-437, GC-441)', () async {
+    final contract = await _repository((_) async => _json(200, {
+          ..._contractJson(),
+          'serviceStatus': 'IN_PROGRESS',
+          'timeline': [
+            {
+              'fromStatus': 'CONTRACTED',
+              'toStatus': 'IN_PROGRESS',
+              'actorRole': 'PROFESSIONAL',
+              'occurredAt': '2026-10-25T15:00:00Z',
+            },
+            {
+              'fromStatus': 'TECHNICIAN_FINISHED',
+              'toStatus': 'IN_PROGRESS',
+              'actorRole': 'CLIENT',
+              'reason': '  Sigue goteando  ',
+              'occurredAt': '2026-10-25T18:00:00Z',
+            },
+            {'toStatus': 'NUEVO', 'occurredAt': '2026-10-25T19:00:00Z'},
+            {'toStatus': 'CLOSED'},
+          ],
+        })).getForRequest('req-1');
+
+    expect(contract.serviceStatus, ServiceRequestStatus.inProgress);
+    expect(contract.timeline, hasLength(2));
+    expect(contract.timeline.first.actor, TransitionActor.professional);
+    expect(contract.timeline.last.reason, 'Sigue goteando');
+    expect(contract.timeline.last.fromStatus,
+        ServiceRequestStatus.technicianFinished);
+  });
+
+  test(
+      'sin serviceStatus usa el estado de la solicitud y sin historial queda vacío',
+      () async {
+    final contract = await _repository((_) async => _json(200, _contractJson()))
+        .getForRequest('req-1');
+    expect(contract.serviceStatus, ServiceRequestStatus.contracted);
+    expect(contract.timeline, isEmpty);
+  });
+
   test('el cliente consulta la contratación de su solicitud', () async {
     late http.Request sent;
     final contract = await _repository((request) async {
