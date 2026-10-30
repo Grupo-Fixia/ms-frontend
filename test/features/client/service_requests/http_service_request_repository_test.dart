@@ -204,6 +204,20 @@ void main() {
   });
 
   group('listMine', () {
+    test('incluye solicitudes en ejecución, finalizadas y cerradas', () async {
+      final requests = await _repository((_) async => _json(200, [
+            _requestJson(id: 'req-1', status: 'IN_PROGRESS'),
+            _requestJson(id: 'req-2', status: 'TECHNICIAN_FINISHED'),
+            _requestJson(id: 'req-3', status: 'CLOSED'),
+          ])).listMine();
+
+      expect(requests.map((r) => r.status), [
+        ServiceRequestStatus.inProgress,
+        ServiceRequestStatus.technicianFinished,
+        ServiceRequestStatus.closed,
+      ]);
+    });
+
     test('lista las solicitudes y descarta las que no entiende', () async {
       late http.Request sent;
       final requests = await _repository((request) async {

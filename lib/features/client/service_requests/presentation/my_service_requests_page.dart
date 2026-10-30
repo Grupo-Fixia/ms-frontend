@@ -78,7 +78,7 @@ class _MyServiceRequestsPageState extends State<MyServiceRequestsPage> {
               for (final request in requests)
                 ListTile(
                   title: Text(request.description),
-                  subtitle: Text(
+                  subtitle: Text('${request.status.label} · '
                       'Presupuesto orientativo: ${request.budget?.label ?? 'Presupuesto no informado'}'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _opening ? null : () => _open(request),
