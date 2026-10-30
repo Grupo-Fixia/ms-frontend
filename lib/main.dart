@@ -39,6 +39,7 @@ import 'features/client/service_requests/application/service_request_use_cases.d
 import 'features/client/service_requests/domain/service_request.dart';
 import 'features/client/service_requests/domain/service_request_exceptions.dart';
 import 'features/client/service_requests/presentation/my_service_requests_page.dart';
+import 'features/client/service_requests/presentation/service_request_detail_page.dart';
 import 'backend_integrations.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
@@ -488,6 +489,19 @@ class _FixiaAppState extends State<FixiaApp> {
       load: () => query(() => ListMyServiceRequests(backend.serviceRequests)()),
       get: (id) =>
           query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
+      onOpen: (request) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ServiceRequestDetailPage(
+            requestId: request.id,
+            get: (id) =>
+                query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
+            listApplicants: (id) =>
+                query(() => ListApplicants(backend.serviceRequests)(id)),
+            selectProvider: (id, applicationId) => query(() =>
+                SelectProvider(backend.serviceRequests)(id, applicationId)),
+          ),
+        ),
+      ),
     );
   }
 
