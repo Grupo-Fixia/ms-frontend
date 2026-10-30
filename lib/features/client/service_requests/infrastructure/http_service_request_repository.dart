@@ -21,7 +21,9 @@ import '../domain/service_request_exceptions.dart';
 /// - `GET /api/services/requests/{id}` → `200`; `404` si no existe o es de
 ///   otro cliente.
 /// - `GET /api/services/requests/{id}/applications` → `200` con los
-///   postulantes en orden de llegada (GC-347).
+///   postulantes en orden de llegada (GC-347), su precio propuesto (GC-423)
+///   y el perfil público del prestador (GC-425); para empresas, también el
+///   del técnico propuesto (GC-468). `503` si ms-users no responde.
 /// - `POST /api/services/requests/{id}/applications/{applicationId}/selection`
 ///   → `200` con la solicitud en `PROVIDER_SELECTED` (GC-348); `409` si ya
 ///   no admite seleccionar prestador.
@@ -52,6 +54,8 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       'Ese prestador no está entre los postulantes de la solicitud.';
   static const notSelectableMessage =
       'Esta solicitud ya no admite seleccionar prestador.';
+  static const profilesUnavailableMessage =
+      'Los perfiles de los prestadores no están disponibles en este momento. Inténtalo de nuevo.';
   static const invalidDataMessage = 'Revisa los datos marcados.';
   static const unexpectedErrorMessage =
       'No pudimos completar la acción. Inténtalo más tarde.';
@@ -203,7 +207,15 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
               : notFoundMessage,
         );
       case 409:
-        throw const ServiceRequestFailure(notSelectableMessage);
+        final body = _decode(response);
+        final detail = body is Map ? body['detail'] : null;
+        throw ServiceRequestFailure(
+          detail is String && detail.trim().isNotEmpty
+              ? detail.trim()
+              : notSelectableMessage,
+        );
+      case 503:
+        throw const ServiceRequestFailure(profilesUnavailableMessage);
       default:
         throw const ServiceRequestFailure(unexpectedErrorMessage);
     }
@@ -228,14 +240,52 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
         status == null) {
       return null;
     }
+    final technicianId = json['technicianId'];
     return Applicant(
       id: id,
       providerId: providerId,
       status: status,
+      providerType: ProviderType.fromApi(_string(json['providerType'])),
+      technicianId: technicianId is String ? technicianId : null,
+      proposedPrice: _price(json['proposedAmount'], json['currency']),
+      provider: _profile(json['provider']),
+      executor: _profile(json['executor']),
       createdAt: _date(json['createdAt']),
       updatedAt: _date(json['updatedAt']),
     );
   }
+
+  /// Un precio ilegible se trata como no informado: nunca se muestra uno
+  /// distinto del que guardó el backend.
+  ServiceBudget? _price(Object? amount, Object? currency) {
+    try {
+      return ServiceBudget.fromJson(amount, currency);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  ProviderPublicProfile? _profile(Object? json) {
+    if (json is! Map) return null;
+    final categories = json['categories'];
+    final years = json['yearsOfExperience'];
+    return ProviderPublicProfile(
+      displayName: _text(json['displayName']),
+      verificationStatus:
+          VerificationStatus.fromApi(_string(json['verificationStatus'])),
+      categories: categories is List
+          ? List.unmodifiable(categories
+              .map((c) => ServiceCategory.fromApi(_string(c)))
+              .whereType<ServiceCategory>())
+          : const [],
+      professionalDescription: _text(json['professionalDescription']),
+      yearsOfExperience: years is int ? years : null,
+      city: _text(json['city']),
+    );
+  }
+
+  String? _text(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
 
   ServiceBudget? _budget(Map json) {
     try {
