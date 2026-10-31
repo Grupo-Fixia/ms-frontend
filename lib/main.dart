@@ -40,6 +40,15 @@ import 'features/client/service_requests/application/service_request_use_cases.d
 import 'features/client/service_requests/domain/service_request.dart';
 import 'features/client/service_requests/domain/service_request_exceptions.dart';
 import 'features/client/service_requests/presentation/my_service_requests_page.dart';
+import 'features/client/service_requests/presentation/request_progress_sections.dart';
+import 'features/client/service_requests/presentation/service_request_detail_page.dart';
+import 'features/contracts/application/contract_use_cases.dart';
+import 'features/contracts/domain/contract_exceptions.dart';
+import 'features/quotations/application/quotation_use_cases.dart';
+import 'features/quotations/domain/quotation_exceptions.dart';
+import 'features/technician/jobs/presentation/technician_contract_page.dart';
+import 'features/technician/jobs/presentation/technician_jobs_page.dart';
+import 'features/technician/jobs/presentation/technician_quotation_page.dart';
 import 'features/company/dashboard/presentation/company_dashboard_page.dart';
 import 'features/company/technicians/application/company_use_cases.dart';
 import 'features/company/technicians/application/ports/company_repository.dart';
@@ -93,6 +102,7 @@ abstract final class AppRoutes {
   static const clientServiceRequest = '/cliente/publicar-problema';
   static const clientServiceRequests = '/cliente/solicitudes';
   static const technicianOpportunities = '/tecnico/solicitudes';
+  static const technicianJobs = '/tecnico/trabajos';
   static const technicianSpecialties = '/tecnico/especialidades';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
@@ -575,6 +585,21 @@ class _FixiaAppState extends State<FixiaApp> {
       load: () => query(() => ListMyServiceRequests(backend.serviceRequests)()),
       get: (id) =>
           query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
+      onOpen: (request) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ServiceRequestDetailPage(
+            requestId: request.id,
+            get: (id) =>
+                query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
+            listApplicants: (id) =>
+                query(() => ListApplicants(backend.serviceRequests)(id)),
+            selectProvider: (id, applicationId) => query(() =>
+                SelectProvider(backend.serviceRequests)(id, applicationId)),
+            extraSections: (context, request, reload) =>
+                _clientRequestSections(context, backend, request, reload),
+          ),
+        ),
+      ),
     );
   }
 
@@ -645,6 +670,9 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianProfile),
       onOpenOpportunities: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onOpenJobs: widget.backend == null
+          ? null
+          : () => Navigator.of(context).pushNamed(AppRoutes.technicianJobs),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onOpenChat: () =>
@@ -794,6 +822,102 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
+  /// Ejecuta una consulta del flujo de servicio y, si la sesión venció,
+  /// vuelve al login. El error sigue su curso para que la pantalla lo
+  /// muestre.
+  Future<T> _serviceCall<T>(
+      BuildContext context, Future<T> Function() operation) async {
+    try {
+      return await operation();
+    } catch (error) {
+      final expired = switch (error) {
+        QuotationFailure(:final isSessionExpired) => isSessionExpired,
+        ContractFailure(:final isSessionExpired) => isSessionExpired,
+        ApplicationFailure(:final isSessionExpired) => isSessionExpired,
+        ServiceRequestFailure(:final isSessionExpired) => isSessionExpired,
+        _ => false,
+      };
+      if (expired && context.mounted) _endExpiredSession(context);
+      rethrow;
+    }
+  }
+
+  /// Secciones del detalle de la solicitud según su estado (GC-428, GC-429):
+  /// la cotización del prestador seleccionado o la contratación.
+  List<Widget> _clientRequestSections(
+    BuildContext context,
+    BackendIntegrations backend,
+    ServiceRequest request,
+    Future<void> Function() reload,
+  ) {
+    switch (request.status) {
+      case ServiceRequestStatus.providerSelected:
+        return [
+          ClientQuotationSection(
+            key: ValueKey('quotations-${request.id}-${request.status.name}'),
+            load: () => _serviceCall(context,
+                () => ListRequestQuotations(backend.quotations)(request.id)),
+            accept: (id) => _serviceCall(context,
+                () => AcceptQuotation(backend.quotations)(request.id, id)),
+            reject: (id) => _serviceCall(context,
+                () => RejectQuotation(backend.quotations)(request.id, id)),
+            onChanged: reload,
+          ),
+        ];
+      case ServiceRequestStatus.contracted ||
+            ServiceRequestStatus.inProgress ||
+            ServiceRequestStatus.technicianFinished ||
+            ServiceRequestStatus.closed:
+        return [
+          ClientContractSection(
+            key: ValueKey('contract-${request.id}-${request.status.name}'),
+            load: () => _serviceCall(context,
+                () => GetRequestContract(backend.contracts)(request.id)),
+          ),
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  /// «Mis trabajos» del técnico (GC-428, GC-429).
+  Widget _technicianJobsPage(BuildContext context) {
+    final backend = widget.backend;
+    if (backend == null) {
+      return const Scaffold(
+          body: Center(child: Text('Esta sección requiere conexión con Fixia.')));
+    }
+    return TechnicianJobsPage(
+      loadApplications: () => _serviceCall(
+          context, () => ListMyApplications(backend.applications)()),
+      loadContracts: () =>
+          _serviceCall(context, () => ListMyContracts(backend.contracts)()),
+      onOpenOpportunities: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onOpenQuotation: (application) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TechnicianQuotationPage(
+            application: application,
+            load: () => _serviceCall(
+                context,
+                () => ListMyQuotations(backend.quotations)(
+                    serviceRequestId: application.serviceRequest.id)),
+            send: (quotation) => _serviceCall(
+                context, () => SendQuotation(backend.quotations)(quotation)),
+          ),
+        ),
+      ),
+      onOpenContract: (contract) => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TechnicianContractPage(
+            load: () => _serviceCall(
+                context, () => GetMyContract(backend.contracts)(contract.id)),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// La sesión venció mientras se usaba una pantalla: se vuelve al login.
   void _endExpiredSession(BuildContext context) {
     _sessionStore.clear();
@@ -904,6 +1028,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.client, _myServiceRequestsPage),
         AppRoutes.technicianOpportunities:
             _guard(RouteAccess.professional, _technicianOpportunitiesPage),
+        AppRoutes.technicianJobs:
+            _guard(RouteAccess.professional, _technicianJobsPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
         AppRoutes.companyDashboard:
@@ -961,8 +1087,10 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenChat,
     required this.onLogout,
     required this.onSessionExpired,
+    this.onOpenJobs,
   });
 
+  final VoidCallback? onOpenJobs;
   final GetTechnicianProfile getProfile;
   final String firstName;
   final VoidCallback onOpenSettings;
@@ -1065,6 +1193,7 @@ class _TechnicianDashboardLoaderState
           verificationStatus: verificationStatus,
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
+          onOpenJobs: widget.onOpenJobs,
           onOpenSpecialties: widget.onOpenSpecialties,
           onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,

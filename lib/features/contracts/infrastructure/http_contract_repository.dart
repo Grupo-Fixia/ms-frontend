@@ -149,7 +149,32 @@ class HttpContractRepository implements ContractRepository {
             address == null || address.trim().isEmpty ? null : address.trim(),
         expectedAt: _date(request['expectedAt']),
       ),
+      serviceStatus: ServiceRequestStatus.fromApi(
+          _string(json['serviceStatus']) ?? _string(request['status'])),
+      timeline: _timeline(json['timeline']),
     );
+  }
+
+  /// Se descartan los cambios que el frontend no entiende, sin inventar
+  /// ninguno.
+  List<ContractTransition> _timeline(Object? json) {
+    if (json is! List) return const [];
+    final transitions = <ContractTransition>[];
+    for (final item in json) {
+      if (item is! Map) continue;
+      final to = ServiceRequestStatus.fromApi(_string(item['toStatus']));
+      final at = _date(item['occurredAt']);
+      if (to == null || at == null) continue;
+      final reason = _string(item['reason'])?.trim();
+      transitions.add(ContractTransition(
+        fromStatus: ServiceRequestStatus.fromApi(_string(item['fromStatus'])),
+        toStatus: to,
+        actor: TransitionActor.fromApi(_string(item['actorRole'])),
+        reason: reason == null || reason.isEmpty ? null : reason,
+        occurredAt: at,
+      ));
+    }
+    return List.unmodifiable(transitions);
   }
 
   String? _string(Object? value) => value is String ? value : null;
