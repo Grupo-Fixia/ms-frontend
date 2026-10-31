@@ -19,6 +19,7 @@ class ClientDashboardPage extends StatefulWidget {
     this.onLogout,
     this.loadRequests,
     this.onOpenRequest,
+    this.onOpenChat,
   });
 
   final String? firstName;
@@ -34,6 +35,10 @@ class ClientDashboardPage extends StatefulWidget {
 
   /// Abre el detalle de una solicitud; al volver se actualiza el inicio.
   final Future<void> Function(ServiceRequest request)? onOpenRequest;
+
+  /// Chat prototipo de GC-431. Es una simulación: no toca solicitudes,
+  /// cotizaciones ni contratos.
+  final VoidCallback? onOpenChat;
 
   /// Cuántas solicitudes recientes se muestran en el inicio.
   static const recentLimit = 3;
@@ -106,6 +111,21 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
           ),
           const SizedBox(height: 16),
           _PublishCard(onPublish: widget.onPublishProblem),
+          if (widget.onOpenChat != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const ValueKey('client-open-chat-prototype'),
+                onPressed: widget.onOpenChat,
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                label: const Tooltip(
+                  message: 'Abrir chat',
+                  child: Text('Chat de demostración'),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 26),
           DashboardSectionHeading(
             title: 'Mis solicitudes',
