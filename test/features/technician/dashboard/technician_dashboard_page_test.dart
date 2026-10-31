@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
+import 'package:ms_frontend/features/technician/opportunities/domain/service_opportunity.dart';
 import 'package:ms_frontend/features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'package:ms_frontend/features/technician/profile/domain/verification_status.dart';
 
 void main() {
-  testWidgets('muestra oportunidades, trabajos asignados y billetera',
-      (tester) async {
+  ServiceOpportunity opportunity(String id, String title) => ServiceOpportunity(
+        id: id,
+        title: title,
+        category: ServiceCategory.plumbing,
+        postedLabel: 'Hace 5 min',
+        budget: '150.000 COP',
+        approximateLocation: 'Chapinero, Bogotá',
+        description: title,
+        expectedMoment: '02/11/2026 · 09:00',
+      );
+
+  testWidgets('sin conexión no muestra datos de ejemplo', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: FixiaTheme.light,
@@ -14,82 +26,106 @@ void main() {
       ),
     );
 
-    expect(find.text('Carlos Mendoza'), findsOneWidget);
-    expect(find.text('4.8'), findsOneWidget);
-    expect(find.text('Oportunidades Disponibles'), findsOneWidget);
-    expect(find.text('Reparar fuga bajo el lavaplatos'), findsOneWidget);
-    expect(find.text('Instalar ventilador de techo'), findsOneWidget);
-    expect(find.text('Reparación de circuito en cocina'), findsOneWidget);
-    expect(find.text('Ubicación aproximada'), findsNWidgets(4));
-    expect(find.text('\$80.000 – \$140.000'), findsOneWidget);
+    expect(find.text('Técnico'), findsOneWidget);
+    expect(find.text('Carlos Mendoza'), findsNothing);
+    expect(find.text('4.8'), findsNothing);
+    expect(find.text('Reparar fuga bajo el lavaplatos'), findsNothing);
+    expect(find.text('Solicitar Retiro'), findsNothing);
+    expect(find.text('Billetera'), findsNothing);
+    expect(find.text('–'), findsNWidgets(3));
+    expect(
+      find.text(
+          'Las oportunidades aparecerán aquí cuando te conectes a Fixia.'),
+      findsOneWidget,
+    );
     expect(find.text('Disponible para trabajos'), findsOneWidget);
-    expect(find.text('3 nuevas'), findsOneWidget);
-    expect(find.text('URGENTE'), findsNWidgets(2));
-    expect(find.text('Trabajos Asignados / En Curso'), findsOneWidget);
-    expect(find.text('Registrar Avance / Evidencia'), findsOneWidget);
-    expect(find.text('Marcar Finalizado'), findsOneWidget);
-    expect(find.text('Saldo disponible'), findsOneWidget);
-    expect(find.text('Saldo retenido'), findsOneWidget);
-    expect(find.text('Solicitar Retiro'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('bloquea postulación mientras la cuenta está pendiente',
-      (tester) async {
+  testWidgets('muestra oportunidades y contadores reales', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: FixiaTheme.light,
-        home: const TechnicianDashboardPage(),
+        home: TechnicianDashboardPage(
+          firstName: 'Laura Mora',
+          loadOpportunities: () async => [
+            for (var i = 1; i <= 4; i++) opportunity('o$i', 'Fuga número $i'),
+          ],
+          loadStats: () async =>
+              const TechnicianWorkStats(toQuote: 1, active: 2, closed: 5),
+        ),
       ),
     );
+    await tester.pumpAndSettle();
 
-    final applyButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('technician-apply')),
+    expect(find.text('LM'), findsOneWidget);
+    expect(find.text('Por cotizar'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+    // Solo las tres primeras; el resto en la pantalla de oportunidades.
+    expect(find.text('Fuga número 1'), findsOneWidget);
+    expect(find.text('Fuga número 3'), findsOneWidget);
+    expect(find.text('Fuga número 4'), findsNothing);
+    expect(find.text('150.000 COP'), findsNWidgets(3));
+  });
+
+  testWidgets('sin oportunidades lo dice; con error permite reintentar',
+      (tester) async {
+    var fail = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TechnicianDashboardPage(
+          loadOpportunities: () async {
+            if (fail) throw Exception('Sin conexión');
+            return [];
+          },
+        ),
+      ),
     );
-    expect(applyButton.onPressed, isNull);
-    expect(find.text('PENDIENTE'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Sin conexión'), findsOneWidget);
+    fail = false;
+    await tester.ensureVisible(find.text('Reintentar'));
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
     expect(
-      find.textContaining('Tu cuenta está en proceso de verificación'),
-      findsOneWidget,
-    );
+        find.textContaining('No hay solicitudes compatibles'), findsOneWidget);
   });
 
-  testWidgets('habilita postulación solo con verificación vigente',
+  testWidgets('Postularme identifica la oportunidad o abre las oportunidades',
       (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: TechnicianDashboardPage(
-          verificationStatus: VerificationStatus.valid,
-        ),
-      ),
-    );
-
-    final applyButton = tester.widget<FilledButton>(
-      find.byKey(const ValueKey('technician-apply')),
-    );
-    expect(applyButton.onPressed, isNotNull);
-    expect(find.text('VIGENTE'), findsOneWidget);
-  });
-
-  testWidgets('la postulación identifica la oportunidad elegida',
-      (tester) async {
-    String? appliedOpportunity;
+    String? applied;
     await tester.pumpWidget(
       MaterialApp(
         theme: FixiaTheme.light,
         home: TechnicianDashboardPage(
-          verificationStatus: VerificationStatus.valid,
-          onApplyToOpportunity: (opportunityId) =>
-              appliedOpportunity = opportunityId,
+          loadOpportunities: () async => [opportunity('o1', 'Fuga')],
+          onApplyToOpportunity: (id) => applied = id,
         ),
       ),
     );
-
-    final button = find.byKey(const ValueKey('technician-apply'));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const ValueKey('technician-apply-o1'));
     await tester.ensureVisible(button);
     await tester.tap(button);
+    expect(applied, 'o1');
 
-    expect(appliedOpportunity, 'plumbing-repair');
+    var opened = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: FixiaTheme.light,
+        home: TechnicianDashboardPage(
+          loadOpportunities: () async => [opportunity('o1', 'Fuga')],
+          onOpenOpportunities: () => opened++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    expect(opened, 1);
+    expect(find.text('PENDIENTE'), findsOneWidget);
   });
 
   testWidgets('el acceso al perfil notifica que la demo no tiene sesión',
@@ -211,7 +247,7 @@ void main() {
     );
 
     final wallet = tester.getRect(
-      find.byKey(const ValueKey('technician-wallet-summary')),
+      find.byKey(const ValueKey('technician-verification-banner')),
     );
     expect(wallet.width, lessThanOrEqualTo(404));
     expect(wallet.center.dx, closeTo(640, 1));

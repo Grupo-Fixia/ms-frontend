@@ -28,6 +28,7 @@ import 'package:ms_frontend/features/technician/opportunities/domain/opportunity
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
+import 'features/service_flow_fakes.dart';
 import 'features/auth/registration/fake_repository.dart';
 import 'features/technician/profile/fake_repository.dart';
 import 'features/technician/profile/fixtures.dart';
@@ -212,6 +213,8 @@ void main() {
           serviceRequests: requests,
           opportunities: opportunities,
           applications: applications,
+          quotations: FakeQuotations(),
+          contracts: FakeContracts(),
         ),
         clientRegistrationRepository: FakeAccountRegistrationRepository(),
         technicianRegistrationRepository: FakeAccountRegistrationRepository(),

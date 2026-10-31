@@ -257,6 +257,8 @@ class HttpQuotationRepository implements QuotationRepository {
           ? statusName.trim()
           : status.label,
       isExpired: expired == true,
+      revision: json['revision'] is int ? json['revision'] as int : null,
+      current: json['current'] is bool ? json['current'] as bool : null,
       respondedAt: _date(json['respondedAt']),
       createdAt: _date(json['createdAt']),
       updatedAt: _date(json['updatedAt']),
