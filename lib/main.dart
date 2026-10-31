@@ -449,8 +449,16 @@ class _FixiaAppState extends State<FixiaApp> {
 
   Widget _clientDashboardPage(BuildContext context) {
     final profile = _sessionStore.profile!;
+    final backend = widget.backend;
     return ClientDashboardPage(
       firstName: profile.firstName,
+      loadRequests: backend == null
+          ? null
+          : () => _serviceCall(
+              context, () => ListMyServiceRequests(backend.serviceRequests)()),
+      onOpenRequest: backend == null
+          ? null
+          : (request) => _openRequestDetail(context, backend, request),
       onOpenHistory: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequests),
       onPublishProblem: () =>
@@ -499,21 +507,7 @@ class _FixiaAppState extends State<FixiaApp> {
       load: () => query(() => ListMyServiceRequests(backend.serviceRequests)()),
       get: (id) =>
           query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
-      onOpen: (request) => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => ServiceRequestDetailPage(
-            requestId: request.id,
-            get: (id) =>
-                query(() => GetMyServiceRequest(backend.serviceRequests)(id)),
-            listApplicants: (id) =>
-                query(() => ListApplicants(backend.serviceRequests)(id)),
-            selectProvider: (id, applicationId) => query(() =>
-                SelectProvider(backend.serviceRequests)(id, applicationId)),
-            extraSections: (context, request, reload) =>
-                _clientRequestSections(context, backend, request, reload),
-          ),
-        ),
-      ),
+      onOpen: (request) => _openRequestDetail(context, backend, request),
     );
   }
 
@@ -551,6 +545,25 @@ class _FixiaAppState extends State<FixiaApp> {
     BackendIntegrations? backend,
   ) {
     return ClientProfilePage(
+      loadStats: backend == null
+          ? null
+          : () async {
+              final requests = await _serviceCall(context,
+                  () => ListMyServiceRequests(backend.serviceRequests)());
+              return ClientActivityStats(
+                requests: requests.length,
+                active: requests
+                    .where((r) => const {
+                          ServiceRequestStatus.contracted,
+                          ServiceRequestStatus.inProgress,
+                          ServiceRequestStatus.technicianFinished,
+                        }.contains(r.status))
+                    .length,
+                closed: requests
+                    .where((r) => r.status == ServiceRequestStatus.closed)
+                    .length,
+              );
+            },
       saveProfile: backend == null
           ? null
           : (update) => _saveClientProfile(context, backend, update),
@@ -587,6 +600,12 @@ class _FixiaAppState extends State<FixiaApp> {
       onOpenJobs: widget.backend == null
           ? null
           : () => Navigator.of(context).pushNamed(AppRoutes.technicianJobs),
+      loadOpportunities: widget.backend == null
+          ? null
+          : () => _loadOpportunities(context, widget.backend!),
+      loadStats: widget.backend == null
+          ? null
+          : () => _technicianStats(context, widget.backend!),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -754,6 +773,29 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
+  /// Detalle de una solicitud del cliente con postulantes, cotización,
+  /// contratación y cierre (GC-426, GC-428, GC-429, GC-442).
+  Future<void> _openRequestDetail(
+    BuildContext context,
+    BackendIntegrations backend,
+    ServiceRequest request,
+  ) =>
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ServiceRequestDetailPage(
+            requestId: request.id,
+            get: (id) => _serviceCall(
+                context, () => GetMyServiceRequest(backend.serviceRequests)(id)),
+            listApplicants: (id) => _serviceCall(
+                context, () => ListApplicants(backend.serviceRequests)(id)),
+            selectProvider: (id, applicationId) => _serviceCall(context,
+                () => SelectProvider(backend.serviceRequests)(id, applicationId)),
+            extraSections: (context, request, reload) =>
+                _clientRequestSections(context, backend, request, reload),
+          ),
+        ),
+      );
+
   /// Secciones del detalle de la solicitud según su estado (GC-428, GC-429):
   /// la cotización del prestador seleccionado o la contratación.
   List<Widget> _clientRequestSections(
@@ -804,6 +846,35 @@ class _FixiaAppState extends State<FixiaApp> {
       default:
         return const [];
     }
+  }
+
+  /// Contadores del inicio del técnico, con sus postulaciones y
+  /// contrataciones reales.
+  Future<TechnicianWorkStats> _technicianStats(
+      BuildContext context, BackendIntegrations backend) async {
+    final applications = await _serviceCall(
+        context, () => ListMyApplications(backend.applications)());
+    if (!context.mounted) {
+      return const TechnicianWorkStats(toQuote: 0, active: 0, closed: 0);
+    }
+    final contracts =
+        await _serviceCall(context, () => ListMyContracts(backend.contracts)());
+    final contracted = {for (final c in contracts) c.serviceRequestId};
+    return TechnicianWorkStats(
+      toQuote: applications
+          .where((a) =>
+              a.status == ApplicationStatus.selected &&
+              !contracted.contains(a.serviceRequest.id))
+          .length,
+      active: contracts
+          .where((c) =>
+              c.serviceStatus != null &&
+              !c.serviceStatus!.isTerminal)
+          .length,
+      closed: contracts
+          .where((c) => c.serviceStatus == ServiceRequestStatus.closed)
+          .length,
+    );
   }
 
   /// «Mis trabajos» del técnico (GC-428, GC-429).
@@ -1016,9 +1087,13 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onLogout,
     required this.onSessionExpired,
     this.onOpenJobs,
+    this.loadOpportunities,
+    this.loadStats,
   });
 
   final VoidCallback? onOpenJobs;
+  final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
+  final Future<TechnicianWorkStats> Function()? loadStats;
   final GetTechnicianProfile getProfile;
   final String firstName;
   final VoidCallback onOpenSettings;
@@ -1121,6 +1196,8 @@ class _TechnicianDashboardLoaderState
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenJobs: widget.onOpenJobs,
+          loadOpportunities: widget.loadOpportunities,
+          loadStats: widget.loadStats,
           onOpenSpecialties: widget.onOpenSpecialties,
           onLogout: widget.onLogout,
         );

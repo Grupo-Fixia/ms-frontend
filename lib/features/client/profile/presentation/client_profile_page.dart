@@ -18,6 +18,7 @@ class ClientProfilePage extends StatefulWidget {
     this.onOpenHome,
     this.onOpenPublish,
     this.saveProfile,
+    this.loadStats,
   });
 
   final String firstName;
@@ -33,6 +34,10 @@ class ClientProfilePage extends StatefulWidget {
   /// se conservan solo en esta vista. Si falla, lanza una excepción con el
   /// mensaje para el usuario.
   final Future<void> Function(ClientProfileUpdate update)? saveProfile;
+
+  /// Resumen real de sus solicitudes en ms-services. Sin conexión es `null`
+  /// y se muestra «–» en lugar de cifras de ejemplo.
+  final Future<ClientActivityStats> Function()? loadStats;
 
   @override
   State<ClientProfilePage> createState() => _ClientProfilePageState();
@@ -156,7 +161,7 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
                     children: [
                       Transform.translate(
                         offset: const Offset(0, -18),
-                        child: const _ProfileStats(),
+                        child: _ProfileStats(load: widget.loadStats),
                       ),
                       const SizedBox(height: 2),
                       _SectionTitle(
@@ -197,14 +202,11 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
                         const _LocalSaveNotice(),
                       ],
                       const SizedBox(height: 22),
-                      const _SectionTitle(
-                        title: 'Métodos de pago',
-                        trailing: _DemoDataTag(),
-                      ),
-                      const _PaymentMethodsCard(),
-                      const SizedBox(height: 20),
-                      _WalletSummary(
-                        onWithdraw: () => _showDemoActionMessage(context),
+                      const Text(
+                        'Los pagos se acuerdan directamente con el técnico; '
+                        'Fixia no guarda métodos de pago en esta versión.',
+                        key: ValueKey('client-profile-payments-note'),
+                        style: TextStyle(color: FixiaColors.textSecondary),
                       ),
                     ],
                   ),
@@ -446,8 +448,32 @@ class _ProfileHero extends StatelessWidget {
   }
 }
 
-class _ProfileStats extends StatelessWidget {
-  const _ProfileStats();
+/// Actividad real del cliente, calculada con sus solicitudes.
+class ClientActivityStats {
+  const ClientActivityStats({
+    required this.requests,
+    required this.active,
+    required this.closed,
+  });
+
+  final int requests;
+
+  /// Contratadas, en ejecución o esperando su confirmación de cierre.
+  final int active;
+  final int closed;
+}
+
+class _ProfileStats extends StatefulWidget {
+  const _ProfileStats({required this.load});
+
+  final Future<ClientActivityStats> Function()? load;
+
+  @override
+  State<_ProfileStats> createState() => _ProfileStatsState();
+}
+
+class _ProfileStatsState extends State<_ProfileStats> {
+  late final Future<ClientActivityStats>? _stats = widget.load?.call();
 
   @override
   Widget build(BuildContext context) {
@@ -465,28 +491,21 @@ class _ProfileStats extends StatelessWidget {
           ),
         ],
       ),
-      child: const Column(
-        children: [
-          Row(
+      child: FutureBuilder<ClientActivityStats>(
+        future: _stats,
+        builder: (context, snapshot) {
+          final stats = snapshot.hasData ? snapshot.data : null;
+          String show(int? value) => value == null ? '–' : '$value';
+          return Row(
             children: [
-              _ProfileStat(value: '23', label: 'Trabajos'),
-              _StatDivider(),
-              _ProfileStat(value: '4.7', label: 'Rating'),
-              _StatDivider(),
-              _ProfileStat(value: '\$24.5K', label: 'Saldo'),
+              _ProfileStat(value: show(stats?.requests), label: 'Solicitudes'),
+              const _StatDivider(),
+              _ProfileStat(value: show(stats?.active), label: 'En curso'),
+              const _StatDivider(),
+              _ProfileStat(value: show(stats?.closed), label: 'Cerradas'),
             ],
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Datos de demostración',
-            key: ValueKey('client-profile-demo-label'),
-            style: TextStyle(
-              color: FixiaColors.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -617,180 +636,6 @@ class _ProfileDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Divider(height: 1, color: Color(0xFFE8EEF6));
-  }
-}
-
-class _DemoDataTag extends StatelessWidget {
-  const _DemoDataTag();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Text(
-      'EJEMPLO',
-      style: TextStyle(
-        color: FixiaColors.secondary,
-        fontSize: 10,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.5,
-      ),
-    );
-  }
-}
-
-class _PaymentMethodsCard extends StatelessWidget {
-  const _PaymentMethodsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('client-profile-payment-methods'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: FixiaDecorations.card,
-      child: const Column(
-        children: [
-          _PaymentMethod(
-            initials: 'V',
-            method: 'Débito •••• 4582',
-            provider: 'Banco de ejemplo',
-            color: Color(0xFF202B87),
-          ),
-          Divider(height: 1, color: Color(0xFFE8EEF6)),
-          _PaymentMethod(
-            initials: 'MC',
-            method: 'Crédito •••• 7893',
-            provider: 'Emisor de ejemplo',
-            color: Color(0xFFEF3340),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentMethod extends StatelessWidget {
-  const _PaymentMethod({
-    required this.initials,
-    required this.method,
-    required this.provider,
-    required this.color,
-  });
-
-  final String initials;
-  final String method;
-  final String provider;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: FixiaColors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  method,
-                  style: const TextStyle(
-                    color: FixiaColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  provider,
-                  style: const TextStyle(
-                    color: FixiaColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WalletSummary extends StatelessWidget {
-  const _WalletSummary({required this.onWithdraw});
-
-  final VoidCallback onWithdraw;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('client-profile-wallet'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [FixiaColors.secondary, Color(0xFF0348C5)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'SALDO DISPONIBLE · EJEMPLO',
-                  style: TextStyle(
-                    color: Color(0xFFDCEBFF),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                SizedBox(height: 5),
-                Text(
-                  '\$24.500',
-                  style: TextStyle(
-                    color: FixiaColors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 92,
-            child: FilledButton(
-              key: const ValueKey('client-profile-withdraw'),
-              onPressed: onWithdraw,
-              style: FilledButton.styleFrom(
-                backgroundColor: FixiaColors.white,
-                foregroundColor: FixiaColors.secondary,
-              ),
-              child: const Text('Retirar'),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../service_requests/domain/service_request.dart';
 
+/// Inicio del cliente. Muestra solo datos reales de ms-services: sus
+/// solicitudes y lo que tiene pendiente en cada una (revisar postulantes o
+/// cotización, confirmar el cierre). No hay técnicos, precios ni
+/// calificaciones de ejemplo.
 class ClientDashboardPage extends StatefulWidget {
   const ClientDashboardPage({
     super.key,
@@ -12,10 +17,8 @@ class ClientDashboardPage extends StatefulWidget {
     this.onOpenHistory,
     this.onOpenProfile,
     this.onLogout,
-    this.onRequestTechnician,
-    this.onOpenChat,
-    this.onReviewQuote,
-    this.onConfirmClosure,
+    this.loadRequests,
+    this.onOpenRequest,
   });
 
   final String? firstName;
@@ -24,89 +27,39 @@ class ClientDashboardPage extends StatefulWidget {
   final VoidCallback? onOpenHistory;
   final VoidCallback? onOpenProfile;
   final VoidCallback? onLogout;
-  final ValueChanged<String>? onRequestTechnician;
-  final VoidCallback? onOpenChat;
-  final VoidCallback? onReviewQuote;
-  final VoidCallback? onConfirmClosure;
 
-  static const _technicians = [
-    _TechnicianCardData(
-      id: 'ana-garcia',
-      initials: 'AG',
-      name: 'Ana García',
-      profession: 'Plomera',
-      neighborhood: 'Usaquén',
-      category: 'Plomería',
-      rating: '4.8',
-      reviews: 64,
-      distance: '2.5 km',
-      rate: '\$70.000',
-    ),
-    _TechnicianCardData(
-      id: 'pedro-rojas',
-      initials: 'PR',
-      name: 'Pedro Rojas',
-      profession: 'Pintor',
-      neighborhood: 'Teusaquillo',
-      category: 'Pintura',
-      rating: '4.7',
-      reviews: 112,
-      distance: '3.1 km',
-      rate: '\$55.000',
-    ),
-    _TechnicianCardData(
-      id: 'laura-torres',
-      initials: 'LT',
-      name: 'Laura Torres',
-      profession: 'Especialista en limpieza',
-      neighborhood: 'Suba',
-      category: 'Limpieza',
-      rating: '5.0',
-      reviews: 203,
-      distance: '0.8 km',
-      rate: '\$45.000',
-    ),
-    _TechnicianCardData(
-      id: 'camilo-diaz',
-      initials: 'CD',
-      name: 'Camilo Díaz',
-      profession: 'Electricista',
-      neighborhood: 'Chapinero',
-      category: 'Electricidad',
-      rating: '4.9',
-      reviews: 87,
-      distance: '1.2 km',
-      rate: '\$85.000',
-    ),
-  ];
+  /// Solicitudes del cliente, la más reciente primero. Sin conexión con
+  /// Fixia es `null` y la sección lo dice en lugar de inventar datos.
+  final Future<List<ServiceRequest>> Function()? loadRequests;
+
+  /// Abre el detalle de una solicitud; al volver se actualiza el inicio.
+  final Future<void> Function(ServiceRequest request)? onOpenRequest;
+
+  /// Cuántas solicitudes recientes se muestran en el inicio.
+  static const recentLimit = 3;
 
   @override
   State<ClientDashboardPage> createState() => _ClientDashboardPageState();
 }
 
 class _ClientDashboardPageState extends State<ClientDashboardPage> {
-  final _searchController = TextEditingController();
-  String _selectedCategory = 'Todos';
-  String _searchQuery = '';
+  Future<List<ServiceRequest>>? _requests;
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _requests = widget.loadRequests?.call();
   }
 
-  List<_TechnicianCardData> get _visibleTechnicians {
-    final query = _searchQuery.trim().toLowerCase();
-    return ClientDashboardPage._technicians.where((technician) {
-      final matchesCategory = _selectedCategory == 'Todos' ||
-          technician.category == _selectedCategory;
-      final searchableText =
-          '${technician.name} ${technician.profession} ${technician.category} '
-                  '${technician.neighborhood}'
-              .toLowerCase();
-      return matchesCategory &&
-          (query.isEmpty || searchableText.contains(query));
-    }).toList();
+  void _reload() => setState(() {
+        _requests = widget.loadRequests?.call();
+      });
+
+  Future<void> _open(ServiceRequest request) async {
+    final open = widget.onOpenRequest;
+    if (open == null) return;
+    await open(request);
+    if (mounted) _reload();
   }
 
   void _showClientProfileUnavailable() {
@@ -136,7 +89,7 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
           const SizedBox(height: 22),
           Text(
             widget.firstName == null || widget.firstName!.trim().isEmpty
-                ? 'Encuentra tu técnico'
+                ? 'Bienvenido a Fixia'
                 : 'Hola, ${widget.firstName}',
             key: const ValueKey('client-dashboard-greeting'),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -146,100 +99,26 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
           ),
           const SizedBox(height: 5),
           Text(
-            'Profesionales verificados cerca de ti',
+            '¿Qué necesitas arreglar hoy?',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: FixiaColors.textSecondary,
                 ),
           ),
           const SizedBox(height: 16),
-          const _LocationSummary(),
-          const SizedBox(height: 12),
-          _SearchField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchQuery = value),
-            onClear: () {
-              _searchController.clear();
-              setState(() {
-                _searchQuery = '';
-                _selectedCategory = 'Todos';
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          _CategoryFilters(
-            selectedCategory: _selectedCategory,
-            onSelected: (category) =>
-                setState(() => _selectedCategory = category),
-          ),
-          const SizedBox(height: 22),
-          DashboardSectionHeading(
-            title: 'Recomendados para ti',
-            subtitle: 'Técnicos con buenas calificaciones en tu zona.',
-            trailing: TextButton(
-              onPressed: () => setState(() {
-                _searchController.clear();
-                _searchQuery = '';
-                _selectedCategory = 'Todos';
-              }),
-              child: const Text('Ver todos'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (_visibleTechnicians.isEmpty)
-            const _NoTechniciansFound()
-          else
-            for (var index = 0;
-                index < _visibleTechnicians.length;
-                index++) ...[
-              _TechnicianCard(
-                data: _visibleTechnicians[index],
-                onRequest: () => widget.onRequestTechnician
-                    ?.call(_visibleTechnicians[index].id),
-              ),
-              if (index < _visibleTechnicians.length - 1)
-                const SizedBox(height: 12),
-            ],
+          _PublishCard(onPublish: widget.onPublishProblem),
           const SizedBox(height: 26),
           DashboardSectionHeading(
-            title: 'Mis publicaciones activas',
+            title: 'Mis solicitudes',
             trailing: TextButton(
               onPressed: widget.onOpenHistory ?? _noop,
               child: const Text('Ver todas'),
             ),
           ),
           const SizedBox(height: 12),
-          const _RequestSummaryCard(),
-          const SizedBox(height: 26),
-          DashboardSectionHeading(
-            title: 'Tus servicios en curso',
-            trailing: TextButton(
-              onPressed: widget.onOpenHistory ?? _noop,
-              child: const Text('Historial'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _ActiveServiceCard(
-            title: 'Mantenimiento de calentador',
-            technician: 'Andrés Rojas · En curso',
-            action: 'Abrir chat',
-            icon: Icons.chat_bubble_outline_rounded,
-            onPressed: widget.onOpenChat,
-          ),
-          const SizedBox(height: 10),
-          _ActiveServiceCard(
-            title: 'Pintura de habitación',
-            technician: 'Sofía Méndez · Cotización pendiente',
-            action: 'Revisar cotización',
-            icon: Icons.request_quote_outlined,
-            onPressed: widget.onReviewQuote,
-          ),
-          const SizedBox(height: 10),
-          _ActiveServiceCard(
-            title: 'Cambio de grifo',
-            technician: 'Luis Herrera · Por confirmar cierre',
-            action: 'Confirmar cierre',
-            icon: Icons.task_alt_rounded,
-            onPressed: widget.onConfirmClosure,
+          _RequestsSection(
+            future: _requests,
+            onRetry: _reload,
+            onOpen: _open,
           ),
           const SizedBox(height: 20),
         ],
@@ -248,30 +127,182 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
   }
 }
 
-class _TechnicianCardData {
-  const _TechnicianCardData({
-    required this.id,
-    required this.initials,
-    required this.name,
-    required this.profession,
-    required this.neighborhood,
-    required this.category,
-    required this.rating,
-    required this.reviews,
-    required this.distance,
-    required this.rate,
+/// Qué le toca hacer al cliente en cada estado, para destacarlo.
+String? pendingActionFor(ServiceRequestStatus status) => switch (status) {
+      ServiceRequestStatus.published => 'Revisa los postulantes',
+      ServiceRequestStatus.providerSelected => 'Revisa la cotización',
+      ServiceRequestStatus.technicianFinished => 'Confirma el cierre',
+      _ => null,
+    };
+
+class _PublishCard extends StatelessWidget {
+  const _PublishCard({required this.onPublish});
+
+  final VoidCallback? onPublish;
+
+  @override
+  Widget build(BuildContext context) {
+    return DashboardCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.home_repair_service_outlined,
+                color: FixiaColors.secondary,
+                size: 28,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Publica tu problema y recibe propuestas de técnicos.',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            key: const ValueKey('client-dashboard-publish'),
+            onPressed: onPublish ?? _noop,
+            child: const Text('Publicar un problema'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestsSection extends StatelessWidget {
+  const _RequestsSection({
+    required this.future,
+    required this.onRetry,
+    required this.onOpen,
   });
 
-  final String id;
-  final String initials;
-  final String name;
-  final String profession;
-  final String neighborhood;
-  final String category;
-  final String rating;
-  final int reviews;
-  final String distance;
-  final String rate;
+  final Future<List<ServiceRequest>>? future;
+  final VoidCallback onRetry;
+  final ValueChanged<ServiceRequest> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = future;
+    if (pending == null) {
+      return const _Message(
+          'Tus solicitudes aparecerán aquí cuando te conectes a Fixia.');
+    }
+    return FutureBuilder<List<ServiceRequest>>(
+      future: pending,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Column(
+            children: [
+              _Message('${snapshot.error}'),
+              TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+            ],
+          );
+        }
+        final requests = snapshot.data!;
+        if (requests.isEmpty) {
+          return const _Message(
+              'Todavía no has publicado solicitudes. Publica tu primer problema para recibir propuestas.');
+        }
+        final recent = requests.take(ClientDashboardPage.recentLimit).toList();
+        return Column(
+          children: [
+            for (var i = 0; i < recent.length; i++) ...[
+              _RequestCard(request: recent[i], onOpen: () => onOpen(recent[i])),
+              if (i < recent.length - 1) const SizedBox(height: 10),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({required this.request, required this.onOpen});
+
+  final ServiceRequest request;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final action = pendingActionFor(request.status);
+    return InkWell(
+      key: ValueKey('client-request-${request.id}'),
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(FixiaRadii.card),
+      child: DashboardCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              request.description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _CategoryBadge(label: request.category.label),
+                Text(request.status.label),
+                Text(
+                  '${request.approximateLocation.zone}, ${request.approximateLocation.city}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            if (action != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: FixiaColors.secondary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    action,
+                    style: const TextStyle(
+                      color: FixiaColors.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Message extends StatelessWidget {
+  const _Message(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(color: FixiaColors.textSecondary),
+      );
 }
 
 class _ClientHeader extends StatelessWidget {
@@ -308,345 +339,6 @@ class _ClientHeader extends StatelessWidget {
   }
 }
 
-class _LocationSummary extends StatelessWidget {
-  const _LocationSummary();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.location_on_outlined,
-              color: FixiaColors.secondary,
-              size: 19,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'Usaquén, Bogotá',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: FixiaColors.primary,
-                    ),
-              ),
-            ),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 25, top: 2),
-          child: Text(
-            'Ubicación aproximada',
-            style:
-                Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.onChanged,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      key: const ValueKey('client-technician-search'),
-      controller: controller,
-      onChanged: onChanged,
-      decoration: const InputDecoration(
-        hintText: '¿Qué servicio necesitas?',
-        prefixIcon: Icon(Icons.search_rounded),
-        contentPadding: EdgeInsets.symmetric(vertical: 12),
-      ).copyWith(
-        suffixIcon: IconButton(
-          key: const ValueKey('client-clear-filters'),
-          tooltip: 'Limpiar búsqueda y filtros',
-          onPressed: onClear,
-          icon: const Icon(Icons.tune_rounded),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryFilters extends StatelessWidget {
-  const _CategoryFilters({
-    required this.selectedCategory,
-    required this.onSelected,
-  });
-
-  final String selectedCategory;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    const categories = [
-      'Todos',
-      'Plomería',
-      'Pintura',
-      'Limpieza',
-      'Electricidad'
-    ];
-    return SizedBox(
-      height: 38,
-      child: ScrollConfiguration(
-        behavior: const DragScrollBehavior(),
-        child: ListView.separated(
-        key: const ValueKey('client-technician-categories'),
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final selected = categories[index] == selectedCategory;
-          return ChoiceChip(
-            key: ValueKey('client-category-${categories[index]}'),
-            label: Text(categories[index]),
-            selected: selected,
-            onSelected: (_) => onSelected(categories[index]),
-            showCheckmark: false,
-            selectedColor: FixiaColors.secondary,
-            backgroundColor: FixiaColors.white,
-            side: BorderSide(
-              color: selected ? FixiaColors.secondary : const Color(0xFFDCE5F0),
-            ),
-            labelStyle: TextStyle(
-              color: selected ? FixiaColors.white : FixiaColors.textSecondary,
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-          );
-        },
-        ),
-      ),
-    );
-  }
-}
-
-class _NoTechniciansFound extends StatelessWidget {
-  const _NoTechniciansFound();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('client-no-technicians-found'),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: FixiaColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDCE5F0)),
-      ),
-      child: Text(
-        'No encontramos técnicos con esos filtros. Prueba otra búsqueda.',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium,
-      ),
-    );
-  }
-}
-
-class _TechnicianCard extends StatelessWidget {
-  const _TechnicianCard({required this.data, required this.onRequest});
-
-  final _TechnicianCardData data;
-  final VoidCallback onRequest;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      key: ValueKey('client-technician-${data.id}'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: FixiaColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE3EAF4)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0C01255D),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _TechnicianAvatar(initials: data.initials),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      data.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${data.profession} · ${data.neighborhood}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              _CategoryBadge(label: data.category),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _RatingAndDistance(data: data),
-          const SizedBox(height: 12),
-          const Divider(height: 1, color: FixiaColors.supportBackground),
-          const SizedBox(height: 11),
-          Row(
-            children: [
-              Expanded(
-                child: Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 5,
-                  children: [
-                    Text(
-                      data.rate,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: FixiaColors.secondary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      '/ hora',
-                      style: theme.textTheme.bodySmall?.copyWith(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: 96,
-                height: 42,
-                child: FilledButton(
-                  key: ValueKey('client-request-${data.id}'),
-                  onPressed: onRequest,
-                  style: FilledButton.styleFrom(
-                    minimumSize: Size.zero,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    backgroundColor: FixiaColors.secondary,
-                    textStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  child: const Text('Solicitar'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TechnicianAvatar extends StatelessWidget {
-  const _TechnicianAvatar({required this.initials});
-
-  final String initials;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CircleAvatar(
-          radius: 27,
-          backgroundColor: FixiaColors.supportBackground,
-          child: Text(
-            initials,
-            style: const TextStyle(
-              color: FixiaColors.secondary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        Positioned(
-          right: -1,
-          bottom: -1,
-          child: Container(
-            width: 19,
-            height: 19,
-            decoration: BoxDecoration(
-              color: FixiaColors.accent,
-              shape: BoxShape.circle,
-              border: Border.all(color: FixiaColors.white, width: 2),
-            ),
-            child: const Icon(
-              Icons.check_rounded,
-              color: FixiaColors.white,
-              size: 12,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RatingAndDistance extends StatelessWidget {
-  const _RatingAndDistance({required this.data});
-
-  final _TechnicianCardData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall;
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 5,
-      runSpacing: 3,
-      children: [
-        ...List.generate(
-          5,
-          (index) => Icon(
-            index < 4 ? Icons.star_rounded : Icons.star_half_rounded,
-            color: const Color(0xFFF4A11A),
-            size: 16,
-          ),
-        ),
-        Text('${data.rating} (${data.reviews})', style: style),
-        const Icon(
-          Icons.location_on_outlined,
-          size: 15,
-          color: FixiaColors.textSecondary,
-        ),
-        Text(data.distance, style: style),
-        Text(
-          'Ubicación aproximada',
-          style: style?.copyWith(fontSize: 10),
-        ),
-      ],
-    );
-  }
-}
-
 class _CategoryBadge extends StatelessWidget {
   const _CategoryBadge({required this.label});
 
@@ -667,113 +359,6 @@ class _CategoryBadge extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
-      ),
-    );
-  }
-}
-
-class _ActiveServiceCard extends StatelessWidget {
-  const _ActiveServiceCard({
-    required this.title,
-    required this.technician,
-    required this.action,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String title;
-  final String technician;
-  final String action;
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return DashboardCard(
-      child: Row(
-        children: [
-          const Icon(
-            Icons.handyman_outlined,
-            color: FixiaColors.secondary,
-            size: 22,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 3),
-                Text(technician, style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 6),
-                const ApproximateLocationLabel(),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: action,
-            onPressed: onPressed ?? _noop,
-            icon: Icon(icon, color: FixiaColors.secondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RequestSummaryCard extends StatelessWidget {
-  const _RequestSummaryCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return DashboardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Reparación de fuga en cocina',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 8),
-          const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _CategoryBadge(label: 'Plomería'),
-              Text('Publicado hoy'),
-              ApproximateLocationLabel(),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Row(
-            children: [
-              Icon(
-                Icons.people_alt_outlined,
-                size: 18,
-                color: FixiaColors.secondary,
-              ),
-              SizedBox(width: 6),
-              Text(
-                '3 postulantes',
-                style: TextStyle(
-                  color: FixiaColors.secondary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
