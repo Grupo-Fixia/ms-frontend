@@ -41,6 +41,7 @@ import 'features/client/service_requests/domain/service_request.dart';
 import 'features/client/service_requests/domain/service_request_exceptions.dart';
 import 'features/client/service_requests/presentation/my_service_requests_page.dart';
 import 'features/company/dashboard/presentation/company_dashboard_page.dart';
+import 'features/company/applications/presentation/company_opportunities_page.dart';
 import 'features/company/technicians/application/company_use_cases.dart';
 import 'features/company/technicians/application/ports/company_repository.dart';
 import 'features/company/technicians/domain/company_exceptions.dart';
@@ -100,6 +101,7 @@ abstract final class AppRoutes {
   /// Cuenta de empresa prestadora (GC-467).
   static const companyDashboard = '/empresa/inicio';
   static const companyTechnicians = '/empresa/tecnicos';
+  static const companyOpportunities = '/empresa/oportunidades';
 
   /// Chat prototipo, solo simulación (GC-431). No es mensajería real.
   static const chatPrototype = '/demo/chat';
@@ -518,6 +520,8 @@ class _FixiaAppState extends State<FixiaApp> {
       },
       onOpenTechnicians: () =>
           Navigator.of(context).pushNamed(AppRoutes.companyTechnicians),
+      onOpenOpportunities: () =>
+          Navigator.of(context).pushNamed(AppRoutes.companyOpportunities),
       onLogout: () => _logoutAndGoToLogin(context),
     );
   }
@@ -536,6 +540,24 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   static const _needsConnection = 'La consulta requiere conexión con Fixia.';
+
+  Widget _companyOpportunitiesPage(BuildContext context) {
+    final controller = _companyTechnicians;
+    final applications = widget.backend?.companyApplications;
+    final opportunities = widget.backend?.companyOpportunities;
+    if (controller == null || applications == null || opportunities == null) {
+      return const Scaffold(body: Center(child: Text(_needsConnection)));
+    }
+    return CompanyOpportunitiesPage(
+      key: ValueKey(_sessionStore.profile!.id),
+      sessionKey: _sessionStore.profile!.id,
+      techniciansController: controller,
+      applications: applications,
+      opportunities: opportunities,
+      onBack: () => Navigator.of(context).maybePop(),
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
 
   Widget _clientServiceRequestPage(BuildContext context) {
     final backend = widget.backend;
@@ -910,6 +932,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
             _guard(RouteAccess.company, _companyTechniciansPage),
+        AppRoutes.companyOpportunities:
+            _guard(RouteAccess.company, _companyOpportunitiesPage),
         AppRoutes.chatPrototype: _guard(
             RouteAccess.authenticated, (_) => const ChatPrototypePage()),
       },
