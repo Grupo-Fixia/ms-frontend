@@ -27,6 +27,7 @@ import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
+import 'features/chat_prototype/presentation/chat_prototype_page.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/application/client_profile_use_cases.dart';
 import 'features/client/profile/domain/client_profile.dart';
@@ -48,6 +49,13 @@ import 'features/quotations/domain/quotation_exceptions.dart';
 import 'features/technician/jobs/presentation/technician_contract_page.dart';
 import 'features/technician/jobs/presentation/technician_jobs_page.dart';
 import 'features/technician/jobs/presentation/technician_quotation_page.dart';
+import 'features/company/dashboard/presentation/company_dashboard_page.dart';
+import 'features/company/technicians/application/company_use_cases.dart';
+import 'features/company/technicians/application/ports/company_repository.dart';
+import 'features/company/technicians/domain/company_exceptions.dart';
+import 'features/company/technicians/infrastructure/http_company_repository.dart';
+import 'features/company/technicians/presentation/company_technicians_controller.dart';
+import 'features/company/technicians/presentation/company_technicians_page.dart';
 import 'backend_integrations.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
@@ -98,6 +106,13 @@ abstract final class AppRoutes {
   static const technicianSpecialties = '/tecnico/especialidades';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
+
+  /// Cuenta de empresa prestadora (GC-467).
+  static const companyDashboard = '/empresa/inicio';
+  static const companyTechnicians = '/empresa/tecnicos';
+
+  /// Chat prototipo, solo simulación (GC-431). No es mensajería real.
+  static const chatPrototype = '/demo/chat';
 }
 
 Future<void> main() async {
@@ -169,6 +184,18 @@ Future<void> main() async {
           ).call,
         ),
       ),
+      companyRepository: HttpCompanyRepository(
+        client: httpClient,
+        baseUrl: usersApiBaseUrl,
+        authorizedHttp: AuthorizedHttp(
+          accessToken: () => sessionStore.session?.accessToken,
+          renewSession: RefreshSession(
+            authRepository,
+            sessionStore,
+            sessionStorage,
+          ).renew,
+        ),
+      ),
       authRepository: authRepository,
       sessionStorage: sessionStorage,
       sessionStore: sessionStore,
@@ -209,6 +236,7 @@ class FixiaApp extends StatefulWidget {
     required this.authRepository,
     required this.sessionStorage,
     this.technicianSpecialtiesRepository,
+    this.companyRepository,
     this.sessionStore,
     this.sessionChangesFromOtherTabs,
   });
@@ -227,6 +255,11 @@ class FixiaApp extends StatefulWidget {
   /// Repositorio de especialidades del técnico con sesión. Si es `null` se usa
   /// uno en memoria.
   final TechnicianSpecialtiesRepository? technicianSpecialtiesRepository;
+
+  /// Empresa del administrador autenticado y sus técnicos (GC-467). Si es
+  /// `null`, las pantallas de empresa piden conexión en vez de mostrar datos
+  /// de ejemplo.
+  final CompanyRepository? companyRepository;
 
   /// Sesión de la app. Si es `null` se crea una vacía. Llega con la sesión ya
   /// iniciada cuando se restauró desde el almacenamiento.
@@ -300,6 +333,15 @@ class _FixiaAppState extends State<FixiaApp> {
     _wasAuthenticated = authenticated;
   }
 
+  /// Única fuente de técnicos de la empresa en la app (GC-467): la usan «Mis
+  /// técnicos» y el selector de la postulación empresarial (GC-469).
+  late final CompanyTechniciansController? _companyTechnicians =
+      widget.companyRepository == null
+          ? null
+          : CompanyTechniciansController(
+              ListCompanyTechnicians(widget.companyRepository!),
+            );
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -327,6 +369,7 @@ class _FixiaAppState extends State<FixiaApp> {
   @override
   void dispose() {
     _otherTabs?.cancel();
+    _companyTechnicians?.dispose();
     _sessionStore.removeListener(_onSessionChanged);
     if (widget.sessionStore == null) _sessionStore.dispose();
     super.dispose();
@@ -372,6 +415,7 @@ class _FixiaAppState extends State<FixiaApp> {
   String get _accountHome => switch (_sessionStore.profile?.role) {
         UserRole.client => AppRoutes.clientDashboard,
         UserRole.professional => AppRoutes.technicianDashboard,
+        UserRole.company => AppRoutes.companyDashboard,
         _ => AppRoutes.session,
       };
 
@@ -433,6 +477,9 @@ class _FixiaAppState extends State<FixiaApp> {
     if (profile.role == UserRole.professional) {
       return _technicianDashboardPage(context);
     }
+    if (profile.role == UserRole.company) {
+      return _companyDashboardPage(context);
+    }
 
     return SessionPage(
       store: _sessionStore,
@@ -456,9 +503,49 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
+      onOpenChat: () =>
+          Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
     );
   }
+
+  /// GC-467: inicio de la empresa con su nombre real.
+  Widget _companyDashboardPage(BuildContext context) {
+    final profile = _sessionStore.profile!;
+    final repository = widget.companyRepository;
+    return CompanyDashboardPage(
+      firstName: profile.firstName,
+      loadCompanyName: () async {
+        if (repository == null) throw const _UserMessage(_needsConnection);
+        try {
+          return (await GetMyCompany(repository)()).name;
+        } on CompanyFailure catch (failure) {
+          if (failure.isSessionExpired && context.mounted) {
+            _endExpiredSession(context);
+          }
+          throw _UserMessage(failure.message);
+        }
+      },
+      onOpenTechnicians: () =>
+          Navigator.of(context).pushNamed(AppRoutes.companyTechnicians),
+      onLogout: () => _logoutAndGoToLogin(context),
+    );
+  }
+
+  /// GC-467: técnicos asociados reales de la empresa.
+  Widget _companyTechniciansPage(BuildContext context) {
+    final controller = _companyTechnicians;
+    if (controller == null) {
+      return const Scaffold(body: Center(child: Text(_needsConnection)));
+    }
+    return CompanyTechniciansPage(
+      controller: controller,
+      onBack: () => Navigator.of(context).maybePop(),
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
+
+  static const _needsConnection = 'La consulta requiere conexión con Fixia.';
 
   Widget _clientServiceRequestPage(BuildContext context) {
     final backend = widget.backend;
@@ -588,6 +675,8 @@ class _FixiaAppState extends State<FixiaApp> {
           : () => Navigator.of(context).pushNamed(AppRoutes.technicianJobs),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
+      onOpenChat: () =>
+          Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -943,6 +1032,12 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.professional, _technicianJobsPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
+        AppRoutes.companyDashboard:
+            _guard(RouteAccess.company, _companyDashboardPage),
+        AppRoutes.companyTechnicians:
+            _guard(RouteAccess.company, _companyTechniciansPage),
+        AppRoutes.chatPrototype: _guard(
+            RouteAccess.authenticated, (_) => const ChatPrototypePage()),
       },
       // Una URL que no existe lleva al inicio (el de la cuenta, con sesión)
       // en vez de mostrar un error.
@@ -989,6 +1084,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenSettings,
     required this.onOpenOpportunities,
     required this.onOpenSpecialties,
+    required this.onOpenChat,
     required this.onLogout,
     required this.onSessionExpired,
     this.onOpenJobs,
@@ -1000,6 +1096,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
   final VoidCallback onOpenSpecialties;
+  final VoidCallback onOpenChat;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -1098,6 +1195,7 @@ class _TechnicianDashboardLoaderState
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenJobs: widget.onOpenJobs,
           onOpenSpecialties: widget.onOpenSpecialties,
+          onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
         );
       },

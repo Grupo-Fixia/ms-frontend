@@ -16,6 +16,9 @@ enum RouteAccess {
 
   /// Solo técnicos.
   professional,
+
+  /// Solo administradores de empresa prestadora (GC-467).
+  company,
 }
 
 /// Qué hacer al intentar abrir una ruta.
@@ -54,6 +57,8 @@ abstract final class RouteGuard {
         return _forRole(UserRole.client, isAuthenticated, role);
       case RouteAccess.professional:
         return _forRole(UserRole.professional, isAuthenticated, role);
+      case RouteAccess.company:
+        return _forRole(UserRole.company, isAuthenticated, role);
     }
   }
 
