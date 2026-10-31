@@ -27,6 +27,7 @@ import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
+import 'features/chat_prototype/presentation/chat_prototype_page.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/application/client_profile_use_cases.dart';
 import 'features/client/profile/domain/client_profile.dart';
@@ -99,6 +100,9 @@ abstract final class AppRoutes {
   /// Cuenta de empresa prestadora (GC-467).
   static const companyDashboard = '/empresa/inicio';
   static const companyTechnicians = '/empresa/tecnicos';
+
+  /// Chat prototipo, solo simulación (GC-431). No es mensajería real.
+  static const chatPrototype = '/demo/chat';
 }
 
 Future<void> main() async {
@@ -489,6 +493,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
+      onOpenChat: () =>
+          Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
     );
   }
@@ -641,6 +647,8 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
+      onOpenChat: () =>
+          Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -902,6 +910,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
             _guard(RouteAccess.company, _companyTechniciansPage),
+        AppRoutes.chatPrototype: _guard(
+            RouteAccess.authenticated, (_) => const ChatPrototypePage()),
       },
       // Una URL que no existe lleva al inicio (el de la cuenta, con sesión)
       // en vez de mostrar un error.
@@ -948,6 +958,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenSettings,
     required this.onOpenOpportunities,
     required this.onOpenSpecialties,
+    required this.onOpenChat,
     required this.onLogout,
     required this.onSessionExpired,
   });
@@ -957,6 +968,7 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
   final VoidCallback onOpenSpecialties;
+  final VoidCallback onOpenChat;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -1054,6 +1066,7 @@ class _TechnicianDashboardLoaderState
           onOpenSettings: widget.onOpenSettings,
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenSpecialties: widget.onOpenSpecialties,
+          onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
         );
       },
