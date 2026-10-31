@@ -13,6 +13,7 @@ class TechnicianDashboardPage extends StatelessWidget {
     this.onLogout,
     this.onOpenOpportunities,
     this.onOpenSpecialties,
+    this.onOpenChat,
     this.onRecordEvidence,
     this.onMarkFinished,
     this.onRequestWithdrawal,
@@ -27,6 +28,9 @@ class TechnicianDashboardPage extends StatelessWidget {
   final VoidCallback? onLogout;
   final VoidCallback? onOpenOpportunities;
   final VoidCallback? onOpenSpecialties;
+
+  /// Abre el chat prototipo (simulación, GC-431).
+  final VoidCallback? onOpenChat;
   final VoidCallback? onRecordEvidence;
   final VoidCallback? onMarkFinished;
   final VoidCallback? onRequestWithdrawal;
@@ -73,6 +77,17 @@ class TechnicianDashboardPage extends StatelessWidget {
                     label: const Text('Editar especialidades'),
                   ),
                 ),
+                if (onOpenChat != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const ValueKey('technician-open-chat-prototype'),
+                      onPressed: onOpenChat,
+                      icon: const Icon(Icons.chat_bubble_outline_rounded,
+                          size: 18),
+                      label: const Text('Chat de demostración'),
+                    ),
+                  ),
                 const SizedBox(height: 24),
                 Row(
                   children: [
