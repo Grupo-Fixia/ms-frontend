@@ -45,6 +45,31 @@ class _Repository implements ContractRepository {
     calls.add('list');
     return [_contract];
   }
+
+  @override
+  Future<ServiceContract> start(String contractId) async {
+    calls.add('start $contractId');
+    return _contract;
+  }
+
+  @override
+  Future<ServiceContract> finish(String contractId) async {
+    calls.add('finish $contractId');
+    return _contract;
+  }
+
+  @override
+  Future<ServiceContract> confirmClosure(String serviceRequestId) async {
+    calls.add('closure $serviceRequestId');
+    return _contract;
+  }
+
+  @override
+  Future<ServiceContract> objectClosure(
+      String serviceRequestId, String reason) async {
+    calls.add('objection $serviceRequestId $reason');
+    return _contract;
+  }
 }
 
 void main() {
@@ -79,6 +104,37 @@ void main() {
       throwsA(isA<ContractFailure>().having(
           (f) => f.message, 'message', GetMyContract.missingContractMessage)),
     );
+    expect(repository.calls, isEmpty);
+  });
+
+  test('ciclo del servicio: iniciar, finalizar, cerrar y objetar', () async {
+    final repository = _Repository();
+    await StartService(repository)(' c-1 ');
+    await FinishService(repository)('c-1');
+    await ConfirmServiceClosure(repository)('req-1');
+    await ObjectServiceClosure(repository)('req-1', '  Sigue goteando ');
+    expect(repository.calls, [
+      'start c-1',
+      'finish c-1',
+      'closure req-1',
+      'objection req-1 Sigue goteando',
+    ]);
+  });
+
+  test('objetar exige un motivo de máximo 500 caracteres', () async {
+    final repository = _Repository();
+    expect(
+      () => ObjectServiceClosure(repository)('req-1', '   '),
+      throwsA(isA<ContractFailure>().having((f) => f.message, 'message',
+          ObjectServiceClosure.missingReasonMessage)),
+    );
+    expect(
+      () => ObjectServiceClosure(repository)('req-1', 'x' * 501),
+      throwsA(isA<ContractFailure>().having(
+          (f) => f.message, 'message', ObjectServiceClosure.tooLongMessage)),
+    );
+    expect(
+        () => FinishService(repository)(' '), throwsA(isA<ContractFailure>()));
     expect(repository.calls, isEmpty);
   });
 }

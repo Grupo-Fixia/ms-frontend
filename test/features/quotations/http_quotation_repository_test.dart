@@ -63,6 +63,27 @@ NewQuotation _new({int? cents = 15000050}) => NewQuotation(
     );
 
 void main() {
+  test('lee la versión y si es la vigente (GC-427)', () async {
+    final list = await _repository((_) async => _json(200, [
+          {..._quotationJson(id: 'q-2'), 'revision': 2, 'current': true},
+          {
+            ..._quotationJson(id: 'q-1', status: 'SUPERSEDED'),
+            'revision': 1,
+            'current': false,
+          },
+          _quotationJson(id: 'q-0'),
+        ])).listForRequest('req-1');
+
+    expect(list.map((q) => q.revision), [2, 1, null]);
+    expect(list[0].isCurrent, isTrue);
+    expect(list[0].versionLabel, 'Versión 2');
+    expect(list[1].isCurrent, isFalse);
+    // Sin el campo del backend se deduce del estado.
+    expect(list[2].current, isNull);
+    expect(list[2].isCurrent, isTrue);
+    expect(list[2].versionLabel, 'Cotización');
+  });
+
   group('send (prestador)', () {
     test('envía la cotización y devuelve la enviada', () async {
       late http.Request sent;

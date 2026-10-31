@@ -4,10 +4,15 @@ import '../domain/service_request.dart';
 
 class MyServiceRequestsPage extends StatefulWidget {
   const MyServiceRequestsPage(
-      {super.key, required this.load, required this.get});
+      {super.key, required this.load, required this.get, this.onOpen});
 
   final Future<List<ServiceRequest>> Function() load;
   final Future<ServiceRequest> Function(String id) get;
+
+  /// Abre el detalle completo de la solicitud (postulantes, cotización,
+  /// contrato y cierre). Al volver se actualiza la lista. Sin él, se muestra
+  /// un resumen en un diálogo.
+  final Future<void> Function(ServiceRequest request)? onOpen;
 
   @override
   State<MyServiceRequestsPage> createState() => _MyServiceRequestsPageState();
@@ -19,6 +24,16 @@ class _MyServiceRequestsPageState extends State<MyServiceRequestsPage> {
 
   Future<void> _open(ServiceRequest request) async {
     if (_opening) return;
+    final onOpen = widget.onOpen;
+    if (onOpen != null) {
+      await onOpen(request);
+      if (mounted) {
+        setState(() {
+          _requests = widget.load();
+        });
+      }
+      return;
+    }
     setState(() => _opening = true);
     try {
       final saved = await widget.get(request.id);
