@@ -34,6 +34,7 @@ ms-frontend/
 │       ├── auth/           #   común a todos los roles
 │       │   ├── login/      #     inicio y cierre de sesión (GC-236)
 │       │   └── registration/   # registro de cliente y de técnico (GC-234, GC-235)
+│       ├── chat_prototype/ #   chat de demostración, solo simulación (GC-431); ver docs/chat-prototipo.md
 │       ├── home/           #   página de inicio pública (común a todos)
 │       │   └── presentation/
 │       ├── quotations/     #   cotizaciones: las envía el técnico y las responde el cliente (GC-300, GC-301)

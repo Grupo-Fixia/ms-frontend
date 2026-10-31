@@ -42,10 +42,24 @@ void main() {
         RouteDecision.toHome);
   });
 
+  test('la empresa solo entra a sus rutas y nadie más entra a las de empresa',
+      () {
+    expect(_decide(RouteAccess.company, UserRole.company), RouteDecision.allow);
+    expect(_decide(RouteAccess.client, UserRole.company), RouteDecision.toHome);
+    expect(_decide(RouteAccess.professional, UserRole.company),
+        RouteDecision.toHome);
+    for (final role in [UserRole.client, UserRole.professional]) {
+      expect(_decide(RouteAccess.company, role), RouteDecision.toHome);
+    }
+    expect(_decide(RouteAccess.company, null, authenticated: false),
+        RouteDecision.toLogin);
+  });
+
   test('un administrador o un rol desconocido no entra a rutas de rol', () {
     for (final role in [UserRole.admin, null]) {
       expect(_decide(RouteAccess.client, role), RouteDecision.toHome);
       expect(_decide(RouteAccess.professional, role), RouteDecision.toHome);
+      expect(_decide(RouteAccess.company, role), RouteDecision.toHome);
       expect(_decide(RouteAccess.authenticated, role), RouteDecision.allow);
     }
   });
