@@ -1,6 +1,9 @@
 import 'package:http/http.dart' as http;
 
 import 'core/http/authorized_http.dart';
+import 'features/company/applications/application/company_repositories.dart';
+import 'features/company/applications/infrastructure/http_company_application_repository.dart';
+import 'features/company/applications/infrastructure/http_company_opportunities_repository.dart';
 import 'features/client/profile/application/ports/client_profile_repository.dart';
 import 'features/client/profile/infrastructure/http_client_profile_repository.dart';
 import 'features/client/service_requests/application/ports/service_request_repository.dart';
@@ -25,6 +28,8 @@ class BackendIntegrations {
     required this.applications,
     required this.quotations,
     required this.contracts,
+    this.companyApplications,
+    this.companyOpportunities,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -36,6 +41,14 @@ class BackendIntegrations {
     required AuthorizedHttp authorizedHttp,
   }) =>
       BackendIntegrations(
+        companyApplications: HttpCompanyApplicationRepository(
+            client: client,
+            baseUrl: servicesBaseUrl,
+            authorizedHttp: authorizedHttp),
+        companyOpportunities: HttpCompanyOpportunitiesRepository(
+            client: client,
+            baseUrl: servicesBaseUrl,
+            authorizedHttp: authorizedHttp),
         clientProfile: HttpClientProfileRepository(
           client: client,
           baseUrl: usersBaseUrl,
@@ -76,4 +89,6 @@ class BackendIntegrations {
   /// Cotizaciones y contrataciones (GC-428, GC-429).
   final QuotationRepository quotations;
   final ContractRepository contracts;
+  final CompanyApplicationRepository? companyApplications;
+  final CompanyOpportunitiesRepository? companyOpportunities;
 }

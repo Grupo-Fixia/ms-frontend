@@ -68,7 +68,7 @@ class HttpOpportunityRepository implements OpportunityRepository {
 
     switch (response.statusCode) {
       case 200:
-        return _parsePage(_decode(response));
+        return parsePage(_decode(response));
       case 400:
         throw const OpportunityFailure(invalidQueryMessage);
       case 403:
@@ -80,7 +80,7 @@ class HttpOpportunityRepository implements OpportunityRepository {
     }
   }
 
-  OpportunityPage _parsePage(Object? json) {
+  OpportunityPage parsePage(Object? json) {
     if (json is! Map || json['items'] is! List) {
       throw const OpportunityFailure(unexpectedErrorMessage);
     }
