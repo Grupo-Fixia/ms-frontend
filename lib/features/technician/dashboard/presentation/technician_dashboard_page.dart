@@ -12,6 +12,7 @@ class TechnicianDashboardPage extends StatelessWidget {
     this.onOpenSettings,
     this.onLogout,
     this.onOpenOpportunities,
+    this.onOpenJobs,
     this.onOpenSpecialties,
     this.onOpenChat,
     this.onRecordEvidence,
@@ -27,6 +28,9 @@ class TechnicianDashboardPage extends StatelessWidget {
   final VoidCallback? onOpenSettings;
   final VoidCallback? onLogout;
   final VoidCallback? onOpenOpportunities;
+
+  /// «Mis trabajos»: cotizaciones y servicios contratados (GC-428, GC-429).
+  final VoidCallback? onOpenJobs;
   final VoidCallback? onOpenSpecialties;
 
   /// Abre el chat prototipo (simulación, GC-431).
@@ -45,7 +49,7 @@ class TechnicianDashboardPage extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       bottomNavigationBar: _TechnicianNavigationBar(
         onOpenProfile: onOpenSettings ?? () => _showProfileMessage(context),
-        onOpenOpportunities: onOpenOpportunities,
+        onOpenOpportunities: onOpenJobs ?? onOpenOpportunities,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
