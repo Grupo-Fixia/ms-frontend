@@ -61,11 +61,13 @@ void main() {
     );
     expect(find.text('ana@fixia.com'), findsOneWidget);
     expect(find.text('No registrado'), findsOneWidget);
-    expect(find.text('MÉTODOS DE PAGO'), findsOneWidget);
-    expect(find.text('Débito •••• 4582'), findsOneWidget);
-    expect(find.text('Crédito •••• 7893'), findsOneWidget);
-    expect(find.text('Datos de demostración'), findsOneWidget);
-    expect(find.byKey(const ValueKey('client-profile-wallet')), findsOneWidget);
+    // Sin datos de ejemplo: ni métodos de pago ni saldo inventados.
+    expect(find.text('Débito •••• 4582'), findsNothing);
+    expect(find.text('Datos de demostración'), findsNothing);
+    expect(find.byKey(const ValueKey('client-profile-wallet')), findsNothing);
+    expect(find.byKey(const ValueKey('client-profile-payments-note')),
+        findsOneWidget);
+    expect(find.text('–'), findsNWidgets(3));
     expect(
       find.byKey(const ValueKey('client-profile-nav-profile')),
       findsOneWidget,

@@ -167,8 +167,13 @@ void main() {
       var queries = 0;
       await pump(tester,
           SessionStore()..start(fixtureSession, company.copyWith(role: role)),
-          (_) async {
-        queries++;
+          (request) async {
+        // El inicio al que se redirige (cliente o técnico) consulta sus
+        // propios datos reales; aquí solo cuentan las consultas de empresa.
+        if (request.url.path.contains('/companies') ||
+            request.method != 'GET') {
+          queries++;
+        }
         return json(500, {});
       });
       navigator(tester).pushNamed(AppRoutes.companyOpportunities);
