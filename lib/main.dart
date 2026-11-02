@@ -1,3 +1,5 @@
+import 'features/service_evidence/application/evidence_feature.dart';
+import 'features/service_evidence/presentation/service_evidence_flow.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -895,12 +897,14 @@ class _FixiaAppState extends State<FixiaApp> {
         MaterialPageRoute<void>(
           builder: (_) => ServiceRequestDetailPage(
             requestId: request.id,
-            get: (id) => _serviceCall(
-                context, () => GetMyServiceRequest(backend.serviceRequests)(id)),
+            get: (id) => _serviceCall(context,
+                () => GetMyServiceRequest(backend.serviceRequests)(id)),
             listApplicants: (id) => _serviceCall(
                 context, () => ListApplicants(backend.serviceRequests)(id)),
-            selectProvider: (id, applicationId) => _serviceCall(context,
-                () => SelectProvider(backend.serviceRequests)(id, applicationId)),
+            selectProvider: (id, applicationId) => _serviceCall(
+                context,
+                () =>
+                    SelectProvider(backend.serviceRequests)(id, applicationId)),
             extraSections: (context, request, reload) =>
                 _clientRequestSections(context, backend, request, reload),
           ),
@@ -938,20 +942,23 @@ class _FixiaAppState extends State<FixiaApp> {
             key: ValueKey('contract-${request.id}-${request.status.name}'),
             load: () => _serviceCall(context,
                 () => GetRequestContract(backend.contracts)(request.id)),
-            actionsBuilder: (context, contract, reloadContract) =>
-                clientServiceActions(
-              contract: contract,
-              confirmClosure: () => _serviceCall(context,
-                  () => ConfirmServiceClosure(backend.contracts)(request.id)),
-              object: (reason) => _serviceCall(
-                  context,
-                  () => ObjectServiceClosure(backend.contracts)(
-                      request.id, reason)),
-              onDone: () {
-                reloadContract();
-                reload();
-              },
-            ),
+            actionsBuilder: (context, contract, reloadContract) => [
+              ...clientServiceActions(
+                contract: contract,
+                confirmClosure: () => _serviceCall(context,
+                    () => ConfirmServiceClosure(backend.contracts)(request.id)),
+                object: (reason) => _serviceCall(
+                    context,
+                    () => ObjectServiceClosure(backend.contracts)(
+                        request.id, reason)),
+                onDone: () {
+                  reloadContract();
+                  reload();
+                },
+              ),
+              ..._evidenceActions(
+                  context, EvidenceTarget.forRequest(contract.serviceRequestId))
+            ],
           ),
         ];
       default:
@@ -978,9 +985,7 @@ class _FixiaAppState extends State<FixiaApp> {
               !contracted.contains(a.serviceRequest.id))
           .length,
       active: contracts
-          .where((c) =>
-              c.serviceStatus != null &&
-              !c.serviceStatus!.isTerminal)
+          .where((c) => c.serviceStatus != null && !c.serviceStatus!.isTerminal)
           .length,
       closed: contracts
           .where((c) => c.serviceStatus == ServiceRequestStatus.closed)
@@ -993,7 +998,8 @@ class _FixiaAppState extends State<FixiaApp> {
     final backend = widget.backend;
     if (backend == null) {
       return const Scaffold(
-          body: Center(child: Text('Esta sección requiere conexión con Fixia.')));
+          body:
+              Center(child: Text('Esta sección requiere conexión con Fixia.')));
     }
     return TechnicianJobsPage(
       loadApplications: () => _serviceCall(
@@ -1020,15 +1026,18 @@ class _FixiaAppState extends State<FixiaApp> {
           builder: (_) => TechnicianContractPage(
             load: () => _serviceCall(
                 context, () => GetMyContract(backend.contracts)(contract.id)),
-            actionsBuilder: (context, current, reload) =>
-                technicianServiceActions(
-              contract: current,
-              start: () => _serviceCall(
-                  context, () => StartService(backend.contracts)(current.id)),
-              finish: () => _serviceCall(
-                  context, () => FinishService(backend.contracts)(current.id)),
-              onDone: reload,
-            ),
+            actionsBuilder: (context, current, reload) => [
+              ...technicianServiceActions(
+                contract: current,
+                start: () => _serviceCall(
+                    context, () => StartService(backend.contracts)(current.id)),
+                finish: () => _serviceCall(context,
+                    () => FinishService(backend.contracts)(current.id)),
+                onDone: reload,
+              ),
+              ..._evidenceActions(
+                  context, EvidenceTarget.forContract(current.id))
+            ],
           ),
         ),
       ),
@@ -1036,6 +1045,26 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   /// La sesión venció mientras se usaba una pantalla: se vuelve al login.
+  List<Widget> _evidenceActions(BuildContext context, EvidenceTarget target) {
+    final feature = widget.backend?.evidence;
+    final profile = _sessionStore.profile;
+    if (feature == null || profile == null) return const [];
+    return [
+      OutlinedButton.icon(
+        key: const ValueKey('open-service-evidence'),
+        icon: const Icon(Icons.attach_file),
+        label: const Text('Evidencias del servicio'),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (context) => ServiceEvidenceFlow(
+              feature: feature,
+              target: target,
+              profile: profile,
+              onSessionExpired: () => _endExpiredSession(context)),
+        )),
+      )
+    ];
+  }
+
   void _endExpiredSession(BuildContext context) {
     _sessionStore.clear();
     _goToLogin(context);
@@ -1155,8 +1184,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.company, _companyTechniciansPage),
         AppRoutes.companyOpportunities:
             _guard(RouteAccess.company, _companyOpportunitiesPage),
-        AppRoutes.chatPrototype: _guard(
-            RouteAccess.authenticated, (_) => const ChatPrototypePage()),
+        AppRoutes.chatPrototype:
+            _guard(RouteAccess.authenticated, (_) => const ChatPrototypePage()),
       },
       // Una URL que no existe lleva al inicio (el de la cuenta, con sesión)
       // en vez de mostrar un error.
