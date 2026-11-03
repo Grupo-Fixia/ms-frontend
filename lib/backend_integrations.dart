@@ -14,6 +14,8 @@ import 'features/contracts/application/ports/contract_repository.dart';
 import 'features/contracts/infrastructure/http_contract_repository.dart';
 import 'features/quotations/application/ports/quotation_repository.dart';
 import 'features/quotations/infrastructure/http_quotation_repository.dart';
+import 'features/service_history/application/ports/service_history_repository.dart';
+import 'features/service_history/infrastructure/http_service_history_repository.dart';
 import 'features/technician/applications/application/ports/application_repository.dart';
 import 'features/technician/applications/infrastructure/http_application_repository.dart';
 import 'features/technician/opportunities/application/ports/opportunity_repository.dart';
@@ -33,6 +35,8 @@ class BackendIntegrations {
     this.evidence,
     this.companyApplications,
     this.companyOpportunities,
+    this.serviceHistory,
+    this.evaluations,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -89,6 +93,16 @@ class BackendIntegrations {
         authorizedHttp: authorizedHttp,
       ),
       contracts: contracts,
+      serviceHistory: HttpServiceHistoryRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      evaluations: HttpServiceEvaluationRepository(
+        client: client,
+        baseUrl: usersBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
     );
   }
 
@@ -103,4 +117,9 @@ class BackendIntegrations {
   final ContractRepository contracts;
   final CompanyApplicationRepository? companyApplications;
   final CompanyOpportunitiesRepository? companyOpportunities;
+
+  /// Historial propio y evaluaciones (GC-449). Si faltan, «Mis servicios»
+  /// pide conexión en vez de mostrar datos de ejemplo.
+  final ServiceHistoryRepository? serviceHistory;
+  final ServiceEvaluationRepository? evaluations;
 }
