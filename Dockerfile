@@ -9,7 +9,10 @@ COPY . .
 # URL base de la API, fijada al compilar. Con el mismo origen que sirve Traefik (http://localhost)
 # el navegador no necesita CORS. Para otro host: --build-arg USERS_API_BASE_URL=...
 ARG USERS_API_BASE_URL=http://localhost
-RUN flutter build web --release --dart-define=USERS_API_BASE_URL=${USERS_API_BASE_URL}
+# Sin service worker (--pwa-strategy=none): si no, el navegador guarda una
+# copia de la app y sigue mostrando la versión anterior después de cada
+# despliegue hasta que se borre el caché a mano.
+RUN flutter build web --release --pwa-strategy=none --dart-define=USERS_API_BASE_URL=${USERS_API_BASE_URL}
 
 # Etapa Nginx
 FROM nginx:alpine
