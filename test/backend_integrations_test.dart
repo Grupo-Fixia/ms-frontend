@@ -357,17 +357,22 @@ void main() {
       await scrollTo(tester, key('client-request-expected-at'));
       await tester.tap(key('client-request-expected-at'));
       await tester.pumpAndSettle();
-      final now = DateTime.now();
-      // Mañana, para que siempre sea un momento futuro.
-      final tomorrow = now.add(const Duration(days: 1));
-      if (tomorrow.month != now.month) {
-        await tester.tap(find.byIcon(Icons.chevron_right));
+      // Mañana a las 10:00, para que siempre sea un momento futuro.
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      String two(int n) => n.toString().padLeft(2, '0');
+      final day = key(
+          'fixia-picker-day-${tomorrow.year}-${two(tomorrow.month)}-${two(tomorrow.day)}');
+      if (day.evaluate().isEmpty) {
+        await tester.tap(key('fixia-picker-next'));
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.text('${tomorrow.day}').last);
-      await tester.tap(find.text('Continuar'));
+      await tester.ensureVisible(day);
+      await tester.tap(day);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Aceptar'));
+      await tester.ensureVisible(key('fixia-picker-slot-10:00'));
+      await tester.tap(key('fixia-picker-slot-10:00'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('fixia-picker-confirm'));
       await tester.pumpAndSettle();
     }
 

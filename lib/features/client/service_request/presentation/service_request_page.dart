@@ -4,6 +4,7 @@ import '../../../../core/constants/service_category.dart';
 import '../../../../core/domain/service_budget.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_date_time_picker.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/service_request_draft.dart';
 
@@ -65,35 +66,16 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
 
   Future<void> _pickExpectedMoment() async {
     final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _expectedAt ?? now,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 2),
-      helpText: 'Selecciona el día esperado',
-      cancelText: 'Cancelar',
-      confirmText: 'Continuar',
+    final picked = await showFixiaDateTimePicker(
+      context,
+      first: now,
+      last: DateTime(now.year + 2, now.month, now.day),
+      initial: _expectedAt,
+      title: '¿Cuándo necesitas el servicio?',
+      subtitle: 'Elige el día y una hora aproximada de atención.',
     );
-    if (!mounted || date == null) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _expectedAt == null
-          ? TimeOfDay.now()
-          : TimeOfDay.fromDateTime(_expectedAt!),
-      helpText: 'Selecciona la hora aproximada',
-      cancelText: 'Cancelar',
-      confirmText: 'Aceptar',
-    );
-    if (!mounted || time == null) return;
-    setState(() {
-      _expectedAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+    if (!mounted || picked == null) return;
+    setState(() => _expectedAt = picked);
   }
 
   void _addPhoto() {
