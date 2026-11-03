@@ -6,13 +6,37 @@ import 'dart:math';
 
 /// Valores en pesos como los entrega ms-payments (decimal). Se guardan en
 /// centavos para no arrastrar errores de redondeo.
-int pesosToCents(num value) => (value * 100).round();
+int pesosToCents(num value) => moneyInCents(value);
+
+int moneyInCents(Object? value) {
+  if (value is! num ||
+      !value.isFinite ||
+      value < 0 ||
+      value > 90071992547409 ||
+      (value * 100 - (value * 100).round()).abs() > 0.001) {
+    throw const FormatException('Importe inválido');
+  }
+  return (value * 100).round();
+}
+
+String requiredText(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Falta $key');
+  }
+  return value;
+}
 
 class PaymentsFailure implements Exception {
-  const PaymentsFailure(this.message, {this.isSessionExpired = false});
+  const PaymentsFailure(this.message,
+      {this.isSessionExpired = false,
+      this.statusCode,
+      this.isInsufficientBalance = false});
 
   final String message;
   final bool isSessionExpired;
+  final int? statusCode;
+  final bool isInsufficientBalance;
 
   @override
   String toString() => message;
@@ -92,9 +116,37 @@ class CommissionQuote {
     required this.commissionCents,
     required this.totalCents,
     required this.rate,
+    this.ruleId,
+    this.ruleValidFrom,
     this.currency = 'COP',
   });
 
+  factory CommissionQuote.fromJson(Map<String, dynamic> json) {
+    final price = moneyInCents(json['price']);
+    final commission = moneyInCents(json['commission']);
+    final total = moneyInCents(json['total']);
+    final rate = json['rate'];
+    if (price <= 0 ||
+        price + commission != total ||
+        rate is! num ||
+        !rate.isFinite ||
+        rate < 0 ||
+        rate >= 1) {
+      throw const FormatException('Desglose inválido');
+    }
+    return CommissionQuote(
+        priceCents: price,
+        commissionCents: commission,
+        totalCents: total,
+        rate: rate.toDouble(),
+        currency: requiredText(json, 'currency'),
+        ruleId: requiredText(json, 'ruleId'),
+        ruleValidFrom: DateTime.parse(requiredText(json, 'ruleValidFrom')));
+  }
+  bool matches(int cents, String currency) =>
+      priceCents == cents && this.currency == currency;
+  final String? ruleId;
+  final DateTime? ruleValidFrom;
   final int priceCents;
   final int commissionCents;
   final int totalCents;
@@ -112,55 +164,178 @@ class CommissionQuote {
 }
 
 /// Estado de la retención del pago de un servicio en la billetera.
-enum HoldStatus {
-  notApplicable('NotApplicable', 'Sin pago con billetera'),
-  pending('Pending', 'Pago pendiente'),
-  held('Held', 'Dinero retenido'),
-  failed('Failed', 'Falta saldo'),
-  captured('Captured', 'Pagado'),
-  released('Released', 'Retención liberada'),
-  reversed('Reversed', 'Pago revertido');
+enum PaymentStatus {
+  pending,
+  processing,
+  completed,
+  failed,
+  refunded,
+  unknown;
 
-  const HoldStatus(this.apiValue, this.label);
-
-  final String apiValue;
-  final String label;
-
-  static HoldStatus fromApi(Object? value) {
-    for (final s in values) {
-      if (s.apiValue == value) return s;
-    }
-    return HoldStatus.notApplicable;
-  }
+  static PaymentStatus fromApi(Object? value) => switch (value) {
+        'Pending' => pending,
+        'Processing' => processing,
+        'Completed' => completed,
+        'Failed' => failed,
+        'Refunded' => refunded,
+        _ => unknown,
+      };
 }
 
-/// Pago de un servicio contratado (GC-484, GC-485).
+enum HoldStatus {
+  notApplicable,
+  pending,
+  held,
+  failed,
+  captured,
+  released,
+  reversed,
+  unknown;
+
+  static HoldStatus fromApi(Object? value) => switch (value) {
+        'NotApplicable' => notApplicable,
+        'Pending' => pending,
+        'Held' => held,
+        'Failed' => failed,
+        'Captured' => captured,
+        'Released' => released,
+        'Reversed' => reversed,
+        _ => unknown,
+      };
+
+  String get label => switch (this) {
+        notApplicable => 'Retención no aplicable',
+        pending => 'Retención pendiente',
+        held => 'Pago retenido',
+        failed => 'Retención fallida',
+        captured => 'Retención cobrada',
+        released => 'Retención liberada',
+        reversed => 'Pago revertido',
+        unknown => 'Estado de retención no confirmado',
+      };
+}
+
+class PaymentAmounts {
+  const PaymentAmounts(
+      {required this.priceCents,
+      required this.commissionCents,
+      required this.commissionRate,
+      required this.totalCents});
+  factory PaymentAmounts.fromJson(Map<String, dynamic> json) {
+    final price = moneyInCents(json['price']);
+    final commission = moneyInCents(json['commission']);
+    final total = moneyInCents(json['total']);
+    final rate = json['commissionRate'];
+    if (price <= 0 ||
+        price + commission != total ||
+        rate is! num ||
+        !rate.isFinite ||
+        rate < 0 ||
+        rate >= 1) {
+      throw const FormatException('Desglose de pago inválido');
+    }
+    return PaymentAmounts(
+        priceCents: price,
+        commissionCents: commission,
+        totalCents: total,
+        commissionRate: rate.toDouble());
+  }
+  final int priceCents, commissionCents, totalCents;
+  final double commissionRate;
+}
+
 class ServicePayment {
-  const ServicePayment({
-    required this.id,
-    required this.serviceRequestId,
-    required this.holdStatus,
-    required this.canRetryHold,
-    this.priceCents,
-    this.commissionCents,
-    this.totalCents,
-    this.rate,
-    this.failureReason,
-    this.currency = 'COP',
-  });
-
-  final String id;
-  final String serviceRequestId;
-  final HoldStatus holdStatus;
-
-  /// Solo el cliente que paga puede reintentar la retención.
-  final bool canRetryHold;
-  final int? priceCents;
-  final int? commissionCents;
-  final int? totalCents;
+  const ServicePayment(
+      {required this.id,
+      required this.serviceRequestId,
+      int? amountCents,
+      int? totalCents,
+      this.priceCents,
+      this.commissionCents,
+      this.rate,
+      this.currency = 'COP',
+      this.status = PaymentStatus.unknown,
+      this.method = '',
+      this.isWalletPayment = false,
+      this.holdStatus = HoldStatus.unknown,
+      this.breakdown,
+      bool canRetryHold = false,
+      this.failureReason})
+      : amountCents = amountCents ?? totalCents ?? 0,
+        _canRetryHold = canRetryHold;
+  factory ServicePayment.fromJson(Map<String, dynamic> json) {
+    final amount = moneyInCents(json['amount']);
+    final rawBreakdown = json['breakdown'];
+    if (rawBreakdown != null && rawBreakdown is! Map<String, dynamic>) {
+      throw const FormatException('Desglose de pago inválido');
+    }
+    final breakdown = rawBreakdown == null
+        ? null
+        : PaymentAmounts.fromJson(rawBreakdown as Map<String, dynamic>);
+    final isWallet = json['isWalletPayment'] == true;
+    if (breakdown != null && (!isWallet || breakdown.totalCents != amount)) {
+      throw const FormatException('El desglose no corresponde al pago');
+    }
+    return ServicePayment(
+        id: requiredText(json, 'id'),
+        serviceRequestId: requiredText(json, 'serviceRequestId'),
+        amountCents: amount,
+        currency: requiredText(json, 'currency'),
+        status: PaymentStatus.fromApi(json['status']),
+        method: requiredText(json, 'method'),
+        isWalletPayment: isWallet,
+        holdStatus: HoldStatus.fromApi(json['holdStatus']),
+        breakdown: breakdown,
+        priceCents: breakdown?.priceCents,
+        commissionCents: breakdown?.commissionCents,
+        rate: breakdown?.commissionRate,
+        canRetryHold: json['canRetryHold'] == true,
+        failureReason: json['failureReason'] is String
+            ? json['failureReason'] as String
+            : null);
+  }
+  final String id, serviceRequestId, currency, method;
+  final int amountCents;
+  final int? priceCents, commissionCents;
   final double? rate;
+  int get totalCents => amountCents;
+  final PaymentStatus status;
   final String? failureReason;
-  final String currency;
+  final bool isWalletPayment, _canRetryHold;
+  final HoldStatus holdStatus;
+  final PaymentAmounts? breakdown;
+
+  HoldStatus get confirmedHoldStatus {
+    if (!isWalletPayment) {
+      return holdStatus == HoldStatus.notApplicable
+          ? holdStatus
+          : HoldStatus.unknown;
+    }
+    final consistent = switch (holdStatus) {
+      HoldStatus.pending => status == PaymentStatus.pending,
+      HoldStatus.held => status == PaymentStatus.processing,
+      HoldStatus.failed => status == PaymentStatus.failed,
+      HoldStatus.captured => status == PaymentStatus.completed,
+      HoldStatus.released ||
+      HoldStatus.reversed =>
+        status == PaymentStatus.refunded,
+      _ => false,
+    };
+    return consistent ? holdStatus : HoldStatus.unknown;
+  }
+
+  bool get canRetryHold =>
+      _canRetryHold &&
+      isWalletPayment &&
+      confirmedHoldStatus == HoldStatus.failed;
+  String get label => switch (status) {
+        PaymentStatus.pending => 'Pago pendiente',
+        PaymentStatus.processing => 'Pago en procesamiento',
+        PaymentStatus.completed => 'Pago completado',
+        PaymentStatus.failed => 'Pago fallido',
+        PaymentStatus.refunded => 'Pago reembolsado',
+        PaymentStatus.unknown => 'Estado del pago no reconocido',
+      };
 }
 
 /// Clave de idempotencia nueva por operación (UUID v4).

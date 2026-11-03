@@ -44,11 +44,7 @@ class HttpPaymentsRepository implements WalletGateway {
   @override
   Future<Wallet> wallet() async {
     final json = _object(await _get(_uri('wallets/me')));
-    return Wallet(
-      availableCents: pesosToCents(_num(json['availableBalance'])),
-      heldCents: pesosToCents(_num(json['heldBalance'])),
-      currency: _currency(json),
-    );
+    return _wallet(json);
   }
 
   @override
@@ -77,35 +73,68 @@ class HttpPaymentsRepository implements WalletGateway {
   Future<Wallet> withdraw(int amountCents) =>
       _walletOperation('wallets/me/withdrawals', amountCents);
 
-  Future<CommissionQuote> commissionQuote(int priceCents) async {
-    final json = _object(
-        await _get(_uri('commission-quote', {'amount': _pesos(priceCents)})));
-    return CommissionQuote(
-      priceCents: pesosToCents(_num(json['price'])),
-      commissionCents: pesosToCents(_num(json['commission'])),
-      totalCents: pesosToCents(_num(json['total'])),
-      rate: _num(json['rate']).toDouble(),
-      currency: _currency(json),
-    );
+  Future<CommissionQuote> commissionQuote(int priceCents,
+      {String currency = 'COP'}) async {
+    final quote = _parse(
+        _object(await _get(_uri('commission-quote',
+            {'amount': _pesos(priceCents), 'currency': currency}))),
+        CommissionQuote.fromJson);
+    if (!quote.matches(priceCents, currency)) {
+      throw const PaymentsFailure(
+          'El desglose no corresponde a esta cotización.');
+    }
+    return quote;
   }
 
-  /// `null` si el servicio todavía no tiene pago registrado.
   Future<ServicePayment?> paymentForRequest(String serviceRequestId) async {
-    final response = await _send((h) =>
-        _client.get(_uri('service-request/$serviceRequestId'), headers: h));
+    final response = await _send((h) => _client.get(
+        _base.replace(pathSegments: [
+          ..._base.pathSegments.where((s) => s.isNotEmpty),
+          'service-request',
+          serviceRequestId
+        ]),
+        headers: h));
     if (response.statusCode == 404) return null;
     _check(response);
-    return _payment(_object(response));
+    final payment = _payment(_object(response));
+    if (payment.serviceRequestId != serviceRequestId) {
+      throw const PaymentsFailure('El pago no corresponde a este servicio.');
+    }
+    return payment;
   }
 
   Future<ServicePayment> retryHold(String paymentId) async {
+    final currentResponse = await _get(_base.replace(pathSegments: [
+      ..._base.pathSegments.where((s) => s.isNotEmpty),
+      paymentId
+    ]));
+    final current = _payment(_object(currentResponse));
+    if (current.id != paymentId || !current.canRetryHold) {
+      throw const PaymentsFailure(
+          'El reintento de retención no está disponible para este pago.');
+    }
     final response = await _send((h) => _client.post(
-          _uri('$paymentId/process'),
-          headers: {...h, 'Content-Type': 'application/json'},
-          body: '{}',
-        ));
+        _base.replace(pathSegments: [
+          ..._base.pathSegments.where((s) => s.isNotEmpty),
+          paymentId,
+          'process'
+        ]),
+        headers: h));
     _check(response);
-    return _payment(_object(response));
+    final updated = _payment(_object(response));
+    if (updated.id != current.id ||
+        updated.serviceRequestId != current.serviceRequestId) {
+      throw const PaymentsFailure('La respuesta no corresponde a este pago.');
+    }
+    return updated;
+  }
+
+  T _parse<T>(Map json, T Function(Map<String, dynamic>) parse) {
+    try {
+      return parse(Map<String, dynamic>.from(json));
+    } on FormatException {
+      throw const PaymentsFailure(unavailableMessage);
+    }
   }
 
   Future<Wallet> _walletOperation(String path, int amountCents) async {
@@ -121,41 +150,17 @@ class HttpPaymentsRepository implements WalletGateway {
         ));
     _check(response, success: 201);
     final json = _object(response);
-    return Wallet(
-      availableCents: pesosToCents(_num(json['availableBalance'])),
-      heldCents: pesosToCents(_num(json['heldBalance'])),
-      currency: _currency(json),
-    );
+    return _wallet(json);
   }
 
-  ServicePayment _payment(Map json) {
-    final id = json['id'];
-    final requestId = json['serviceRequestId'];
-    if (id is! String || requestId is! String) {
-      throw const PaymentsFailure(unavailableMessage);
-    }
-    final breakdown = json['breakdown'];
-    int? cents(String key) => breakdown is Map && breakdown[key] is num
-        ? pesosToCents(breakdown[key] as num)
-        : null;
-    final reason = json['failureReason'];
-    return ServicePayment(
-      id: id,
-      serviceRequestId: requestId,
-      holdStatus: HoldStatus.fromApi(json['holdStatus']),
-      canRetryHold: json['canRetryHold'] == true,
-      priceCents: cents('price'),
-      commissionCents: cents('commission'),
-      totalCents: cents('total') ??
-          (json['amount'] is num ? pesosToCents(json['amount'] as num) : null),
-      rate: breakdown is Map && breakdown['commissionRate'] is num
-          ? (breakdown['commissionRate'] as num).toDouble()
-          : null,
-      failureReason:
-          reason is String && reason.trim().isNotEmpty ? reason.trim() : null,
-      currency: _currency(json),
-    );
-  }
+  Wallet _wallet(Map json) => _parse(
+      json,
+      (data) => Wallet(
+          availableCents: moneyInCents(data['availableBalance']),
+          heldCents: moneyInCents(data['heldBalance']),
+          currency: requiredText(data, 'currency')));
+
+  ServicePayment _payment(Map json) => _parse(json, ServicePayment.fromJson);
 
   WalletEntry? _entry(Object? json) {
     if (json is! Map) return null;
@@ -202,7 +207,9 @@ class HttpPaymentsRepository implements WalletGateway {
   void _check(http.Response response, {int success = 200}) {
     final status = response.statusCode;
     if (status == success || status == 200) return;
-    if (status == 403) throw const PaymentsFailure(forbiddenMessage);
+    if (status == 403) {
+      throw const PaymentsFailure(forbiddenMessage, statusCode: 403);
+    }
     if (status >= 400 && status < 500) {
       final body = _decode(response);
       final detail = body is Map ? body['detail'] ?? body['title'] : null;
@@ -210,9 +217,13 @@ class HttpPaymentsRepository implements WalletGateway {
         detail is String && detail.trim().isNotEmpty
             ? detail.trim()
             : unavailableMessage,
+        statusCode: status,
+        isInsufficientBalance: status == 409 &&
+            body is Map &&
+            body['title'] == 'Saldo insuficiente',
       );
     }
-    throw const PaymentsFailure(unavailableMessage);
+    throw PaymentsFailure(unavailableMessage, statusCode: status);
   }
 
   Object? _decode(http.Response response) {
@@ -230,11 +241,6 @@ class HttpPaymentsRepository implements WalletGateway {
   }
 
   static num _num(Object? value) => value is num ? value : 0;
-
-  static String _currency(Map json) {
-    final c = json['currency'];
-    return c is String && c.isNotEmpty ? c : 'COP';
-  }
 
   /// 15000050 centavos → «150000.5».
   static String _pesos(int cents) {

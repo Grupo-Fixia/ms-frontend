@@ -196,6 +196,7 @@ Future<void> main() async {
         client: httpClient,
         usersBaseUrl: usersApiBaseUrl,
         servicesBaseUrl: Uri.parse(ApiConfig.servicesBaseUrl),
+        paymentsBaseUrl: Uri.parse(ApiConfig.paymentsBaseUrl),
         authorizedHttp: AuthorizedHttp(
           accessToken: () => sessionStore.session?.accessToken,
           renewSession: RefreshSession(
@@ -1084,16 +1085,12 @@ class _FixiaAppState extends State<FixiaApp> {
             reject: (id) => _serviceCall(context,
                 () => RejectQuotation(backend.quotations)(request.id, id)),
             onChanged: reload,
-            previewBuilder: backend.payments == null
+            loadCommission: backend.payments == null
                 ? null
-                : (current) => CommissionPreview(
-                      key: ValueKey('commission-${current.id}'),
-                      priceCents: current.amountInCents,
-                      quote: (cents) => _serviceCall(context,
-                          () => backend.payments!.commissionQuote(cents)),
-                      loadWallet: () => _serviceCall(
-                          context, () => backend.payments!.wallet()),
-                    ),
+                : (cents, currency) => _serviceCall(
+                    context,
+                    () => backend.payments!
+                        .commissionQuote(cents, currency: currency)),
           ),
         ];
       case ServiceRequestStatus.contracted ||
@@ -1102,6 +1099,7 @@ class _FixiaAppState extends State<FixiaApp> {
             ServiceRequestStatus.closed:
         return [
           ClientContractSection(
+            footerBuilder: _paymentFooter(context, backend),
             key: ValueKey('contract-${request.id}-${request.status.name}'),
             load: () => _serviceCall(context,
                 () => GetRequestContract(backend.contracts)(request.id)),
@@ -1125,19 +1123,6 @@ class _FixiaAppState extends State<FixiaApp> {
                   context, EvidenceTarget.forRequest(contract.serviceRequestId))
             ],
           ),
-          if (backend.payments != null)
-            ServicePaymentPanel(
-              key: ValueKey('payment-${request.id}-${request.status.name}'),
-              isClient: true,
-              load: () => _serviceCall(context,
-                  () => backend.payments!.paymentForRequest(request.id)),
-              retryHold: (id) =>
-                  _serviceCall(context, () => backend.payments!.retryHold(id)),
-              loadWallet: () =>
-                  _serviceCall(context, () => backend.payments!.wallet()),
-              topUp: (cents) =>
-                  _serviceCall(context, () => backend.payments!.topUp(cents)),
-            ),
         ];
       default:
         return const [];
@@ -1242,6 +1227,29 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  Widget Function(ServiceContract)? _paymentFooter(
+          BuildContext context, BackendIntegrations backend) =>
+      backend.payments == null
+          ? null
+          : (contract) => ServicePaymentPanel(
+                key: ValueKey(
+                    'payment-${contract.serviceRequestId}-${contract.serviceStatus?.name}'),
+                isClient: true,
+                serviceClosed:
+                    contract.serviceStatus == ServiceRequestStatus.closed,
+                load: () => _serviceCall(
+                    context,
+                    () => backend.payments!
+                        .paymentForRequest(contract.serviceRequestId)),
+                loadWallet: () =>
+                    _serviceCall(context, backend.payments!.wallet),
+                retryHold: (id) => _serviceCall(
+                    context, () => backend.payments!.retryHold(id)),
+                openTopUp: () async {
+                  await _navigatorKey.currentState!.pushNamed(AppRoutes.wallet);
+                },
+              );
+
   /// «Mis servicios» del cliente o del técnico (GC-449).
   Widget _serviceHistoryPage(BuildContext context) {
     final controller = _serviceHistory;
@@ -1299,6 +1307,8 @@ class _FixiaAppState extends State<FixiaApp> {
       );
     } else {
       contractSection = ClientContractSection(
+        footerBuilder: _paymentFooter(context, backend),
+        walletPayments: backend.payments != null,
         load: () => _serviceCall(
             context,
             () =>
@@ -1306,6 +1316,7 @@ class _FixiaAppState extends State<FixiaApp> {
         actionsBuilder: (context, contract, reload) => [
           ...clientServiceActions(
             contract: contract,
+            payWithWallet: backend.payments != null,
             confirmClosure: () => _serviceCall(
                 context,
                 () => ConfirmServiceClosure(backend.contracts)(

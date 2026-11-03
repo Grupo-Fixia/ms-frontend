@@ -1,3 +1,4 @@
+import 'package:ms_frontend/features/payments/domain/payments.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/client/service_requests/presentation/request_progress_sections.dart';
@@ -32,6 +33,12 @@ void main() {
 
     Widget section({Widget Function(Quotation)? preview}) =>
         ClientQuotationSection(
+          loadCommission: (cents, currency) async => CommissionQuote(
+              priceCents: cents,
+              commissionCents: 10000,
+              totalCents: cents + 10000,
+              currency: currency,
+              rate: 0.1),
           load: () => quotations.listForRequest('req-1'),
           accept: (id) => quotations.accept('req-1', id),
           reject: (id) => quotations.reject('req-1', id),

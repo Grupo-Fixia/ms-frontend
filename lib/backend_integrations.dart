@@ -52,6 +52,7 @@ class BackendIntegrations {
     required http.Client client,
     required Uri usersBaseUrl,
     required Uri servicesBaseUrl,
+    Uri? paymentsBaseUrl,
     required AuthorizedHttp authorizedHttp,
   }) {
     final contracts = HttpContractRepository(
@@ -102,7 +103,7 @@ class BackendIntegrations {
       contracts: contracts,
       payments: HttpPaymentsRepository(
         client: client,
-        baseUrl: servicesBaseUrl,
+        baseUrl: paymentsBaseUrl ?? servicesBaseUrl,
         authorizedHttp: authorizedHttp,
       ),
       compatibleTechnicians: HttpCompatibleTechniciansRepository(
