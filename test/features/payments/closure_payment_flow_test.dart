@@ -9,8 +9,8 @@ import 'package:ms_frontend/features/client/service_requests/presentation/reques
 import 'package:ms_frontend/features/contracts/domain/service_contract.dart';
 import 'package:ms_frontend/features/contracts/infrastructure/http_contract_repository.dart';
 import 'package:ms_frontend/features/contracts/presentation/service_actions.dart';
-import 'package:ms_frontend/features/payments/presentation/service_payment_section.dart';
-import 'package:ms_frontend/features/payments/infrastructure/http_payment_repository.dart';
+import 'package:ms_frontend/features/payments/presentation/service_payment_panel.dart';
+import 'package:ms_frontend/features/payments/infrastructure/http_payments_repository.dart';
 import 'payment_repository_test.dart' show walletPaymentJson, response;
 
 Map<String, Object?> contractJson(String state) => {
@@ -72,7 +72,7 @@ void main() {
           client: client,
           baseUrl: Uri.parse('http://gateway'),
           authorizedHttp: auth);
-      final payments = HttpPaymentRepository(
+      final payments = HttpPaymentsRepository(
           client: client,
           baseUrl: Uri.parse('http://gateway'),
           authorizedHttp: auth);
@@ -81,15 +81,18 @@ void main() {
               body: SingleChildScrollView(
         child: ClientContractSection(
           load: () => contracts.getForRequest('req-1'),
-          footerBuilder: (contract) => ServicePaymentSection(
+          walletPayments: true,
+          footerBuilder: (contract) => ServicePaymentPanel(
               key: ValueKey(contract.serviceStatus),
               serviceClosed:
                   contract.serviceStatus == ServiceRequestStatus.closed,
-              load: () => payments.forRequest('req-1'),
+              load: () => payments.paymentForRequest('req-1'),
               loadWallet: payments.wallet,
-              retryHold: payments.retryHold),
+              retryHold: payments.retryHold,
+              isClient: true),
           actionsBuilder: (context, contract, reload) => clientServiceActions(
               contract: contract,
+              payWithWallet: true,
               confirmClosure: () => contracts.confirmClosure('req-1'),
               object: (reason) => contracts.objectClosure('req-1', reason),
               onDone: reload),

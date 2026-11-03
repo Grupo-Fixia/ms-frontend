@@ -1,4 +1,4 @@
-import '../../../payments/domain/payment.dart';
+import '../../../payments/domain/payments.dart';
 import '../../../payments/presentation/commission_confirmation.dart';
 import 'package:flutter/material.dart';
 
@@ -72,15 +72,19 @@ class ClientQuotationSection extends StatefulWidget {
     super.key,
     required this.load,
     required this.accept,
-    this.loadCommission,
     required this.reject,
     required this.onChanged,
+    this.previewBuilder,
+    this.loadCommission,
   });
 
   final Future<List<Quotation>> Function() load;
+
+  /// Lo que se muestra antes de aceptar la versión vigente (p. ej. el
+  /// desglose con la comisión, GC-491).
+  final Widget Function(Quotation current)? previewBuilder;
+  final Future<CommissionQuote> Function(int, String)? loadCommission;
   final Future<Quotation> Function(String quotationId) accept;
-  final Future<CommissionQuote> Function(int cents, String currency)?
-      loadCommission;
   final Future<Quotation> Function(String quotationId) reject;
 
   /// Avisa a la pantalla para que vuelva a consultar la solicitud (al
@@ -140,7 +144,7 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
             latest.amountInCents != quotation.amountInCents ||
             latest.currency != quotation.currency ||
             latest.revision != quotation.revision) {
-          throw const PaymentFailure(
+          throw const PaymentsFailure(
               'La cotización cambió. Revisa la versión vigente y su desglose.');
         }
         await widget.accept(quotation.id);
@@ -185,7 +189,7 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
                     style: TextStyle(color: FixiaColors.textSecondary),
                   ),
                 )
-              else
+              else ...[
                 QuotationCard(
                   quotation: main,
                   actions: main.isCurrent
@@ -214,6 +218,9 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
                         ]
                       : const [],
                 ),
+                if (main.isCurrent && widget.previewBuilder != null)
+                  widget.previewBuilder!(main),
+              ],
               if (versions.history.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text(
@@ -240,11 +247,13 @@ class ClientContractSection extends StatelessWidget {
     super.key,
     required this.load,
     this.actionsBuilder,
+    this.walletPayments = false,
     this.footerBuilder,
   });
 
   final Future<ServiceContract> Function() load;
-  final Widget Function(ServiceContract contract)? footerBuilder;
+  final bool walletPayments;
+  final Widget Function(ServiceContract)? footerBuilder;
 
   /// Acciones del cliente sobre el servicio (confirmar cierre u objetar).
   final List<Widget> Function(
@@ -260,11 +269,12 @@ class ClientContractSection extends StatelessWidget {
           children: [
             ContractCard(
                 contract: contract,
+                walletPayments: walletPayments,
                 actions: actionsBuilder?.call(context, contract, reload) ??
                     const []),
             if (footerBuilder != null) ...[
               const SizedBox(height: 20),
-              footerBuilder!(contract),
+              footerBuilder!(contract)
             ],
           ],
         ),

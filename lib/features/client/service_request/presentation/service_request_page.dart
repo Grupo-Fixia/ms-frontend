@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/colombian_cities.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/domain/service_budget.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_date_time_picker.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/service_request_draft.dart';
 
@@ -65,35 +67,16 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
 
   Future<void> _pickExpectedMoment() async {
     final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _expectedAt ?? now,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 2),
-      helpText: 'Selecciona el día esperado',
-      cancelText: 'Cancelar',
-      confirmText: 'Continuar',
+    final picked = await showFixiaDateTimePicker(
+      context,
+      first: now,
+      last: DateTime(now.year + 2, now.month, now.day),
+      initial: _expectedAt,
+      title: '¿Cuándo necesitas el servicio?',
+      subtitle: 'Elige el día y una hora aproximada de atención.',
     );
-    if (!mounted || date == null) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _expectedAt == null
-          ? TimeOfDay.now()
-          : TimeOfDay.fromDateTime(_expectedAt!),
-      helpText: 'Selecciona la hora aproximada',
-      cancelText: 'Cancelar',
-      confirmText: 'Aceptar',
-    );
-    if (!mounted || time == null) return;
-    setState(() {
-      _expectedAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+    if (!mounted || picked == null) return;
+    setState(() => _expectedAt = picked);
   }
 
   void _addPhoto() {
@@ -422,12 +405,11 @@ class _LocationDialog extends StatefulWidget {
 
 class _LocationDialogState extends State<_LocationDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final _city = TextEditingController(text: widget.city);
+  late String? _city = ColombianCities.match(widget.city);
   late final _zone = TextEditingController(text: widget.zone);
 
   @override
   void dispose() {
-    _city.dispose();
     _zone.dispose();
     super.dispose();
   }
@@ -445,14 +427,25 @@ class _LocationDialogState extends State<_LocationDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
+            DropdownButtonFormField<String>(
               key: const ValueKey('client-request-city'),
-              controller: _city,
-              maxLength: 80,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Ciudad'),
-              validator: (value) => _required(value, 'la ciudad'),
+              // Flutter 3.22 necesita `value`.
+              // ignore: deprecated_member_use
+              value: _city,
+              isExpanded: true,
+              menuMaxHeight: 360,
+              decoration: const InputDecoration(
+                labelText: 'Ciudad',
+                helperText: 'Los técnicos de esa ciudad verán tu solicitud.',
+              ),
+              items: [
+                for (final city in ColombianCities.all)
+                  DropdownMenuItem(value: city, child: Text(city)),
+              ],
+              onChanged: (value) => setState(() => _city = value),
+              validator: (value) => value == null ? 'Elige la ciudad.' : null,
             ),
+            const SizedBox(height: 12),
             TextFormField(
               key: const ValueKey('client-request-zone'),
               controller: _zone,
@@ -476,7 +469,7 @@ class _LocationDialogState extends State<_LocationDialog> {
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
             Navigator.of(context).pop(
-              (city: _city.text.trim(), zone: _zone.text.trim()),
+              (city: _city!, zone: _zone.text.trim()),
             );
           },
           child: const Text('Guardar'),

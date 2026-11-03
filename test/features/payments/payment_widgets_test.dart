@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/client/service_requests/presentation/request_progress_sections.dart';
-import 'package:ms_frontend/features/payments/domain/payment.dart';
-import 'package:ms_frontend/features/payments/presentation/service_payment_section.dart';
+import 'package:ms_frontend/features/payments/domain/payments.dart';
+import 'package:ms_frontend/features/payments/presentation/service_payment_panel.dart';
 import '../service_flow_fakes.dart';
 import 'payment_repository_test.dart' show walletPaymentJson;
 
@@ -11,9 +11,8 @@ CommissionQuote quote(int cents, String currency) => CommissionQuote(
     priceCents: cents,
     commissionCents: 15000,
     totalCents: cents + 15000,
-    currency: currency,
-    ruleId: 'rule-1',
-    ruleValidFrom: DateTime.utc(2026));
+    rate: .15,
+    currency: currency);
 ServicePayment payment(PaymentStatus status,
         {String method = 'Wallet',
         bool isWalletPayment = true,
@@ -52,16 +51,17 @@ Widget quotations(FakeQuotations q,
         onChanged: () async {});
 Widget panel(
         {required Future<ServicePayment?> Function() load,
-        Future<ServicePayment> Function(ServicePayment)? retry,
+        Future<ServicePayment> Function(String)? retry,
         bool closed = false,
-        Future<WalletBalance> Function()? wallet,
+        Future<Wallet> Function()? wallet,
         Future<void> Function()? topUp}) =>
-    ServicePaymentSection(
+    ServicePaymentPanel(
         load: load,
+        isClient: true,
         serviceClosed: closed,
         retryHold: retry ?? (_) async => throw StateError('No debe procesar'),
         loadWallet: wallet ??
-            () async => const WalletBalance(
+            () async => const Wallet(
                 availableCents: 100, heldCents: 500000, currency: 'COP'),
         openTopUp: topUp);
 
@@ -83,9 +83,12 @@ void main() {
                 walletPaymentJson(status: 'Processing'));
           }));
       expect(find.text('Retención fallida'), findsOneWidget);
-      expect(find.text('Precio del prestador: 1.000,50 COP'), findsOneWidget);
-      expect(find.text('Comisión Fixia: 150 COP'), findsOneWidget);
-      expect(find.text('Total del pago: 1.150,50 COP'), findsOneWidget);
+      expect(find.text('Precio del prestador'), findsOneWidget);
+      expect(find.text('1.000,50 COP'), findsOneWidget);
+      expect(find.textContaining('Comisión de Fixia'), findsOneWidget);
+      expect(find.text('150 COP'), findsOneWidget);
+      expect(find.text('Total del cliente'), findsOneWidget);
+      expect(find.text('1.150,50 COP'), findsOneWidget);
       expect(find.text('Recargar saldo'), findsNothing);
       expect(find.text('Reintentar retención'),
           payer ? findsOneWidget : findsNothing);
@@ -150,7 +153,7 @@ void main() {
           load: () async => payment(PaymentStatus.failed),
           retry: (p) async {
             attempts++;
-            return p;
+            return payment(PaymentStatus.failed);
           },
         ));
     expect(find.text('Reintentar retención'), findsNothing);
@@ -266,7 +269,8 @@ void main() {
       await t.ensureVisible(find.text('Aceptar'));
       await t.tap(find.text('Aceptar'));
       await t.pumpAndSettle();
-      expect(find.text('Total: 1.150 COP'), findsOneWidget);
+      expect(find.text('Total del cliente'), findsOneWidget);
+      expect(find.text('1.150 COP'), findsOneWidget);
       expect(t.takeException(), isNull);
     });
   }
@@ -306,8 +310,9 @@ void main() {
         isNull);
     pending.complete(quote(100000, 'COP'));
     await t.pumpAndSettle();
-    expect(find.text('Comisión Fixia: 150 COP'), findsOneWidget);
-    expect(find.text('Total: 1.150 COP'), findsOneWidget);
+    expect(find.textContaining('Comisión de Fixia'), findsOneWidget);
+    expect(find.text('Total del cliente'), findsOneWidget);
+    expect(find.text('1.150 COP'), findsOneWidget);
     await t.tap(find.text('Aceptar y contratar'));
     await t.pumpAndSettle();
     expect(contracts.items, hasLength(1));
@@ -332,7 +337,7 @@ void main() {
     await pump(
         t,
         quotations(q, load: (c, currency) async {
-          if (calls++ == 0) throw const PaymentFailure('Sin tarifa vigente');
+          if (calls++ == 0) throw const PaymentsFailure('Sin tarifa vigente');
           return quote(c, currency);
         }));
     await t.tap(find.text('Aceptar'));
@@ -442,9 +447,9 @@ void main() {
         t,
         panel(
             load: () async => retryablePayment(),
-            wallet: () async => const WalletBalance(
+            wallet: () async => const Wallet(
                 availableCents: 900000, heldCents: 0, currency: 'COP'),
-            retry: (_) async => throw const PaymentFailure(
+            retry: (_) async => throw const PaymentsFailure(
                 'Modificación concurrente',
                 statusCode: 409)));
     await t.tap(find.text('Reintentar retención'));
@@ -459,7 +464,7 @@ void main() {
         t,
         panel(
             load: () async => payment(PaymentStatus.processing),
-            wallet: () async => throw const PaymentFailure('Sin conexión')));
+            wallet: () async => throw const PaymentsFailure('Sin conexión')));
     expect(find.text('Pago en procesamiento'), findsOneWidget);
     expect(find.text('Pago retenido'), findsNothing);
     expect(

@@ -1,4 +1,4 @@
-import 'package:ms_frontend/features/payments/domain/payment.dart';
+import 'package:ms_frontend/features/payments/domain/payments.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/client/service_requests/presentation/request_progress_sections.dart';
@@ -31,18 +31,19 @@ void main() {
     late FakeQuotations quotations;
     late int changes;
 
-    Widget section() => ClientQuotationSection(
+    Widget section({Widget Function(Quotation)? preview}) =>
+        ClientQuotationSection(
           loadCommission: (cents, currency) async => CommissionQuote(
               priceCents: cents,
               commissionCents: 10000,
               totalCents: cents + 10000,
               currency: currency,
-              ruleId: 'rule-test',
-              ruleValidFrom: DateTime.utc(2026)),
+              rate: 0.1),
           load: () => quotations.listForRequest('req-1'),
           accept: (id) => quotations.accept('req-1', id),
           reject: (id) => quotations.reject('req-1', id),
           onChanged: () async => changes++,
+          previewBuilder: preview,
         );
 
     setUp(() {
@@ -58,6 +59,17 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Aceptar'), findsNothing);
+    });
+
+    testWidgets('muestra el desglose antes de aceptar la vigente',
+        (tester) async {
+      quotations.add('req-1', 13800000);
+      await _pump(
+          tester,
+          section(
+              preview: (q) => Text('pagarás por ${q.amountInCents}',
+                  key: const ValueKey('preview'))));
+      expect(find.text('pagarás por 13800000'), findsOneWidget);
     });
 
     testWidgets('muestra la versión vigente y las anteriores', (tester) async {

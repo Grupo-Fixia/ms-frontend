@@ -5,6 +5,7 @@ import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/applicant.dart';
+import '../domain/compatible_technician.dart';
 import '../domain/service_request.dart';
 import 'service_request_list.dart';
 
@@ -23,7 +24,13 @@ class ServiceRequestDetailPage extends StatefulWidget {
     required this.listApplicants,
     required this.selectProvider,
     this.extraSections,
+    this.listCompatibleTechnicians,
   });
+
+  /// Técnicos compatibles con la solicitud (GC-474), por páginas. Solo se
+  /// consultan mientras la solicitud está publicada.
+  final Future<CompatibleTechniciansPage> Function(String? cursor)?
+      listCompatibleTechnicians;
 
   final String requestId;
   final Future<ServiceRequest> Function(String id) get;
@@ -183,7 +190,19 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
                 _applicantsSection(request),
               ],
             ),
-            side: _RequestSummary(request: request),
+            side: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _RequestSummary(request: request),
+                if (widget.listCompatibleTechnicians != null &&
+                    request.status == ServiceRequestStatus.published) ...[
+                  const SizedBox(height: 16),
+                  CompatibleTechniciansPanel(
+                    load: widget.listCompatibleTechnicians!,
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
       );
@@ -518,4 +537,182 @@ String formatDate(DateTime date) {
   final local = date.toLocal();
   String two(int n) => n.toString().padLeft(2, '0');
   return '${two(local.day)}/${two(local.month)}/${local.year}';
+}
+
+/// «Técnicos que pueden atenderte» (GC-474): los que ofrecen la categoría,
+/// atienden la ciudad y tienen horario a la hora pedida. Si matching no
+/// responde lo dice con opción de reintentar, nunca como lista vacía.
+class CompatibleTechniciansPanel extends StatefulWidget {
+  const CompatibleTechniciansPanel({super.key, required this.load});
+
+  final Future<CompatibleTechniciansPage> Function(String? cursor) load;
+
+  /// Páginas vacías seguidas que se piden solas antes de detenerse.
+  static const maxEmptyPages = 3;
+
+  @override
+  State<CompatibleTechniciansPanel> createState() =>
+      _CompatibleTechniciansPanelState();
+}
+
+class _CompatibleTechniciansPanelState
+    extends State<CompatibleTechniciansPanel> {
+  final _items = <CompatibleTechnician>[];
+  String? _cursor;
+  bool _done = false;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _more();
+  }
+
+  Future<void> _more() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      var empty = 0;
+      do {
+        final page = await widget.load(_cursor);
+        _items.addAll(page.items);
+        _cursor = page.nextCursor;
+        _done = !page.hasMore;
+        empty = page.items.isEmpty ? empty + 1 : 0;
+        // Una página vacía con cursor no significa que no haya más.
+      } while (!_done &&
+          empty > 0 &&
+          empty < CompatibleTechniciansPanel.maxEmptyPages);
+    } catch (error) {
+      _error = '$error';
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FixiaPanel(
+      key: const ValueKey('compatible-technicians'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Técnicos que pueden atenderte',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: FixiaColors.primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Ofrecen este servicio, atienden tu ciudad y tienen horario a la hora que pediste. Pueden postularse a tu solicitud.',
+            style: TextStyle(fontSize: 12, color: FixiaColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          for (final t in _items) _CompatibleTile(technician: t),
+          if (_items.isEmpty && _done && _error == null)
+            const Text(
+              'Por ahora ningún técnico cumple las condiciones. Tu solicitud sigue publicada y te avisaremos cuando alguien se postule.',
+              key: ValueKey('compatible-technicians-empty'),
+              style: TextStyle(color: FixiaColors.textSecondary),
+            ),
+          if (_error != null) ...[
+            Text(
+              _error!,
+              key: const ValueKey('compatible-technicians-error'),
+              style: const TextStyle(color: FixiaColors.textSecondary),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('compatible-technicians-retry'),
+                onPressed: _more,
+                child: const Text('Reintentar'),
+              ),
+            ),
+          ],
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (!_done && _error == null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('compatible-technicians-more'),
+                onPressed: _more,
+                child: const Text('Ver más técnicos'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompatibleTile extends StatelessWidget {
+  const _CompatibleTile({required this.technician});
+
+  final CompatibleTechnician technician;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = technician;
+    final details = [
+      if (t.categories.isNotEmpty) t.categories.map((c) => c.label).join(', '),
+      if (t.city != null) t.city!,
+    ].join(' · ');
+    final initials = t.displayName
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .take(2)
+        .map((p) => p[0].toUpperCase())
+        .join();
+    return Padding(
+      key: ValueKey('compatible-technician-${t.userId}'),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: FixiaColors.supportBackground,
+            child: Text(
+              initials,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: FixiaColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.displayName,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                if (details.isNotEmpty)
+                  Text(
+                    details,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: FixiaColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

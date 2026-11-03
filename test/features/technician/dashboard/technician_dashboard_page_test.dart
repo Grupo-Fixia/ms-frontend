@@ -68,7 +68,9 @@ void main() {
     expect(find.text('Técnico'), findsWidgets);
     expect(find.text('Carlos Mendoza'), findsNothing);
     expect(find.text('4.8'), findsNothing);
-    expect(find.text('Billetera'), findsNothing);
+    // La billetera de ejemplo con saldo inventado ya no existe; la real
+    // está en el menú y consulta ms-payments.
+    expect(find.textContaining('\$'), findsNothing);
     expect(find.text('–'), findsNWidgets(3));
     expect(
       find.text(
@@ -248,7 +250,7 @@ void main() {
         onOpenOpportunities: () => opportunities++,
         onOpenJobs: () => jobs++,
         onOpenSpecialties: () => specialties++,
-        onOpenAvailability: () => availability++,
+        onOpenAvailability: () async => availability++,
         onOpenChat: () => chat++,
         onLogout: () => logout++,
       ),
@@ -328,5 +330,29 @@ void main() {
     expect(banner.width, greaterThan(800));
     expect(banner.left, greaterThan(248));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sin horario y zona avisa y al configurar se revisa de nuevo',
+      (tester) async {
+    var complete = false;
+    var opened = 0;
+    await pumpPage(
+      tester,
+      TechnicianDashboardPage(
+        loadSetupComplete: () async => complete,
+        onOpenAvailability: () async {
+          opened++;
+          complete = true;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+        find.byKey(const ValueKey('technician-setup-banner')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('technician-setup-configure')));
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+    expect(find.byKey(const ValueKey('technician-setup-banner')), findsNothing);
   });
 }

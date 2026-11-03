@@ -32,13 +32,16 @@ Widget _technician(FakeContracts contracts, {bool withStart = true}) =>
       ),
     );
 
-Widget _client(FakeContracts contracts, {VoidCallback? onPageReload}) =>
+Widget _client(FakeContracts contracts,
+        {VoidCallback? onPageReload, bool wallet = false}) =>
     Scaffold(
       body: SingleChildScrollView(
         child: ClientContractSection(
           load: () => contracts.getForRequest('req-1'),
+          walletPayments: wallet,
           actionsBuilder: (context, contract, reload) => clientServiceActions(
             contract: contract,
+            payWithWallet: wallet,
             confirmClosure: () => contracts.confirmClosure('req-1'),
             object: (reason) => contracts.objectClosure('req-1', reason),
             onDone: () {
@@ -122,14 +125,24 @@ void main() {
       final contracts = _contracts(ServiceRequestStatus.technicianFinished);
       await _pump(
           tester, _client(contracts, onPageReload: () => pageReloads++));
-      await _confirm(tester, 'Confirmar y pagar', 'Confirmar y pagar');
+      await _confirm(tester, 'Confirmar cierre', 'Confirmar cierre');
 
+      expect(contracts.actions, ['closure']);
+      expect(find.text('Servicio cerrado. ¡Gracias por usar Fixia!'),
+          findsOneWidget);
+      expect(find.text('Cerrada'), findsWidgets);
+      expect(find.text('Confirmar cierre'), findsNothing);
+      expect(pageReloads, 1);
+    });
+
+    testWidgets('con billetera: confirmar y pagar', (tester) async {
+      final contracts = _contracts(ServiceRequestStatus.technicianFinished);
+      await _pump(tester, _client(contracts, wallet: true));
+      expect(find.textContaining('Con la billetera de Fixia'), findsOneWidget);
+      await _confirm(tester, 'Confirmar y pagar', 'Confirmar y pagar');
       expect(contracts.actions, ['closure']);
       expect(find.text('Cierre confirmado. Consulta el estado del pago.'),
           findsOneWidget);
-      expect(find.text('Cerrada'), findsWidgets);
-      expect(find.text('Confirmar y pagar'), findsNothing);
-      expect(pageReloads, 1);
     });
 
     testWidgets('objeta con motivo y el servicio vuelve a ejecución',

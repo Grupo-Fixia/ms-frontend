@@ -12,6 +12,10 @@ enum ShellDestination {
       ShellRole.client, 'Inicio', Icons.home_outlined, 'client-nav-inicio'),
   clientRequests(ShellRole.client, 'Mis solicitudes', Icons.assignment_outlined,
       'client-nav-historial'),
+  clientServices(ShellRole.client, 'Mis servicios', Icons.history_rounded,
+      'client-nav-servicios'),
+  clientWallet(ShellRole.client, 'Billetera',
+      Icons.account_balance_wallet_outlined, 'client-nav-billetera'),
   clientProfile(ShellRole.client, 'Mi perfil', Icons.person_outline_rounded,
       'client-nav-perfil'),
   technicianHome(ShellRole.technician, 'Inicio', Icons.home_outlined,
@@ -20,6 +24,10 @@ enum ShellDestination {
       Icons.search_rounded, 'technician-nav-oportunidades'),
   technicianJobs(ShellRole.technician, 'Mis trabajos',
       Icons.work_outline_rounded, 'technician-nav-trabajos'),
+  technicianServices(ShellRole.technician, 'Mis servicios',
+      Icons.history_rounded, 'technician-nav-servicios'),
+  technicianWallet(ShellRole.technician, 'Billetera',
+      Icons.account_balance_wallet_outlined, 'technician-nav-billetera'),
   technicianProfile(ShellRole.technician, 'Perfil profesional',
       Icons.person_outline_rounded, 'technician-nav-perfil'),
   companyHome(
@@ -27,7 +35,9 @@ enum ShellDestination {
   companyTechnicians(ShellRole.company, 'Mis técnicos', Icons.groups_outlined,
       'company-nav-tecnicos'),
   companyOpportunities(ShellRole.company, 'Oportunidades', Icons.search_rounded,
-      'company-nav-oportunidades');
+      'company-nav-oportunidades'),
+  companyWallet(ShellRole.company, 'Billetera',
+      Icons.account_balance_wallet_outlined, 'company-nav-billetera');
 
   const ShellDestination(this.role, this.label, this.icon, this.keyName);
 
@@ -720,7 +730,12 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[];
-    final destinations = config.destinations;
+    final all = config.destinations;
+    // Caben cuatro secciones; si hay más, las últimas van en «Más».
+    final overflow = all.length > maxItems
+        ? all.sublist(maxItems - 1)
+        : const <ShellDestination>[];
+    final destinations = overflow.isEmpty ? all : all.sublist(0, maxItems - 1);
     for (var i = 0; i < destinations.length; i++) {
       final d = destinations[i];
       items.add(_BottomItem(
@@ -744,6 +759,15 @@ class _BottomBar extends StatelessWidget {
         ));
       }
     }
+    if (overflow.isNotEmpty) {
+      items.add(_BottomItem(
+        keyName: '${config.role.name}-nav-mas',
+        icon: Icons.more_horiz_rounded,
+        label: 'Más',
+        selected: overflow.contains(config.current),
+        onTap: () => _showMore(context, overflow),
+      ));
+    }
     return Material(
       color: FixiaColors.white,
       child: SafeArea(
@@ -759,12 +783,59 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
+  /// Secciones visibles en la barra inferior (sin contar «Publicar»).
+  static const maxItems = 4;
+
+  Future<void> _showMore(
+      BuildContext context, List<ShellDestination> overflow) async {
+    final picked = await showModalBottomSheet<ShellDestination>(
+      context: context,
+      backgroundColor: FixiaColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final d in overflow)
+                ListTile(
+                  key: ValueKey(d.keyName),
+                  leading: Icon(
+                    d.icon,
+                    color: d == config.current
+                        ? FixiaColors.secondary
+                        : FixiaColors.primary,
+                  ),
+                  title: Text(
+                    d.label,
+                    style: TextStyle(
+                      fontWeight: d == config.current
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.of(sheet).pop(d),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) config.go(picked);
+  }
+
   String _shortLabel(ShellDestination d) => switch (d) {
         ShellDestination.clientRequests => 'Solicitudes',
         ShellDestination.clientProfile ||
         ShellDestination.technicianProfile =>
           'Perfil',
         ShellDestination.technicianJobs => 'Trabajos',
+        ShellDestination.clientServices ||
+        ShellDestination.technicianServices =>
+          'Servicios',
         ShellDestination.companyTechnicians => 'Técnicos',
         _ => d.label,
       };

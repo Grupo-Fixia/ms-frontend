@@ -4,6 +4,27 @@ import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/client/service_request/domain/service_request_draft.dart';
 import 'package:ms_frontend/features/client/service_request/presentation/service_request_page.dart';
 
+/// Elige mañana a las 10:00 a. m. en el selector de Fixia.
+Future<void> pickTomorrowAt10(WidgetTester tester) async {
+  final tomorrow = DateTime.now().add(const Duration(days: 1));
+  String two(int n) => n.toString().padLeft(2, '0');
+  final day = find.byKey(ValueKey(
+      'fixia-picker-day-${tomorrow.year}-${two(tomorrow.month)}-${two(tomorrow.day)}'));
+  if (day.evaluate().isEmpty) {
+    await tester.tap(find.byKey(const ValueKey('fixia-picker-next')));
+    await tester.pumpAndSettle();
+  }
+  await tester.ensureVisible(day);
+  await tester.tap(day);
+  await tester.pumpAndSettle();
+  final slot = find.byKey(const ValueKey('fixia-picker-slot-10:00'));
+  await tester.ensureVisible(slot);
+  await tester.tap(slot);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('fixia-picker-confirm')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('presupuesto requerido, positivo y conservado al corregirlo',
       (tester) async {
@@ -103,10 +124,7 @@ void main() {
     );
     await tester.tap(expectedMoment);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Aceptar'));
-    await tester.pumpAndSettle();
+    await pickTomorrowAt10(tester);
     final addPhoto = find.byKey(const ValueKey('client-request-add-photo'));
     await tester.scrollUntilVisible(
       addPhoto,

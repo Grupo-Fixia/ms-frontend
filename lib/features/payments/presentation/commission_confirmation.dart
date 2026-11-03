@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../quotations/domain/quotation.dart';
-import '../../quotations/presentation/quotation_card.dart';
-import '../domain/payment.dart';
+import '../domain/payments.dart';
+import 'service_payment_panel.dart';
 
 class CommissionConfirmation extends StatefulWidget {
   const CommissionConfirmation(
@@ -18,12 +18,12 @@ class _CommissionConfirmationState extends State<CommissionConfirmation> {
   Future<CommissionQuote> _load() async {
     final load = widget.load;
     if (load == null) {
-      throw const PaymentFailure('El desglose de pagos no está disponible.');
+      throw const PaymentsFailure('El desglose de pagos no está disponible.');
     }
     final q = widget.quotation;
     final result = await load(q.amountInCents, q.currency);
     if (!result.matches(q.amountInCents, q.currency)) {
-      throw const PaymentFailure(
+      throw const PaymentsFailure(
           'El desglose no corresponde a esta cotización.');
     }
     return result;
@@ -58,12 +58,14 @@ class _CommissionConfirmationState extends State<CommissionConfirmation> {
                     child: const Text('Reintentar desglose')),
               ],
               if (quote != null) ...[
-                Text(
-                    'Precio del prestador: ${formatCents(quote.priceCents, quote.currency)}'),
-                Text(
-                    'Comisión Fixia: ${formatCents(quote.commissionCents, quote.currency)}'),
-                Text('Total: ${formatCents(quote.totalCents, quote.currency)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                PaymentBreakdown(
+                  priceCents: quote.priceCents,
+                  commissionCents: quote.commissionCents,
+                  totalCents: quote.totalCents,
+                  rate: quote.rate,
+                  currency: quote.currency,
+                  priceLabel: 'Precio del prestador',
+                ),
                 const SizedBox(height: 12),
                 const Text(
                     'Pago virtual. Al contratar se solicitará la retención del total. '

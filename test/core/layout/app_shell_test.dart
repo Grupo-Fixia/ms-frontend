@@ -47,10 +47,12 @@ void main() {
     expect(ShellDestination.of(ShellRole.client), [
       ShellDestination.clientHome,
       ShellDestination.clientRequests,
+      ShellDestination.clientServices,
+      ShellDestination.clientWallet,
       ShellDestination.clientProfile,
     ]);
-    expect(ShellDestination.of(ShellRole.technician), hasLength(4));
-    expect(ShellDestination.of(ShellRole.company), hasLength(3));
+    expect(ShellDestination.of(ShellRole.technician), hasLength(6));
+    expect(ShellDestination.of(ShellRole.company), hasLength(4));
   });
 
   test('initialsOf no inventa nombres', () {
@@ -123,11 +125,14 @@ void main() {
     );
 
     final bottom = tester.getRect(
-      find.byKey(const ValueKey('client-nav-perfil')),
+      find.byKey(const ValueKey('client-nav-mas')),
     );
     expect(bottom.bottom, greaterThan(760));
     await tester.tap(find.byKey(const ValueKey('client-publish-problem')));
+    await tester.tap(find.byKey(const ValueKey('client-nav-mas')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('client-nav-perfil')));
+    await tester.pumpAndSettle();
     expect(publish, 1);
     expect(visited, [ShellDestination.clientProfile]);
     expect(tester.takeException(), isNull);
@@ -218,5 +223,26 @@ void main() {
     ));
     expect(tester.getRect(find.byKey(const ValueKey('fill'))).height,
         greaterThan(780));
+  });
+
+  testWidgets('celular: si hay más de cuatro secciones, las demás van en Más',
+      (tester) async {
+    final visited = <ShellDestination>[];
+    await pumpShell(
+      tester,
+      size: const Size(390, 844),
+      destination: ShellDestination.technicianWallet,
+      onNavigate: visited.add,
+    );
+    expect(
+        find.byKey(const ValueKey('technician-nav-trabajos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('technician-nav-perfil')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('technician-nav-mas')));
+    await tester.pumpAndSettle();
+    expect(find.text('Billetera'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('technician-nav-perfil')));
+    await tester.pumpAndSettle();
+    expect(visited, [ShellDestination.technicianProfile]);
+    expect(tester.takeException(), isNull);
   });
 }

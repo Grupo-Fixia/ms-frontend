@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ms_frontend/core/http/authorized_http.dart';
-import 'package:ms_frontend/features/payments/domain/payment.dart';
-import 'package:ms_frontend/features/payments/infrastructure/http_payment_repository.dart';
+import 'package:ms_frontend/features/payments/domain/payments.dart';
+import 'package:ms_frontend/features/payments/infrastructure/http_payments_repository.dart';
 
 Map<String, dynamic> paymentJson(
         {String status = 'Failed', String method = 'Wallet'}) =>
@@ -49,9 +49,9 @@ Map<String, dynamic> quoteJson() => {
     };
 http.Response response(Object body, [int status = 200]) =>
     http.Response.bytes(utf8.encode(jsonEncode(body)), status);
-HttpPaymentRepository repository(MockClientHandler handler,
+HttpPaymentsRepository repository(MockClientHandler handler,
         {AuthorizedHttp? auth}) =>
-    HttpPaymentRepository(
+    HttpPaymentsRepository(
         client: MockClient(handler),
         baseUrl: Uri.parse('http://gateway'),
         authorizedHttp: auth ??
@@ -145,8 +145,8 @@ void main() {
           repository((_) async => response({
                 ...walletPaymentJson(),
                 'breakdown': breakdown,
-              })).forRequest('req-1'),
-          throwsA(isA<PaymentFailure>()));
+              })).paymentForRequest('req-1'),
+          throwsA(isA<PaymentsFailure>()));
     });
   }
   test('cliente autorizado reconsulta y reintenta una vez; devuelve Held',
@@ -159,14 +159,11 @@ void main() {
       return response(walletPaymentJson(
           status: r.method == 'POST' ? 'Processing' : 'Failed'));
     });
-    final result =
-        await repo.retryHold(ServicePayment.fromJson(walletPaymentJson()));
+    final result = await repo.retryHold('pay-1');
     expect(result.confirmedHoldStatus, HoldStatus.held);
     expect(result.canRetryHold, isFalse);
-    expect(calls, [
-      'GET /api/payments/service-request/req-1',
-      'POST /api/payments/pay-1/process'
-    ]);
+    expect(
+        calls, ['GET /api/payments/pay-1', 'POST /api/payments/pay-1/process']);
   });
   test(
       'técnico o permiso revocado no envía process aunque la vista anterior lo permitía',
@@ -176,17 +173,15 @@ void main() {
       calls.add(r.method);
       return response(walletPaymentJson(payer: false));
     });
-    await expectLater(
-        repo.retryHold(ServicePayment.fromJson(walletPaymentJson())),
-        throwsA(isA<PaymentFailure>()));
+    await expectLater(repo.retryHold('pay-1'), throwsA(isA<PaymentsFailure>()));
     expect(calls, ['GET']);
   });
   test('403 real al procesar no se trata como saldo insuficiente', () async {
     final repo = repository((r) async =>
         r.method == 'GET' ? response(walletPaymentJson()) : response({}, 403));
     await expectLater(
-        repo.retryHold(ServicePayment.fromJson(walletPaymentJson())),
-        throwsA(isA<PaymentFailure>()
+        repo.retryHold('pay-1'),
+        throwsA(isA<PaymentsFailure>()
             .having((e) => e.statusCode, 'status', 403)
             .having((e) => e.isInsufficientBalance, 'saldo', isFalse)));
   });
@@ -197,8 +192,8 @@ void main() {
     expect(quote.totalCents, 115050);
     expect(quote.matches(100050, 'COP'), isTrue);
     expect(quote.matches(100050, 'USD'), isFalse);
-    final wallet = WalletBalance.fromJson(
-        {'availableBalance': 20.5, 'heldBalance': 500, 'currency': 'COP'});
+    const wallet =
+        Wallet(availableCents: 2050, heldCents: 50000, currency: 'COP');
     expect(wallet.availableCents, 2050);
     expect(wallet.heldCents, 50000);
   });
@@ -249,15 +244,18 @@ void main() {
       expect(r.headers['Authorization'], 'Bearer token');
       return response(quoteJson());
     });
-    expect((await repo.quote(100050, 'COP')).totalCents, 115050);
+    expect((await repo.commissionQuote(100050, currency: 'COP')).totalCents,
+        115050);
   });
   test('rechaza comisión para otro precio o moneda', () async {
     await expectLater(
-        repository((_) async => response(quoteJson())).quote(100000, 'COP'),
-        throwsA(isA<PaymentFailure>()));
+        repository((_) async => response(quoteJson()))
+            .commissionQuote(100000, currency: 'COP'),
+        throwsA(isA<PaymentsFailure>()));
     await expectLater(
-        repository((_) async => response(quoteJson())).quote(100050, 'USD'),
-        throwsA(isA<PaymentFailure>()));
+        repository((_) async => response(quoteJson()))
+            .commissionQuote(100050, currency: 'USD'),
+        throwsA(isA<PaymentsFailure>()));
   });
   test('consulta pago y saldo global en rutas separadas', () async {
     final paths = <String>[];
@@ -267,19 +265,22 @@ void main() {
           ? {'availableBalance': 2000, 'heldBalance': 4000, 'currency': 'COP'}
           : paymentJson());
     });
-    expect((await repo.forRequest('req-1'))!.amountCents, 115050);
+    expect((await repo.paymentForRequest('req-1'))!.amountCents, 115050);
     expect((await repo.wallet()).heldCents, 400000);
     expect(paths,
         ['/api/payments/service-request/req-1', '/api/payments/wallets/me']);
   });
   test('404 de consulta es no disponible; no inventa pago', () async {
-    expect(await repository((_) async => response({}, 404)).forRequest('req-1'),
+    expect(
+        await repository((_) async => response({}, 404))
+            .paymentForRequest('req-1'),
         isNull);
   });
   test('rechaza un pago de otra solicitud', () async {
     await expectLater(
-        repository((_) async => response(paymentJson())).forRequest('req-2'),
-        throwsA(isA<PaymentFailure>()));
+        repository((_) async => response(paymentJson()))
+            .paymentForRequest('req-2'),
+        throwsA(isA<PaymentsFailure>()));
   });
   test('Wallet fallido sin discriminador no envía process', () async {
     final calls = <String>[];
@@ -289,9 +290,8 @@ void main() {
       return response(
           paymentJson(status: r.method == 'POST' ? 'Processing' : 'Failed'));
     });
-    await expectLater(repo.retryHold(ServicePayment.fromJson(paymentJson())),
-        throwsA(isA<PaymentFailure>()));
-    expect(calls, ['GET /api/payments/service-request/req-1']);
+    await expectLater(repo.retryHold('pay-1'), throwsA(isA<PaymentsFailure>()));
+    expect(calls, ['GET /api/payments/pay-1']);
   });
   for (final status in [
     'Pending',
@@ -305,8 +305,8 @@ void main() {
         expect(r.method, 'GET');
         return response(paymentJson(status: status));
       });
-      await expectLater(repo.retryHold(ServicePayment.fromJson(paymentJson())),
-          throwsA(isA<PaymentFailure>()));
+      await expectLater(
+          repo.retryHold('pay-1'), throwsA(isA<PaymentsFailure>()));
     });
   }
   test('no procesa un método heredado fallido', () async {
@@ -314,8 +314,7 @@ void main() {
       expect(r.method, 'GET');
       return response(paymentJson(method: 'CreditCard'));
     });
-    await expectLater(repo.retryHold(ServicePayment.fromJson(paymentJson())),
-        throwsA(isA<PaymentFailure>()));
+    await expectLater(repo.retryHold('pay-1'), throwsA(isA<PaymentsFailure>()));
   });
   for (final title in [
     'Saldo insuficiente',
@@ -326,7 +325,7 @@ void main() {
       await expectLater(
           repository((_) async =>
               response({'title': title, 'detail': 'detalle'}, 409)).wallet(),
-          throwsA(isA<PaymentFailure>()
+          throwsA(isA<PaymentsFailure>()
               .having((f) => f.isInsufficientBalance, 'saldo insuficiente',
                   title == 'Saldo insuficiente')
               .having((f) => f.message, 'detalle', 'detalle')));
@@ -335,13 +334,13 @@ void main() {
   for (final status in [400, 403, 404, 500]) {
     test('error HTTP $status no produce saldo', () async {
       await expectLater(repository((_) async => response({}, status)).wallet(),
-          throwsA(isA<PaymentFailure>()));
+          throwsA(isA<PaymentsFailure>()));
     });
   }
   test('sesión expirada se propaga al mecanismo existente', () async {
     await expectLater(
         repository((_) async => response({}, 401)).wallet(),
-        throwsA(isA<PaymentFailure>()
+        throwsA(isA<PaymentsFailure>()
             .having((e) => e.isSessionExpired, 'sesión', isTrue)));
   });
   test('401 tras renovar no declara expirada una sesión renovada', () async {
@@ -356,7 +355,7 @@ void main() {
                   token = 'new';
                   return true;
                 })).wallet(),
-        throwsA(isA<PaymentFailure>()
+        throwsA(isA<PaymentsFailure>()
             .having((e) => e.isSessionExpired, 'sesión', isFalse)));
     expect(renewals, 1);
   });
@@ -372,12 +371,12 @@ void main() {
                     renewSession: () async => false,
                     timeout: const Duration(milliseconds: 1)))
             .wallet(),
-        throwsA(isA<PaymentFailure>()));
+        throwsA(isA<PaymentsFailure>()));
     expect(calls, 1);
   });
   test('JSON malformado no se muestra como éxito', () async {
     await expectLater(
         repository((_) async => http.Response('invalid', 200)).wallet(),
-        throwsA(isA<PaymentFailure>()));
+        throwsA(isA<PaymentsFailure>()));
   });
 }
