@@ -91,4 +91,32 @@ class FakeEvaluations implements ServiceEvaluationRepository {
         .where((e) => serviceRequestIds.contains(e.serviceRequestId))
         .toList();
   }
+
+  /// Si se configura, `submit` falla con esto.
+  ServiceHistoryFailure? submitFailure;
+  Completer<void>? pendingSubmit;
+  final submitted = <NewServiceEvaluation>[];
+
+  /// Quién evalúa en las evaluaciones registradas por `submit`.
+  String evaluatorId = clientUserId;
+
+  @override
+  Future<ServiceEvaluation> submit(NewServiceEvaluation evaluation) async {
+    submitted.add(evaluation);
+    await pendingSubmit?.future;
+    if (submitFailure != null) throw submitFailure!;
+    final saved = ServiceEvaluation(
+      serviceRequestId: evaluation.serviceRequestId,
+      direction: evaluatorId == clientUserId
+          ? EvaluationDirection.clientToProvider
+          : EvaluationDirection.providerToClient,
+      evaluatorId: evaluatorId,
+      evaluatedId:
+          evaluatorId == clientUserId ? technicianUserId : clientUserId,
+      rating: evaluation.rating,
+      comment: evaluation.comment,
+    );
+    items = [...items, saved];
+    return saved;
+  }
 }
