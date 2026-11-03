@@ -20,6 +20,7 @@ import 'features/technician/applications/infrastructure/http_application_reposit
 import 'features/technician/opportunities/application/ports/opportunity_repository.dart';
 import 'features/technician/opportunities/infrastructure/http_opportunity_repository.dart';
 import 'features/technician/availability/application/ports/technician_availability_repository.dart';
+import 'features/payments/infrastructure/http_payments_repository.dart';
 import 'features/technician/availability/infrastructure/http_technician_availability_repository.dart';
 
 /// Repositorios que conectan las pantallas con ms-users y ms-services
@@ -38,6 +39,7 @@ class BackendIntegrations {
     this.companyOpportunities,
     this.technicianAvailability,
     this.compatibleTechnicians,
+    this.payments,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -94,6 +96,11 @@ class BackendIntegrations {
         authorizedHttp: authorizedHttp,
       ),
       contracts: contracts,
+      payments: HttpPaymentsRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
       compatibleTechnicians: HttpCompatibleTechniciansRepository(
         client: client,
         baseUrl: servicesBaseUrl,
@@ -124,4 +131,7 @@ class BackendIntegrations {
 
   /// Técnicos compatibles con una solicitud del cliente (GC-474).
   final HttpCompatibleTechniciansRepository? compatibleTechnicians;
+
+  /// Billetera y pagos simulados con ms-payments (GC-489, GC-491).
+  final HttpPaymentsRepository? payments;
 }

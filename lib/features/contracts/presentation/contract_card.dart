@@ -10,8 +10,15 @@ import '../domain/service_contract.dart';
 /// las partes, la dirección exacta. Incluye el estado del servicio y su
 /// historial (GC-437, GC-441).
 class ContractCard extends StatelessWidget {
-  const ContractCard(
-      {super.key, required this.contract, this.actions = const []});
+  const ContractCard({
+    super.key,
+    required this.contract,
+    this.actions = const [],
+    this.walletPayments = false,
+  });
+
+  /// El pago se hace con la billetera de Fixia (ms-payments).
+  final bool walletPayments;
 
   final ServiceContract contract;
 
@@ -76,9 +83,11 @@ class ContractCard extends StatelessWidget {
               _Line('Contratado el', formatDateTime(contract.contractedAt)),
             ],
           ),
-          const _Line(
+          _Line(
             'Pago',
-            'Se acuerda directamente entre las partes; Fixia no procesa pagos en esta versión.',
+            walletPayments
+                ? 'Con la billetera de Fixia: el total queda retenido al contratar y el técnico lo recibe cuando el cliente confirma el cierre.'
+                : 'Se acuerda directamente entre las partes; Fixia no procesa pagos en esta versión.',
           ),
           if (contract.timeline.isNotEmpty) ...[
             const Divider(height: 24),

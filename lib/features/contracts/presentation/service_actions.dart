@@ -219,6 +219,7 @@ List<Widget> clientServiceActions({
   required Future<ServiceContract> Function() confirmClosure,
   required Future<ServiceContract> Function(String reason) object,
   required VoidCallback onDone,
+  bool payWithWallet = false,
 }) {
   switch (contract.serviceStatus) {
     case ServiceRequestStatus.contracted:
@@ -232,11 +233,16 @@ List<Widget> clientServiceActions({
         const _Note(
             'El técnico declaró el trabajo terminado. Revísalo y confirma el cierre.'),
         ServiceActionButton(
-          label: 'Confirmar cierre',
-          confirmTitle: 'Confirmar cierre del servicio',
-          confirmText:
-              'Confirmas que el trabajo quedó como se acordó. El servicio quedará cerrado y no se puede reabrir.',
-          successMessage: 'Servicio cerrado. ¡Gracias por usar Fixia!',
+          label: payWithWallet ? 'Confirmar y pagar' : 'Confirmar cierre',
+          confirmTitle: payWithWallet
+              ? 'Confirmar cierre y pagar'
+              : 'Confirmar cierre del servicio',
+          confirmText: payWithWallet
+              ? 'Confirmas que el trabajo quedó como se acordó. Con esto se le paga al técnico lo retenido en tu billetera y el servicio queda cerrado; no se puede reabrir.'
+              : 'Confirmas que el trabajo quedó como se acordó. El servicio quedará cerrado y no se puede reabrir.',
+          successMessage: payWithWallet
+              ? 'Servicio cerrado y pagado. ¡Gracias por usar Fixia!'
+              : 'Servicio cerrado. ¡Gracias por usar Fixia!',
           run: (_) => confirmClosure(),
           onDone: onDone,
         ),

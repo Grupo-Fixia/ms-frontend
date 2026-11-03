@@ -47,10 +47,11 @@ void main() {
     expect(ShellDestination.of(ShellRole.client), [
       ShellDestination.clientHome,
       ShellDestination.clientRequests,
+      ShellDestination.clientWallet,
       ShellDestination.clientProfile,
     ]);
-    expect(ShellDestination.of(ShellRole.technician), hasLength(4));
-    expect(ShellDestination.of(ShellRole.company), hasLength(3));
+    expect(ShellDestination.of(ShellRole.technician), hasLength(5));
+    expect(ShellDestination.of(ShellRole.company), hasLength(4));
   });
 
   test('initialsOf no inventa nombres', () {

@@ -14,7 +14,13 @@ class TechnicianContractPage extends StatelessWidget {
     super.key,
     required this.load,
     this.actionsBuilder,
+    this.footer,
+    this.walletPayments = false,
   });
+
+  /// Debajo de la contratación (p. ej. el estado del pago).
+  final Widget? footer;
+  final bool walletPayments;
 
   final Future<ServiceContract> Function() load;
   final List<Widget> Function(
@@ -44,12 +50,21 @@ class TechnicianContractPage extends StatelessWidget {
                   load: load,
                   builder: (context, contract, reload) => ContractCard(
                     contract: contract,
+                    walletPayments: walletPayments,
                     actions: actionsBuilder?.call(context, contract, reload) ??
                         const [],
                   ),
                 ),
               ),
             ),
+            if (footer != null)
+              Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 860),
+                  child: footer,
+                ),
+              ),
           ],
         ),
       );

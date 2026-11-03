@@ -68,7 +68,9 @@ void main() {
     expect(find.text('Técnico'), findsWidgets);
     expect(find.text('Carlos Mendoza'), findsNothing);
     expect(find.text('4.8'), findsNothing);
-    expect(find.text('Billetera'), findsNothing);
+    // La billetera de ejemplo con saldo inventado ya no existe; la real
+    // está en el menú y consulta ms-payments.
+    expect(find.textContaining('\$'), findsNothing);
     expect(find.text('–'), findsNWidgets(3));
     expect(
       find.text(

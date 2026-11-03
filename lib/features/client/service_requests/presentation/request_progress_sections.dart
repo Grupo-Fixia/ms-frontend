@@ -72,9 +72,14 @@ class ClientQuotationSection extends StatefulWidget {
     required this.accept,
     required this.reject,
     required this.onChanged,
+    this.previewBuilder,
   });
 
   final Future<List<Quotation>> Function() load;
+
+  /// Lo que se muestra antes de aceptar la versión vigente (p. ej. el
+  /// desglose con la comisión, GC-491).
+  final Widget Function(Quotation current)? previewBuilder;
   final Future<Quotation> Function(String quotationId) accept;
   final Future<Quotation> Function(String quotationId) reject;
 
@@ -163,7 +168,7 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
                     style: TextStyle(color: FixiaColors.textSecondary),
                   ),
                 )
-              else
+              else ...[
                 QuotationCard(
                   quotation: main,
                   actions: main.isCurrent
@@ -192,6 +197,9 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
                         ]
                       : const [],
                 ),
+                if (main.isCurrent && widget.previewBuilder != null)
+                  widget.previewBuilder!(main),
+              ],
               if (versions.history.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 const Text(
@@ -218,9 +226,11 @@ class ClientContractSection extends StatelessWidget {
     super.key,
     required this.load,
     this.actionsBuilder,
+    this.walletPayments = false,
   });
 
   final Future<ServiceContract> Function() load;
+  final bool walletPayments;
 
   /// Acciones del cliente sobre el servicio (confirmar cierre u objetar).
   final List<Widget> Function(
@@ -233,6 +243,7 @@ class ClientContractSection extends StatelessWidget {
         load: load,
         builder: (context, contract, reload) => ContractCard(
           contract: contract,
+          walletPayments: walletPayments,
           actions: actionsBuilder?.call(context, contract, reload) ?? const [],
         ),
       );

@@ -12,6 +12,8 @@ enum ShellDestination {
       ShellRole.client, 'Inicio', Icons.home_outlined, 'client-nav-inicio'),
   clientRequests(ShellRole.client, 'Mis solicitudes', Icons.assignment_outlined,
       'client-nav-historial'),
+  clientWallet(ShellRole.client, 'Billetera',
+      Icons.account_balance_wallet_outlined, 'client-nav-billetera'),
   clientProfile(ShellRole.client, 'Mi perfil', Icons.person_outline_rounded,
       'client-nav-perfil'),
   technicianHome(ShellRole.technician, 'Inicio', Icons.home_outlined,
@@ -20,6 +22,8 @@ enum ShellDestination {
       Icons.search_rounded, 'technician-nav-oportunidades'),
   technicianJobs(ShellRole.technician, 'Mis trabajos',
       Icons.work_outline_rounded, 'technician-nav-trabajos'),
+  technicianWallet(ShellRole.technician, 'Billetera',
+      Icons.account_balance_wallet_outlined, 'technician-nav-billetera'),
   technicianProfile(ShellRole.technician, 'Perfil profesional',
       Icons.person_outline_rounded, 'technician-nav-perfil'),
   companyHome(
@@ -27,7 +31,9 @@ enum ShellDestination {
   companyTechnicians(ShellRole.company, 'Mis técnicos', Icons.groups_outlined,
       'company-nav-tecnicos'),
   companyOpportunities(ShellRole.company, 'Oportunidades', Icons.search_rounded,
-      'company-nav-oportunidades');
+      'company-nav-oportunidades'),
+  companyWallet(ShellRole.company, 'Billetera',
+      Icons.account_balance_wallet_outlined, 'company-nav-billetera');
 
   const ShellDestination(this.role, this.label, this.icon, this.keyName);
 
