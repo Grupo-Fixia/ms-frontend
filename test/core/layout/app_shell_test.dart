@@ -47,10 +47,11 @@ void main() {
     expect(ShellDestination.of(ShellRole.client), [
       ShellDestination.clientHome,
       ShellDestination.clientRequests,
+      ShellDestination.clientServices,
       ShellDestination.clientWallet,
       ShellDestination.clientProfile,
     ]);
-    expect(ShellDestination.of(ShellRole.technician), hasLength(5));
+    expect(ShellDestination.of(ShellRole.technician), hasLength(6));
     expect(ShellDestination.of(ShellRole.company), hasLength(4));
   });
 
@@ -124,11 +125,14 @@ void main() {
     );
 
     final bottom = tester.getRect(
-      find.byKey(const ValueKey('client-nav-perfil')),
+      find.byKey(const ValueKey('client-nav-mas')),
     );
     expect(bottom.bottom, greaterThan(760));
     await tester.tap(find.byKey(const ValueKey('client-publish-problem')));
+    await tester.tap(find.byKey(const ValueKey('client-nav-mas')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('client-nav-perfil')));
+    await tester.pumpAndSettle();
     expect(publish, 1);
     expect(visited, [ShellDestination.clientProfile]);
     expect(tester.takeException(), isNull);

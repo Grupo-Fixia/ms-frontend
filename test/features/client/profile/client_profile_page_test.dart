@@ -68,8 +68,9 @@ void main() {
     expect(find.byKey(const ValueKey('client-profile-payments-note')),
         findsOneWidget);
     expect(find.text('–'), findsNWidgets(3));
+    // En celular «Mi perfil» va dentro de «Más».
     expect(
-      find.byKey(const ValueKey('client-nav-perfil')),
+      find.byKey(const ValueKey('client-nav-mas')),
       findsOneWidget,
     );
 

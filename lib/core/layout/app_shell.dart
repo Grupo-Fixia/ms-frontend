@@ -12,6 +12,8 @@ enum ShellDestination {
       ShellRole.client, 'Inicio', Icons.home_outlined, 'client-nav-inicio'),
   clientRequests(ShellRole.client, 'Mis solicitudes', Icons.assignment_outlined,
       'client-nav-historial'),
+  clientServices(ShellRole.client, 'Mis servicios', Icons.history_rounded,
+      'client-nav-servicios'),
   clientWallet(ShellRole.client, 'Billetera',
       Icons.account_balance_wallet_outlined, 'client-nav-billetera'),
   clientProfile(ShellRole.client, 'Mi perfil', Icons.person_outline_rounded,
@@ -22,6 +24,8 @@ enum ShellDestination {
       Icons.search_rounded, 'technician-nav-oportunidades'),
   technicianJobs(ShellRole.technician, 'Mis trabajos',
       Icons.work_outline_rounded, 'technician-nav-trabajos'),
+  technicianServices(ShellRole.technician, 'Mis servicios',
+      Icons.history_rounded, 'technician-nav-servicios'),
   technicianWallet(ShellRole.technician, 'Billetera',
       Icons.account_balance_wallet_outlined, 'technician-nav-billetera'),
   technicianProfile(ShellRole.technician, 'Perfil profesional',
@@ -829,6 +833,9 @@ class _BottomBar extends StatelessWidget {
         ShellDestination.technicianProfile =>
           'Perfil',
         ShellDestination.technicianJobs => 'Trabajos',
+        ShellDestination.clientServices ||
+        ShellDestination.technicianServices =>
+          'Servicios',
         ShellDestination.companyTechnicians => 'Técnicos',
         _ => d.label,
       };
