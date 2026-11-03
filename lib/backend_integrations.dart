@@ -1,3 +1,5 @@
+import 'features/payments/application/payment_repository.dart';
+import 'features/payments/infrastructure/http_payment_repository.dart';
 import 'features/service_evidence/application/evidence_feature.dart';
 import 'features/service_evidence/infrastructure/http_evidence_repository.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +33,7 @@ class BackendIntegrations {
     required this.quotations,
     required this.contracts,
     this.evidence,
+    this.payments,
     this.companyApplications,
     this.companyOpportunities,
   });
@@ -41,6 +44,7 @@ class BackendIntegrations {
     required http.Client client,
     required Uri usersBaseUrl,
     required Uri servicesBaseUrl,
+    Uri? paymentsBaseUrl,
     required AuthorizedHttp authorizedHttp,
   }) {
     final contracts = HttpContractRepository(
@@ -48,6 +52,10 @@ class BackendIntegrations {
         baseUrl: servicesBaseUrl,
         authorizedHttp: authorizedHttp);
     return BackendIntegrations(
+      payments: HttpPaymentRepository(
+          client: client,
+          baseUrl: paymentsBaseUrl ?? servicesBaseUrl,
+          authorizedHttp: authorizedHttp),
       evidence: EvidenceFeature(
           contracts: contracts,
           repositoryFor: (access) => HttpEvidenceRepository(
@@ -93,6 +101,7 @@ class BackendIntegrations {
   }
 
   final EvidenceFeature? evidence;
+  final PaymentRepository? payments;
   final ClientProfileRepository clientProfile;
   final ServiceRequestRepository serviceRequests;
   final OpportunityRepository opportunities;

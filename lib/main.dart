@@ -3,6 +3,8 @@ import 'features/service_evidence/presentation/service_evidence_flow.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'features/payments/domain/payment.dart';
+import 'features/payments/presentation/service_payment_section.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
@@ -170,6 +172,7 @@ Future<void> main() async {
         client: httpClient,
         usersBaseUrl: usersApiBaseUrl,
         servicesBaseUrl: Uri.parse(ApiConfig.servicesBaseUrl),
+        paymentsBaseUrl: Uri.parse(ApiConfig.paymentsBaseUrl),
         authorizedHttp: AuthorizedHttp(
           accessToken: () => sessionStore.session?.accessToken,
           renewSession: RefreshSession(
@@ -886,6 +889,7 @@ class _FixiaAppState extends State<FixiaApp> {
       final expired = switch (error) {
         QuotationFailure(:final isSessionExpired) => isSessionExpired,
         ContractFailure(:final isSessionExpired) => isSessionExpired,
+        PaymentFailure(:final isSessionExpired) => isSessionExpired,
         ApplicationFailure(:final isSessionExpired) => isSessionExpired,
         ServiceRequestFailure(:final isSessionExpired) => isSessionExpired,
         _ => false,
@@ -932,6 +936,10 @@ class _FixiaAppState extends State<FixiaApp> {
       case ServiceRequestStatus.providerSelected:
         return [
           ClientQuotationSection(
+            loadCommission: backend.payments == null
+                ? null
+                : (cents, currency) => _serviceCall(
+                    context, () => backend.payments!.quote(cents, currency)),
             key: ValueKey('quotations-${request.id}-${request.status.name}'),
             load: () => _serviceCall(context,
                 () => ListRequestQuotations(backend.quotations)(request.id)),
@@ -948,6 +956,22 @@ class _FixiaAppState extends State<FixiaApp> {
             ServiceRequestStatus.closed:
         return [
           ClientContractSection(
+            footerBuilder: backend.payments == null
+                ? null
+                : (contract) => ServicePaymentSection(
+                      key: ValueKey(
+                          'payment-${contract.serviceRequestId}-${contract.serviceStatus?.name}'),
+                      serviceClosed:
+                          contract.serviceStatus == ServiceRequestStatus.closed,
+                      load: () => _serviceCall(
+                          context,
+                          () => backend.payments!
+                              .forRequest(contract.serviceRequestId)),
+                      loadWallet: () =>
+                          _serviceCall(context, backend.payments!.wallet),
+                      retryHold: (payment) => _serviceCall(
+                          context, () => backend.payments!.retryHold(payment)),
+                    ),
             key: ValueKey('contract-${request.id}-${request.status.name}'),
             load: () => _serviceCall(context,
                 () => GetRequestContract(backend.contracts)(request.id)),

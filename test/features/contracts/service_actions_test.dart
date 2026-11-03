@@ -114,7 +114,7 @@ void main() {
       await _pump(tester, _client(_contracts(ServiceRequestStatus.inProgress)));
       expect(find.text('El técnico está trabajando en tu servicio.'),
           findsOneWidget);
-      expect(find.text('Confirmar cierre'), findsNothing);
+      expect(find.text('Confirmar y pagar'), findsNothing);
     });
 
     testWidgets('confirma el cierre', (tester) async {
@@ -122,13 +122,13 @@ void main() {
       final contracts = _contracts(ServiceRequestStatus.technicianFinished);
       await _pump(
           tester, _client(contracts, onPageReload: () => pageReloads++));
-      await _confirm(tester, 'Confirmar cierre', 'Confirmar cierre');
+      await _confirm(tester, 'Confirmar y pagar', 'Confirmar y pagar');
 
       expect(contracts.actions, ['closure']);
-      expect(find.text('Servicio cerrado. ¡Gracias por usar Fixia!'),
+      expect(find.text('Cierre confirmado. Consulta el estado del pago.'),
           findsOneWidget);
       expect(find.text('Cerrada'), findsWidgets);
-      expect(find.text('Confirmar cierre'), findsNothing);
+      expect(find.text('Confirmar y pagar'), findsNothing);
       expect(pageReloads, 1);
     });
 

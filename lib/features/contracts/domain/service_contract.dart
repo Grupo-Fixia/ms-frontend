@@ -8,7 +8,7 @@ export '../../../core/constants/service_request_status.dart';
 /// solicitud. Como la solicitud ya está contratada, el resumen trae la
 /// dirección exacta si el cliente la dio: es lo que recibe el prestador.
 ///
-/// No hay datos de contacto ni de pago: el pago ocurre fuera de Fixia.
+/// El estado del pago se consulta por separado en ms-payments.
 class ServiceContract {
   const ServiceContract({
     required this.id,

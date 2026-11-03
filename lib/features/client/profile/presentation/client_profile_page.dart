@@ -190,8 +190,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
         const SizedBox(height: 20),
         const NoticeBanner(
           key: ValueKey('client-profile-payments-note'),
-          message: 'Los pagos se acuerdan directamente con el técnico; '
-              'Fixia no guarda métodos de pago en esta versión.',
+          message: 'Los pagos en Fixia son virtuales. '
+              'Consulta el estado del pago en el detalle de tu servicio.',
           tone: PillTone.neutral,
           icon: Icons.payments_outlined,
         ),

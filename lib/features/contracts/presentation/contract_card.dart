@@ -78,7 +78,7 @@ class ContractCard extends StatelessWidget {
           ),
           const _Line(
             'Pago',
-            'Se acuerda directamente entre las partes; Fixia no procesa pagos en esta versión.',
+            'Pago virtual en Fixia. El estado del servicio no confirma por sí solo el estado del pago.',
           ),
           if (contract.timeline.isNotEmpty) ...[
             const Divider(height: 24),

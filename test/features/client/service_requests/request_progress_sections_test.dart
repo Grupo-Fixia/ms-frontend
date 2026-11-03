@@ -1,3 +1,4 @@
+import 'package:ms_frontend/features/payments/domain/payment.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/features/client/service_requests/presentation/request_progress_sections.dart';
@@ -31,6 +32,13 @@ void main() {
     late int changes;
 
     Widget section() => ClientQuotationSection(
+          loadCommission: (cents, currency) async => CommissionQuote(
+              priceCents: cents,
+              commissionCents: 10000,
+              totalCents: cents + 10000,
+              currency: currency,
+              ruleId: 'rule-test',
+              ruleValidFrom: DateTime.utc(2026)),
           load: () => quotations.listForRequest('req-1'),
           accept: (id) => quotations.accept('req-1', id),
           reject: (id) => quotations.reject('req-1', id),
