@@ -349,7 +349,10 @@ void main() {
         await scrollTo(tester, key('client-request-change-location'));
         await tester.tap(key('client-request-change-location'));
         await tester.pumpAndSettle();
-        await tester.enterText(key('client-request-city'), ' Bogotá ');
+        await tester.tap(key('client-request-city'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Bogotá').last);
+        await tester.pumpAndSettle();
         await tester.enterText(key('client-request-zone'), 'Chapinero');
         await tester.tap(key('client-request-location-save'));
         await tester.pumpAndSettle();
@@ -396,7 +399,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(key('client-request-location-save'));
       await tester.pumpAndSettle();
-      expect(find.text('Escribe la ciudad.'), findsOneWidget);
+      expect(find.text('Elige la ciudad.'), findsOneWidget);
       expect(find.text('Escribe el barrio o localidad.'), findsOneWidget);
 
       await tester.tap(find.text('Cancelar'));

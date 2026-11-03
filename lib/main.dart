@@ -90,11 +90,13 @@ import 'features/technician/opportunities/presentation/opportunity_view.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
+import 'features/technician/specialties/domain/technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
 import 'features/technician/specialties/application/update_technician_specialties.dart';
 import 'features/technician/specialties/infrastructure/demo_technician_specialties_repository.dart';
 import 'features/technician/specialties/infrastructure/http_technician_specialties_repository.dart';
 import 'features/technician/specialties/presentation/technician_specialties_page.dart';
+import 'features/technician/opportunities/presentation/match_setup_summary.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
 import 'features/technician/profile/application/ports/technician_profile_repository.dart';
 import 'features/technician/profile/application/update_technician_profile.dart';
@@ -755,6 +757,39 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
+  /// Ciudad, horario y especialidades del técnico para explicar por qué no
+  /// le llegan oportunidades. Lo que falle se muestra como "–".
+  Future<MatchSetup> _technicianMatchSetup(
+      TechnicianAvailabilityRepository repository) async {
+    Future<T?> safe<T>(Future<T> Function() load) async {
+      try {
+        return await load();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    var zoneLoaded = false;
+    final specialties = widget.technicianSpecialtiesRepository;
+    final results = await Future.wait<Object?>([
+      safe<Object?>(() async {
+        final zone = await repository.fetchCoverageZone();
+        zoneLoaded = true;
+        return zone;
+      }),
+      safe(repository.fetchAvailability),
+      specialties == null
+          ? Future<Object?>.value()
+          : safe(specialties.fetchSpecialties),
+    ]);
+    return MatchSetup(
+      zoneLoaded: zoneLoaded,
+      city: (results[0] as CoverageZone?)?.city,
+      slots: (results[1] as WeeklyAvailability?)?.slots,
+      categories: (results[2] as TechnicianSpecialties?)?.categories,
+    );
+  }
+
   Widget _walletPage(BuildContext context) {
     final payments = widget.backend?.payments;
     final profile = _sessionStore.profile;
@@ -818,6 +853,10 @@ class _FixiaAppState extends State<FixiaApp> {
           ? null
           : () =>
               _technicianSetupComplete(widget.backend!.technicianAvailability!),
+      loadMatchSetup: widget.backend?.technicianAvailability == null
+          ? null
+          : () =>
+              _technicianMatchSetup(widget.backend!.technicianAvailability!),
       onOpenChat: () =>
           Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -852,6 +891,13 @@ class _FixiaAppState extends State<FixiaApp> {
           .pushReplacementNamed(AppRoutes.technicianSpecialties),
       onOpenProfile: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianProfile),
+      loadMatchSetup: backend?.technicianAvailability == null
+          ? null
+          : () => _technicianMatchSetup(backend!.technicianAvailability!),
+      onOpenAvailability: backend?.technicianAvailability == null
+          ? null
+          : () => Navigator.of(context)
+              .pushReplacementNamed(AppRoutes.technicianAvailability),
     );
   }
 
@@ -1551,10 +1597,12 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     this.onOpenContract,
     this.onOpenAvailability,
     this.loadSetupComplete,
+    this.loadMatchSetup,
   });
 
   final Future<void> Function()? onOpenAvailability;
   final Future<bool> Function()? loadSetupComplete;
+  final Future<MatchSetup> Function()? loadMatchSetup;
   final VoidCallback? onOpenJobs;
   final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
   final Future<TechnicianWork> Function()? loadWork;
@@ -1670,6 +1718,7 @@ class _TechnicianDashboardLoaderState
           onOpenSpecialties: widget.onOpenSpecialties,
           onOpenAvailability: widget.onOpenAvailability,
           loadSetupComplete: widget.loadSetupComplete,
+          loadMatchSetup: widget.loadMatchSetup,
           onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
         );
