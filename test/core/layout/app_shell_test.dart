@@ -220,4 +220,25 @@ void main() {
     expect(tester.getRect(find.byKey(const ValueKey('fill'))).height,
         greaterThan(780));
   });
+
+  testWidgets('celular: si hay más de cuatro secciones, las demás van en Más',
+      (tester) async {
+    final visited = <ShellDestination>[];
+    await pumpShell(
+      tester,
+      size: const Size(390, 844),
+      destination: ShellDestination.technicianWallet,
+      onNavigate: visited.add,
+    );
+    expect(
+        find.byKey(const ValueKey('technician-nav-trabajos')), findsOneWidget);
+    expect(find.byKey(const ValueKey('technician-nav-perfil')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('technician-nav-mas')));
+    await tester.pumpAndSettle();
+    expect(find.text('Billetera'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('technician-nav-perfil')));
+    await tester.pumpAndSettle();
+    expect(visited, [ShellDestination.technicianProfile]);
+    expect(tester.takeException(), isNull);
+  });
 }

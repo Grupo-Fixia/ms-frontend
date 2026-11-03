@@ -726,7 +726,12 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[];
-    final destinations = config.destinations;
+    final all = config.destinations;
+    // Caben cuatro secciones; si hay más, las últimas van en «Más».
+    final overflow = all.length > maxItems
+        ? all.sublist(maxItems - 1)
+        : const <ShellDestination>[];
+    final destinations = overflow.isEmpty ? all : all.sublist(0, maxItems - 1);
     for (var i = 0; i < destinations.length; i++) {
       final d = destinations[i];
       items.add(_BottomItem(
@@ -750,6 +755,15 @@ class _BottomBar extends StatelessWidget {
         ));
       }
     }
+    if (overflow.isNotEmpty) {
+      items.add(_BottomItem(
+        keyName: '${config.role.name}-nav-mas',
+        icon: Icons.more_horiz_rounded,
+        label: 'Más',
+        selected: overflow.contains(config.current),
+        onTap: () => _showMore(context, overflow),
+      ));
+    }
     return Material(
       color: FixiaColors.white,
       child: SafeArea(
@@ -763,6 +777,50 @@ class _BottomBar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Secciones visibles en la barra inferior (sin contar «Publicar»).
+  static const maxItems = 4;
+
+  Future<void> _showMore(
+      BuildContext context, List<ShellDestination> overflow) async {
+    final picked = await showModalBottomSheet<ShellDestination>(
+      context: context,
+      backgroundColor: FixiaColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final d in overflow)
+                ListTile(
+                  key: ValueKey(d.keyName),
+                  leading: Icon(
+                    d.icon,
+                    color: d == config.current
+                        ? FixiaColors.secondary
+                        : FixiaColors.primary,
+                  ),
+                  title: Text(
+                    d.label,
+                    style: TextStyle(
+                      fontWeight: d == config.current
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => Navigator.of(sheet).pop(d),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null) config.go(picked);
   }
 
   String _shortLabel(ShellDestination d) => switch (d) {
