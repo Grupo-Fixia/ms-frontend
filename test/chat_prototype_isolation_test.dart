@@ -73,7 +73,7 @@ void main() {
     }
     await tester.tap(find.byKey(const ValueKey('chat-prototype-reset')));
     await tester.pump();
-    await tester.pageBack();
+    await tester.tap(find.byKey(const ValueKey('page-back')));
     await tester.pumpAndSettle();
 
     expect(technicianRepo.fetchCalls, fetches,

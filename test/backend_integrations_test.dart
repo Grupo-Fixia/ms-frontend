@@ -525,7 +525,7 @@ void main() {
       await tester.tap(key('open-my-applications'));
       await tester.pumpAndSettle();
       expect(find.text('150.000 COP'), findsOneWidget);
-      await tester.tap(find.byTooltip('Actualizar postulaciones'));
+      await tester.tap(key('my-applications-refresh'));
       await tester.pumpAndSettle();
       expect(find.text('150.000 COP'), findsOneWidget);
       expect(applications.applied.length, 1);

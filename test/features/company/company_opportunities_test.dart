@@ -244,8 +244,9 @@ void main() {
     await tester.pump();
     expect(
         tester
-            .widget<ListTile>(
-                find.byKey(const ValueKey('company-opportunity-r2')))
+            .widget<InkWell>(find.descendant(
+                of: find.byKey(const ValueKey('company-opportunity-r2')),
+                matching: find.byType(InkWell)))
             .onTap,
         isNull);
     expect(

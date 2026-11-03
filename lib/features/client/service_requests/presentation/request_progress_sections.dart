@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../../../contracts/domain/service_contract.dart';
 import '../../../contracts/presentation/contract_card.dart';
 import '../../../quotations/domain/quotation.dart';
@@ -33,45 +34,31 @@ class _ServerSectionState<T> extends State<ServerSection<T>> {
       });
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: FixiaColors.primary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            FutureBuilder<T>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return Column(
-                    children: [
-                      Text('${snapshot.error}', textAlign: TextAlign.center),
-                      TextButton(
-                        onPressed: _reload,
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  );
-                }
-                return widget.builder(context, snapshot.data as T, _reload);
-              },
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionTitle(title: widget.title),
+          FutureBuilder<T>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SectionLoading();
+              }
+              if (snapshot.hasError) {
+                return EmptyState(
+                  message: '${snapshot.error}',
+                  icon: Icons.error_outline_rounded,
+                  action: TextButton(
+                    onPressed: _reload,
+                    child: const Text('Reintentar'),
+                  ),
+                );
+              }
+              return widget.builder(context, snapshot.data as T, _reload);
+            },
+          ),
+          const SizedBox(height: 20),
+        ],
       );
 }
 
@@ -157,9 +144,10 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
         load: widget.load,
         builder: (context, quotations, reload) {
           if (quotations.isEmpty) {
-            return const Text(
-              'Esperando la cotización formal del prestador seleccionado.',
-              style: TextStyle(color: FixiaColors.textSecondary),
+            return const EmptyState(
+              message:
+                  'Esperando la cotización formal del prestador seleccionado.',
+              icon: Icons.hourglass_empty_rounded,
             );
           }
           final versions = splitVersions(quotations);
@@ -205,9 +193,13 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
                       : const [],
                 ),
               if (versions.history.isNotEmpty) ...[
+                const SizedBox(height: 16),
                 const Text(
                   'Versiones anteriores',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: FixiaColors.primary,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 for (final q in versions.history)

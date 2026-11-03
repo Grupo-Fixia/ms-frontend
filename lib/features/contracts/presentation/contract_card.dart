@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/fixia_theme.dart';
+import '../../../core/widgets/fixia_ui.dart';
 import '../../quotations/presentation/quotation_card.dart';
 import '../domain/service_contract.dart';
 
@@ -22,106 +23,81 @@ class ContractCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final request = contract.request;
     final status = contract.serviceStatus;
-    return Card(
+    return FixiaPanel(
       key: ValueKey('contract-${contract.id}'),
-      color: FixiaColors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(FixiaRadii.card),
-        side: const BorderSide(color: FixiaColors.accent, width: 2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.verified_outlined, color: FixiaColors.accent),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Contratación',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: FixiaColors.primary,
-                    ),
+      highlight: FixiaColors.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.verified_outlined, color: FixiaColors.accent),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Contratación',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: FixiaColors.primary,
                   ),
                 ),
-                if (status != null)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: FixiaColors.supportBackground,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      status.label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: FixiaColors.primary,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
+              if (status != null) StatusPill(label: status.label),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Precio contratado',
+            style: TextStyle(fontSize: 12, color: FixiaColors.textSecondary),
+          ),
+          Text(
+            formatCents(contract.amountInCents, contract.currency),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: FixiaColors.secondary,
             ),
-            const SizedBox(height: 12),
+          ),
+          _Line(
+              'Servicio', '${request.category.label} · ${request.description}'),
+          _Line('Alcance', contract.scope),
+          _Line('Condiciones', contract.conditions),
+          ResponsiveGrid(
+            minItemWidth: 200,
+            spacing: 8,
+            children: [
+              _Line('Fecha acordada', formatDateTime(contract.agreedAt)),
+              if (request.exactAddress != null)
+                _Line('Dirección', request.exactAddress!)
+              else
+                _Line(
+                    'Ubicación aproximada', '${request.zone}, ${request.city}'),
+              _Line('Contratado el', formatDateTime(contract.contractedAt)),
+            ],
+          ),
+          const _Line(
+            'Pago',
+            'Se acuerda directamente entre las partes; Fixia no procesa pagos en esta versión.',
+          ),
+          if (contract.timeline.isNotEmpty) ...[
+            const Divider(height: 24),
             const Text(
-              'Precio contratado',
-              style: TextStyle(fontSize: 12, color: FixiaColors.textSecondary),
+              'Historial del servicio',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
-            Text(
-              formatCents(contract.amountInCents, contract.currency),
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: FixiaColors.secondary,
+            const SizedBox(height: 4),
+            for (var i = 0; i < contract.timeline.length; i++)
+              _TimelineStep(
+                transition: contract.timeline[i],
+                last: i == contract.timeline.length - 1,
               ),
-            ),
-            _Line('Servicio',
-                '${request.category.label} · ${request.description}'),
-            _Line('Alcance', contract.scope),
-            _Line('Condiciones', contract.conditions),
-            _Line('Fecha acordada', formatDateTime(contract.agreedAt)),
-            if (request.exactAddress != null)
-              _Line('Dirección', request.exactAddress!)
-            else
-              _Line('Ubicación aproximada', '${request.zone}, ${request.city}'),
-            _Line('Contratado el', formatDateTime(contract.contractedAt)),
-            const _Line(
-              'Pago',
-              'Se acuerda directamente entre las partes; Fixia no procesa pagos en esta versión.',
-            ),
-            if (contract.timeline.isNotEmpty) ...[
-              const Divider(height: 24),
-              const Text(
-                'Historial del servicio',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              for (final t in contract.timeline)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    '${formatDateTime(t.occurredAt)} · ${t.toStatus.label}'
-                    '${t.actor == null ? '' : ' (${t.actor!.label})'}'
-                    '${t.reason == null ? '' : '\nMotivo: ${t.reason}'}',
-                    style: const TextStyle(color: FixiaColors.textSecondary),
-                  ),
-                ),
-            ],
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              for (final action in actions)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: SizedBox(width: double.infinity, child: action),
-                ),
-            ],
           ],
-        ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            ActionBar(actions: actions),
+          ],
+        ],
       ),
     );
   }
@@ -150,4 +126,55 @@ class _Line extends StatelessWidget {
           ],
         ),
       );
+}
+
+class _TimelineStep extends StatelessWidget {
+  const _TimelineStep({required this.transition, required this.last});
+
+  final ContractTransition transition;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = transition;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 22,
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: last ? FixiaColors.accent : FixiaColors.secondary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!last)
+                  Expanded(
+                    child: Container(width: 2, color: const Color(0xFFDCE5F0)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 8),
+              child: Text(
+                '${formatDateTime(t.occurredAt)} · ${t.toStatus.label}'
+                '${t.actor == null ? '' : ' (${t.actor!.label})'}'
+                '${t.reason == null ? '' : '\nMotivo: ${t.reason}'}',
+                style: const TextStyle(color: FixiaColors.textSecondary),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

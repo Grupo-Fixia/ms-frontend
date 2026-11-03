@@ -1,7 +1,6 @@
-import 'dart:ui' show PointerDeviceKind;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/technician/opportunities/presentation/technician_opportunities_page.dart';
 
@@ -15,7 +14,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Oportunidades'), findsOneWidget);
+    expect(find.text('Oportunidades para ti'), findsOneWidget);
     expect(find.text('Reparar fuga bajo el lavaplatos'), findsOneWidget);
     expect(find.text('\$80.000 – \$140.000'), findsOneWidget);
     expect(find.text('Ubicación aproximada'), findsAtLeastNWidgets(1));
@@ -67,9 +66,9 @@ void main() {
     );
   });
 
-  testWidgets('limita el catálogo al ancho de teléfono en navegador',
+  testWidgets('en computador usa menú lateral y varias columnas',
       (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
@@ -77,15 +76,18 @@ void main() {
       const MaterialApp(home: TechnicianOpportunitiesPage()),
     );
 
-    final card = tester.getRect(
+    final first = tester.getRect(
       find.byKey(const ValueKey('technician-opportunity-fuga-lavaplatos')),
     );
-    expect(card.width, lessThanOrEqualTo(440));
-    expect(card.center.dx, closeTo(640, 1));
+    expect(first.left, greaterThan(248));
+    // Las tarjetas se reparten en columnas: no ocupan todo el ancho.
+    expect(first.width, lessThan(600));
+    expect(find.byKey(const ValueKey('technician-nav-oportunidades')),
+        findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('barra inferior navega a inicio y especialidades',
+  testWidgets('el menú navega a inicio y especialidades',
       (tester) async {
     var homeOpens = 0;
     var specialtiesOpens = 0;
@@ -98,7 +100,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('mobile-nav-inicio')));
+    await tester.tap(find.byKey(const ValueKey('technician-nav-inicio')));
     await tester.tap(
       find.byKey(const ValueKey('technician-opportunities-specialties')),
     );
@@ -106,7 +108,8 @@ void main() {
     expect(specialtiesOpens, 1);
   });
 
-  testWidgets('la barra de categorías se desplaza con mouse', (tester) async {
+  testWidgets('en celular se ven todas las categorías sin desplazar',
+      (tester) async {
     tester.view.physicalSize = const Size(340, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -115,21 +118,14 @@ void main() {
           theme: FixiaTheme.light, home: const TechnicianOpportunitiesPage()),
     );
 
-    final list = find.byKey(const ValueKey('technician-opportunities-filters'));
-    final gesture = await tester.startGesture(
-      tester.getCenter(list),
-      kind: PointerDeviceKind.mouse,
-    );
-    await gesture.moveBy(const Offset(-30, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(-170, 0));
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
-
-    final scrollable = tester.state<ScrollableState>(
-      find.descendant(of: list, matching: find.byType(Scrollable)),
-    );
-    expect(scrollable.position.pixels, greaterThan(0));
+    final filters =
+        find.byKey(const ValueKey('technician-opportunities-filters'));
+    final area = tester.getRect(filters);
+    for (final category in ServiceCategory.values) {
+      final chip = tester.getRect(find.widgetWithText(ChoiceChip, category.label));
+      expect(chip.right, lessThanOrEqualTo(area.right + 0.5));
+      expect(chip.left, greaterThanOrEqualTo(area.left - 0.5));
+    }
+    expect(tester.takeException(), isNull);
   });
 }

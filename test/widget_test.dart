@@ -357,7 +357,7 @@ void main() {
     expect(find.byKey(const ValueKey('client-profile-saved-local')),
         findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('client-profile-nav-home')));
+    await tester.tap(find.byKey(const ValueKey('client-nav-inicio')));
     await tester.pumpAndSettle();
     expect(find.text('Hola, Lucía'), findsOneWidget);
 

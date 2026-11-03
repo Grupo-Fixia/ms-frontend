@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../../../client/service_requests/presentation/request_progress_sections.dart';
 import '../../../contracts/domain/service_contract.dart';
 import '../../../contracts/presentation/contract_card.dart';
@@ -21,19 +22,32 @@ class TechnicianContractPage extends StatelessWidget {
       actionsBuilder;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: FixiaColors.neutralBackground,
-        appBar: AppBar(title: const Text('Servicio contratado')),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+  Widget build(BuildContext context) => AppShell(
+        destination: ShellDestination.technicianJobs,
+        subpage: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ServerSection<ServiceContract>(
-              title: 'Contratación',
-              load: load,
-              builder: (context, contract, reload) => ContractCard(
-                contract: contract,
-                actions:
-                    actionsBuilder?.call(context, contract, reload) ?? const [],
+            const BackLink(label: 'Mis trabajos'),
+            const PageHeader(
+              title: 'Servicio contratado',
+              subtitle:
+                  'Lo acordado con el cliente, la dirección del servicio y su avance.',
+            ),
+            const SizedBox(height: 24),
+            Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 860),
+                child: ServerSection<ServiceContract>(
+                  title: 'Contratación',
+                  load: load,
+                  builder: (context, contract, reload) => ContractCard(
+                    contract: contract,
+                    actions: actionsBuilder?.call(context, contract, reload) ??
+                        const [],
+                  ),
+                ),
               ),
             ),
           ],

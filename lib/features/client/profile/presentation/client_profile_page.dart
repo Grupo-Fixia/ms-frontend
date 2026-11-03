@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/client_profile_rules.dart';
 import '../domain/client_profile_update.dart';
 
@@ -130,91 +131,104 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
     }
   }
 
+  void _navigate(ShellDestination destination) {
+    final own = switch (destination) {
+      ShellDestination.clientHome => widget.onOpenHome,
+      _ => null,
+    };
+    if (own != null) return own();
+    final scope = FixiaShellScope.maybeOf(context);
+    if (scope?.onNavigate != null) return scope!.onNavigate!(destination);
+    if (destination != ShellDestination.clientProfile) {
+      _showDemoActionMessage(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return DashboardShell(
-      contentPadding: EdgeInsets.zero,
-      bottomNavigationBar: _ProfileNavigationBar(
-        onHome: widget.onOpenHome ?? () => _showDemoActionMessage(context),
-        onHistory: () => _showDemoActionMessage(context),
-        onPublish:
-            widget.onOpenPublish ?? () => _showDemoActionMessage(context),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: SizedBox(
-            width: double.infinity,
-            child: Column(
+    final personal = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          title: 'Información personal',
+          action: _isEditing
+              ? TextButton.icon(
+                  key: const ValueKey('client-profile-edit'),
+                  onPressed: _toggleEditing,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Cancelar edición'),
+                )
+              : OutlinedButton.icon(
+                  key: const ValueKey('client-profile-edit'),
+                  onPressed: _toggleEditing,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Editar perfil'),
+                ),
+        ),
+        if (_isEditing)
+          FixiaPanel(
+            padding: const EdgeInsets.all(24),
+            child: _editForm(Theme.of(context)),
+          )
+        else
+          _profileSummary(),
+        if (_isEditing) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              key: const ValueKey('client-profile-cancel'),
+              onPressed: _cancelEditing,
+              child: const Text('Cancelar'),
+            ),
+          ),
+        ],
+        if (_justSavedLocally) ...[
+          const SizedBox(height: 12),
+          const _LocalSaveNotice(),
+        ],
+        const SizedBox(height: 20),
+        const NoticeBanner(
+          key: ValueKey('client-profile-payments-note'),
+          message: 'Los pagos se acuerdan directamente con el técnico; '
+              'Fixia no guarda métodos de pago en esta versión.',
+          tone: PillTone.neutral,
+          icon: Icons.payments_outlined,
+        ),
+      ],
+    );
+    return AppShell(
+      destination: ShellDestination.clientProfile,
+      userName: '$_firstName $_lastName'.trim(),
+      onNavigate: _navigate,
+      onPrimaryAction: widget.onOpenPublish,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BackLink(
+            buttonKey: const ValueKey('client-profile-back'),
+            onPressed: widget.onBack,
+          ),
+          const PageHeader(
+            title: 'Mi perfil',
+            titleKey: ValueKey('client-profile-title'),
+            subtitle: 'Tus datos de contacto y el resumen de tu actividad.',
+          ),
+          const SizedBox(height: 24),
+          TwoColumns(
+            sideWidth: 320,
+            sideFirstWhenStacked: true,
+            main: personal,
+            side: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ProfileHero(
-                  firstName: _firstName,
-                  lastName: _lastName,
-                  onBack:
-                      widget.onBack ?? () => Navigator.of(context).maybePop(),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Transform.translate(
-                        offset: const Offset(0, -18),
-                        child: _ProfileStats(load: widget.loadStats),
-                      ),
-                      const SizedBox(height: 2),
-                      _SectionTitle(
-                        title: 'Información personal',
-                        trailing: IconButton(
-                          key: const ValueKey('client-profile-edit'),
-                          tooltip:
-                              _isEditing ? 'Cancelar edición' : 'Editar perfil',
-                          onPressed: _toggleEditing,
-                          icon: Icon(
-                            _isEditing
-                                ? Icons.close_rounded
-                                : Icons.edit_outlined,
-                          ),
-                          color: FixiaColors.secondary,
-                        ),
-                      ),
-                      if (_isEditing)
-                        DecoratedBox(
-                          decoration: FixiaDecorations.card,
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: _editForm(Theme.of(context)),
-                          ),
-                        )
-                      else
-                        _profileSummary(),
-                      if (_isEditing) ...[
-                        const SizedBox(height: 10),
-                        OutlinedButton(
-                          key: const ValueKey('client-profile-cancel'),
-                          onPressed: _cancelEditing,
-                          child: const Text('Cancelar'),
-                        ),
-                      ],
-                      if (_justSavedLocally) ...[
-                        const SizedBox(height: 12),
-                        const _LocalSaveNotice(),
-                      ],
-                      const SizedBox(height: 22),
-                      const Text(
-                        'Los pagos se acuerdan directamente con el técnico; '
-                        'Fixia no guarda métodos de pago en esta versión.',
-                        key: ValueKey('client-profile-payments-note'),
-                        style: TextStyle(color: FixiaColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
+                _ProfileHero(firstName: _firstName, lastName: _lastName),
+                const SizedBox(height: 16),
+                _ProfileStats(load: widget.loadStats),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -224,9 +238,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
       key: const ValueKey('client-profile-summary'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
-          decoration: FixiaDecorations.card,
+        FixiaPanel(
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
           child: Column(
             children: [
               _PersonalInfoRow(
@@ -349,12 +362,10 @@ class _ProfileHero extends StatelessWidget {
   const _ProfileHero({
     required this.firstName,
     required this.lastName,
-    required this.onBack,
   });
 
   final String firstName;
   final String lastName;
-  final VoidCallback onBack;
 
   String get _initials {
     final first = firstName.trim().isEmpty ? '' : firstName.trim()[0];
@@ -365,47 +376,21 @@ class _ProfileHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 34),
-      decoration: const BoxDecoration(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
         color: FixiaColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              IconButton(
-                key: const ValueKey('client-profile-back'),
-                tooltip: 'Volver',
-                onPressed: onBack,
-                icon: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: FixiaColors.white,
-                ),
-              ),
-              const Spacer(),
-              const Text(
-                'Mi perfil',
-                key: ValueKey('client-profile-title'),
-                style: TextStyle(
-                  color: FixiaColors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              const SizedBox(width: 48),
-            ],
-          ),
-          const SizedBox(height: 14),
           CircleAvatar(
-            radius: 44,
+            radius: 40,
             backgroundColor: FixiaColors.supportBackground,
             child: Text(
-              _initials.isEmpty ? 'FX' : _initials,
+              _initials.isEmpty ? '·' : _initials,
               style: const TextStyle(
                 color: FixiaColors.primary,
-                fontSize: 28,
+                fontSize: 26,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -429,18 +414,6 @@ class _ProfileHero extends StatelessWidget {
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
-          ),
-          const SizedBox(height: 8),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.star_rounded, color: Color(0xFFFFB323), size: 18),
-              SizedBox(width: 4),
-              Text(
-                'Resumen de perfil',
-                style: TextStyle(color: Color(0xFFDCEBFF), fontSize: 12),
-              ),
-            ],
           ),
         ],
       ),
@@ -477,20 +450,8 @@ class _ProfileStatsState extends State<_ProfileStats> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: FixiaColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE3EAF4)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1401255D),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+    return FixiaPanel(
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: FutureBuilder<ClientActivityStats>(
         future: _stats,
         builder: (context, snapshot) {
@@ -560,36 +521,6 @@ class _StatDivider extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title.toUpperCase(),
-              style: const TextStyle(
-                color: FixiaColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
-}
-
 class _PersonalInfoRow extends StatelessWidget {
   const _PersonalInfoRow({required this.label, required this.value});
 
@@ -636,52 +567,6 @@ class _ProfileDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Divider(height: 1, color: Color(0xFFE8EEF6));
-  }
-}
-
-class _ProfileNavigationBar extends StatelessWidget {
-  const _ProfileNavigationBar({
-    required this.onHome,
-    required this.onHistory,
-    required this.onPublish,
-  });
-
-  final VoidCallback onHome;
-  final VoidCallback onHistory;
-  final VoidCallback onPublish;
-
-  @override
-  Widget build(BuildContext context) {
-    return MobileNavigationBar(
-      items: [
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-profile-nav-home'),
-          icon: Icons.home_outlined,
-          label: 'Inicio',
-          onPressed: onHome,
-        ),
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-profile-nav-history'),
-          icon: Icons.history_rounded,
-          label: 'Historial',
-          onPressed: onHistory,
-        ),
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-profile-nav-publish'),
-          icon: Icons.add_rounded,
-          label: 'Publicar',
-          isAction: true,
-          onPressed: onPublish,
-        ),
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-profile-nav-profile'),
-          icon: Icons.person_rounded,
-          label: 'Perfil',
-          selected: true,
-          onPressed: () {},
-        ),
-      ],
-    );
   }
 }
 

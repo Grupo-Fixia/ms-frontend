@@ -86,7 +86,10 @@ void main() {
               ? AppRoutes.technicianJobs
               : '/cliente/solicitudes');
       await tester.pumpAndSettle();
-      final tile = find.byType(ListTile).first;
+      final tile = find.byKey(ValueKey(role == UserRole.professional
+          ? 'contract-c1'
+          : 'client-request-row-r1'));
+      await tester.ensureVisible(tile);
       await tester.tap(tile);
       await tester.pumpAndSettle();
       await tester

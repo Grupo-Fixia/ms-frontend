@@ -180,7 +180,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('muestra navegación móvil de cliente y permite volver a inicio',
+  testWidgets('muestra el menú del cliente y permite volver a inicio',
       (tester) async {
     var homeOpens = 0;
     await tester.pumpWidget(
@@ -189,8 +189,8 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('mobile-nav-publicar')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('mobile-nav-inicio')));
+    expect(find.byKey(const ValueKey('client-nav-historial')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('client-nav-inicio')));
     expect(homeOpens, 1);
   });
 }

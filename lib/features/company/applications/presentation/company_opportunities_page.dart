@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../../technicians/presentation/company_technicians_controller.dart';
 import '../application/company_repositories.dart';
 import 'company_opportunities_panel.dart';
@@ -57,14 +58,24 @@ class _CompanyOpportunitiesPageState extends State<CompanyOpportunitiesPage> {
   @override
   Widget build(BuildContext context) => PopScope(
       canPop: !_sending,
-      child: MobileFeatureShell(
-          title: 'Oportunidades empresariales',
-          onBack: () {
-            if (!_sending) widget.onBack();
-          },
-          child: SingleChildScrollView(
-              padding: const EdgeInsets.all(18),
-              child: CompanyOpportunitiesPanel(
+      child: AppShell(
+          destination: ShellDestination.companyOpportunities,
+          userCaption: 'Empresa',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              BackLink(
+                onPressed: () {
+                  if (!_sending) widget.onBack();
+                },
+              ),
+              const PageHeader(
+                title: 'Oportunidades empresariales',
+                subtitle: 'Solicitudes a las que tu empresa puede postular a '
+                    'uno de sus técnicos.',
+              ),
+              const SizedBox(height: 24),
+              CompanyOpportunitiesPanel(
                 sessionKey: widget.sessionKey,
                 techniciansController: widget.techniciansController,
                 applications: widget.applications,
@@ -73,5 +84,7 @@ class _CompanyOpportunitiesPageState extends State<CompanyOpportunitiesPage> {
                 onBusyChanged: (value) {
                   if (mounted) setState(() => _sending = value);
                 },
-              ))));
+              ),
+            ],
+          )));
 }

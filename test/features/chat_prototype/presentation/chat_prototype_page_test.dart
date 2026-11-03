@@ -9,6 +9,10 @@ import 'package:ms_frontend/features/chat_prototype/presentation/chat_prototype_
 Finder _key(String key) => find.byKey(ValueKey(key));
 
 Future<void> _pump(WidgetTester tester) async {
+  // Tamaño de un portátil: el chat ocupa el alto visible.
+  tester.view.physicalSize = const Size(1280, 900);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(theme: FixiaTheme.light, home: const ChatPrototypePage()),
   );
@@ -119,7 +123,7 @@ void main() {
     await _send(tester, 'mensaje temporal');
     expect(find.text('mensaje temporal'), findsOneWidget);
 
-    await tester.pageBack();
+    await tester.tap(find.byKey(const ValueKey('page-back')));
     await tester.pumpAndSettle();
     await tester.tap(_key('open'));
     await tester.pumpAndSettle();

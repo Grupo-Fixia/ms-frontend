@@ -144,7 +144,7 @@ void main() {
     expect(expired, 1);
   });
 
-  testWidgets('la navegación inferior retorna a inicio o solicitudes',
+  testWidgets('el menú retorna a inicio o a oportunidades',
       (tester) async {
     var homeOpens = 0;
     var opportunitiesOpen = 0;
@@ -157,11 +157,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('mobile-nav-inicio')));
-    await tester.tap(find.byKey(const ValueKey('mobile-nav-trabajos')));
+    await tester.tap(find.byKey(const ValueKey('technician-nav-inicio')));
+    await tester.tap(
+        find.byKey(const ValueKey('technician-nav-oportunidades')));
 
     expect(homeOpens, 1);
     expect(opportunitiesOpen, 1);
-    expect(find.byKey(const ValueKey('mobile-nav-perfil')), findsOneWidget);
+    expect(find.byKey(const ValueKey('technician-nav-perfil')), findsOneWidget);
   });
 }

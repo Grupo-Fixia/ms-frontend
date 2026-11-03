@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/service_opportunity.dart';
 import '../infrastructure/mock_service_opportunities.dart';
 import '../../applications/domain/proposed_price.dart';
@@ -85,188 +86,131 @@ class _TechnicianOpportunitiesPageState
       )
       .toList();
 
-  @override
-  Widget build(BuildContext context) {
-    return MobileFeatureShell(
-      title: 'Oportunidades',
-      onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-      bottomNavigationItems: _buildNavigationItems(context),
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Oportunidades para ti',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    _live
-                        ? 'Solicitudes compatibles con tus especialidades, zona y disponibilidad.'
-                        : 'Solicitudes de ejemplo para explorar y postularte localmente.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: FixiaColors.textSecondary),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      key: const ValueKey(
-                        'technician-opportunities-specialties',
-                      ),
-                      onPressed: widget.onOpenSpecialties ??
-                          () => _showSpecialtiesHint(context),
-                      icon: const Icon(Icons.tune_rounded, size: 18),
-                      label: const Text('Mis especialidades'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (widget.onOpenMyApplications != null)
-                    TextButton.icon(
-                      key: const ValueKey('open-my-applications'),
-                      onPressed: widget.onOpenMyApplications,
-                      icon: const Icon(Icons.list_alt),
-                      label: const Text('Mis postulaciones'),
-                    ),
-                  SizedBox(
-                    height: 42,
-                    child: ScrollConfiguration(
-                      behavior: const DragScrollBehavior(),
-                      child: ListView(
-                        key: const ValueKey(
-                          'technician-opportunities-filters',
-                        ),
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _CategoryFilterChip(
-                            label: 'Todas',
-                            selected: _selectedCategory == null,
-                            onSelected: () =>
-                                setState(() => _selectedCategory = null),
-                          ),
-                          for (final category in ServiceCategory.values)
-                            _CategoryFilterChip(
-                              label: category.label,
-                              selected: _selectedCategory == category,
-                              onSelected: () => setState(
-                                () => _selectedCategory = category,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${_visibleOpportunities.length} solicitudes',
-                    key: const ValueKey('technician-opportunities-count'),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_loading)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: CircularProgressIndicator(
-                  key: ValueKey('technician-opportunities-loading'),
-                ),
-              ),
-            )
-          else if (_loadError != null)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$_loadError',
-                      key: const ValueKey('technician-opportunities-error'),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    OutlinedButton(
-                      key: const ValueKey('technician-opportunities-retry'),
-                      onPressed: _load,
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else if (_visibleOpportunities.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Text(
-                  _live && _selectedCategory == null
-                      ? 'Por ahora no hay solicitudes compatibles contigo.'
-                      : 'No hay solicitudes en esta categoría.',
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final opportunity = _visibleOpportunities[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _OpportunityCard(
-                        opportunity: opportunity,
-                        applied: _appliedIds.contains(opportunity.id),
-                        onOpen: () => _showDetails(opportunity),
-                      ),
-                    );
-                  },
-                  childCount: _visibleOpportunities.length,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+  void _navigate(ShellDestination destination) {
+    final own = switch (destination) {
+      ShellDestination.technicianHome => widget.onOpenHome,
+      ShellDestination.technicianProfile => widget.onOpenProfile,
+      _ => null,
+    };
+    if (own != null) return own();
+    final scope = FixiaShellScope.maybeOf(context);
+    if (scope?.onNavigate != null) return scope!.onNavigate!(destination);
+    if (destination == ShellDestination.technicianProfile) {
+      _showProfileHint(context);
+    } else if (destination == ShellDestination.technicianHome) {
+      (widget.onBack ?? () => Navigator.of(context).maybePop())();
+    }
   }
 
-  List<MobileNavigationItem> _buildNavigationItems(BuildContext context) => [
-        MobileNavigationItem(
-          icon: Icons.home_rounded,
-          label: 'Inicio',
-          onPressed:
-              widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
+  @override
+  Widget build(BuildContext context) {
+    final visible = _visibleOpportunities;
+    Widget body;
+    if (_loading) {
+      body = const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(
+          child: CircularProgressIndicator(
+            key: ValueKey('technician-opportunities-loading'),
+          ),
         ),
-        MobileNavigationItem(
-          icon: Icons.work_outline_rounded,
-          label: 'Trabajos',
-          selected: true,
-          onPressed: () {},
+      );
+    } else if (_loadError != null) {
+      body = FixiaPanel(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          children: [
+            Text(
+              '$_loadError',
+              key: const ValueKey('technician-opportunities-error'),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const ValueKey('technician-opportunities-retry'),
+              onPressed: _load,
+              child: const Text('Reintentar'),
+            ),
+          ],
         ),
-        MobileNavigationItem(
-          icon: Icons.account_balance_wallet_outlined,
-          label: 'Billetera',
-          onPressed: widget.onOpenWallet ?? () => _showWalletHint(context),
-        ),
-        MobileNavigationItem(
-          icon: Icons.person_outline_rounded,
-          label: 'Perfil',
-          onPressed: widget.onOpenProfile ?? () => _showProfileHint(context),
-        ),
-      ];
-
-  void _showWalletHint(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('El resumen de billetera está disponible en Inicio.'),
+      );
+    } else if (visible.isEmpty) {
+      body = EmptyState(
+        icon: Icons.search_off_rounded,
+        message: _live && _selectedCategory == null
+            ? 'Por ahora no hay solicitudes compatibles contigo.'
+            : 'No hay solicitudes en esta categoría.',
+      );
+    } else {
+      body = ResponsiveGrid(
+        minItemWidth: 320,
+        children: [
+          for (final opportunity in visible)
+            _OpportunityCard(
+              opportunity: opportunity,
+              applied: _appliedIds.contains(opportunity.id),
+              onOpen: () => _showDetails(opportunity),
+            ),
+        ],
+      );
+    }
+    return AppShell(
+      destination: ShellDestination.technicianOpportunities,
+      onNavigate: _navigate,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(
+            title: 'Oportunidades para ti',
+            subtitle: _live
+                ? 'Solicitudes compatibles con tus especialidades, zona y disponibilidad.'
+                : 'Solicitudes de ejemplo para explorar y postularte localmente.',
+            actions: [
+              if (widget.onOpenMyApplications != null)
+                OutlinedButton.icon(
+                  key: const ValueKey('open-my-applications'),
+                  onPressed: widget.onOpenMyApplications,
+                  icon: const Icon(Icons.list_alt, size: 18),
+                  label: const Text('Mis postulaciones'),
+                ),
+              OutlinedButton.icon(
+                key: const ValueKey('technician-opportunities-specialties'),
+                onPressed: widget.onOpenSpecialties ??
+                    () => _showSpecialtiesHint(context),
+                icon: const Icon(Icons.tune_rounded, size: 18),
+                label: const Text('Mis especialidades'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            key: const ValueKey('technician-opportunities-filters'),
+            spacing: 0,
+            runSpacing: 8,
+            children: [
+              _CategoryFilterChip(
+                label: 'Todas',
+                selected: _selectedCategory == null,
+                onSelected: () => setState(() => _selectedCategory = null),
+              ),
+              for (final category in ServiceCategory.values)
+                _CategoryFilterChip(
+                  label: category.label,
+                  selected: _selectedCategory == category,
+                  onSelected: () =>
+                      setState(() => _selectedCategory = category),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${visible.length} solicitudes',
+            key: const ValueKey('technician-opportunities-count'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          body,
+        ],
       ),
     );
   }
@@ -288,27 +232,49 @@ class _TechnicianOpportunitiesPageState
   }
 
   Future<void> _showDetails(ServiceOpportunity opportunity) async {
+    Widget sheet(BuildContext context, {required bool dialog}) =>
+        _OpportunityDetailsSheet(
+          opportunity: opportunity,
+          applied: _appliedIds.contains(opportunity.id),
+          live: widget.applyTo != null,
+          dialog: dialog,
+          submitPrice: (price) async =>
+              (await _apply(opportunity, price: price))!,
+          onApply: () {
+            Navigator.of(context).pop();
+            _apply(opportunity);
+          },
+        );
+    // En computador el detalle se abre como ventana centrada; en celular,
+    // como hoja inferior.
+    if (MediaQuery.sizeOf(context).width >= ShellBreakpoints.tablet) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: widget.applyTo == null,
+        builder: (context) => Dialog(
+          backgroundColor: FixiaColors.white,
+          insetPadding: const EdgeInsets.all(24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: sheet(context, dialog: true),
+          ),
+        ),
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       isDismissible: widget.applyTo == null,
       enableDrag: widget.applyTo == null,
-      constraints: const BoxConstraints(maxWidth: 440),
       backgroundColor: FixiaColors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => _OpportunityDetailsSheet(
-        opportunity: opportunity,
-        applied: _appliedIds.contains(opportunity.id),
-        live: widget.applyTo != null,
-        submitPrice: (price) async =>
-            (await _apply(opportunity, price: price))!,
-        onApply: () {
-          Navigator.of(context).pop();
-          _apply(opportunity);
-        },
-      ),
+      builder: (context) => sheet(context, dialog: false),
     );
   }
 
@@ -389,93 +355,90 @@ class _OpportunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return FixiaPanel(
       key: ValueKey('technician-opportunity-${opportunity.id}'),
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(
-                  Icons.handyman_outlined,
-                  color: FixiaColors.secondary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    opportunity.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                _MetaLabel(
-                  icon: Icons.category_outlined,
-                  label: opportunity.category.label,
-                ),
-                _MetaLabel(
-                  icon: Icons.schedule_outlined,
-                  label: opportunity.postedLabel,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _MetaLabel(
-              icon: Icons.location_on_outlined,
-              label: opportunity.approximateLocation,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Ubicación aproximada',
-              key: ValueKey('approximate-location-${opportunity.id}'),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: FixiaColors.textSecondary,
-                    fontSize: 11,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Presupuesto orientativo',
-                        style: Theme.of(context).textTheme.bodySmall,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.handyman_outlined,
+                color: FixiaColors.secondary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  opportunity.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      Text(
-                        opportunity.budget,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: FixiaColors.secondary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                    ],
-                  ),
                 ),
-                TextButton(
-                  key: ValueKey(
-                    'technician-opportunity-detail-${opportunity.id}',
-                  ),
-                  onPressed: onOpen,
-                  child: Text(applied ? 'Postulada' : 'Ver detalle'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _MetaLabel(
+                icon: Icons.category_outlined,
+                label: opportunity.category.label,
+              ),
+              _MetaLabel(
+                icon: Icons.schedule_outlined,
+                label: opportunity.postedLabel,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _MetaLabel(
+            icon: Icons.location_on_outlined,
+            label: opportunity.approximateLocation,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ubicación aproximada',
+            key: ValueKey('approximate-location-${opportunity.id}'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: FixiaColors.textSecondary,
+                  fontSize: 11,
                 ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Presupuesto orientativo',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      opportunity.budget,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: FixiaColors.secondary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                key: ValueKey(
+                  'technician-opportunity-detail-${opportunity.id}',
+                ),
+                onPressed: onOpen,
+                child: Text(applied ? 'Postulada' : 'Ver detalle'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -493,7 +456,13 @@ class _MetaLabel extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: FixiaColors.textSecondary),
           const SizedBox(width: 4),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         ],
       );
 }
@@ -530,7 +499,11 @@ class _OpportunityDetailsSheet extends StatelessWidget {
     required this.onApply,
     required this.submitPrice,
     this.live = false,
+    this.dialog = false,
   });
+
+  /// Se muestra como ventana centrada (computador) en vez de hoja inferior.
+  final bool dialog;
 
   final ServiceOpportunity opportunity;
   final bool applied;
@@ -545,10 +518,10 @@ class _OpportunityDetailsSheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          20,
-          12,
-          20,
-          20 + MediaQuery.viewInsetsOf(context).bottom,
+          dialog ? 28 : 20,
+          dialog ? 20 : 12,
+          dialog ? 28 : 20,
+          (dialog ? 28 : 20) + MediaQuery.viewInsetsOf(context).bottom,
         ),
         child: SingleChildScrollView(
           child: Column(
@@ -556,18 +529,20 @@ class _OpportunityDetailsSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDCE5F0),
-                    borderRadius: BorderRadius.circular(8),
+              if (!dialog) ...[
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCE5F0),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 18),
-              if (live)
+                const SizedBox(height: 18),
+              ],
+              if (live || dialog)
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(

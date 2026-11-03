@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/widgets/fixia_ui.dart';
 import 'package:ms_frontend/features/auth/login/application/session_store.dart';
 import 'package:ms_frontend/features/auth/login/domain/user_profile.dart';
 import 'package:ms_frontend/features/company/technicians/domain/company_exceptions.dart';
@@ -85,7 +86,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('company-open-technicians')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mis técnicos'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(PageHeader), matching: find.text('Mis técnicos')),
+        findsOneWidget);
     expect(find.byType(AssociatedTechnicianTile), findsNWidgets(2));
     expect(repository.techniciansCalls, 1);
 

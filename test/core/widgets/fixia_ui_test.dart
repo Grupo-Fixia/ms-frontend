@@ -118,4 +118,74 @@ void main() {
     await tester.tap(find.text('Reintentar'));
     expect(tapped, 1);
   });
+
+  testWidgets('FilterPills marca el filtro y avisa el elegido', (tester) async {
+    String? chosen;
+    await pump(
+      tester,
+      FilterPills<String>(
+        keyPrefix: 'f',
+        options: const [('a', 'Todas'), ('b', 'Abiertas')],
+        selected: 'a',
+        onSelected: (v) => chosen = v,
+      ),
+      600,
+    );
+    final all =
+        tester.widget<ChoiceChip>(find.byKey(const ValueKey('f-Todas')));
+    expect(all.selected, isTrue);
+    await tester.tap(find.byKey(const ValueKey('f-Abiertas')));
+    expect(chosen, 'b');
+  });
+
+  testWidgets('ActionBar alinea a la derecha o apila en celular',
+      (tester) async {
+    const bar = ActionBar(actions: [
+      Text('uno', key: ValueKey('a1')),
+      Text('dos', key: ValueKey('a2')),
+    ]);
+    await pump(tester, bar, 900);
+    var a1 = tester.getRect(find.byKey(const ValueKey('a1')));
+    var a2 = tester.getRect(find.byKey(const ValueKey('a2')));
+    expect(a1.top, a2.top);
+    expect(a2.right, greaterThan(800));
+
+    await pump(tester, bar, 360);
+    a1 = tester.getRect(find.byKey(const ValueKey('a1')));
+    a2 = tester.getRect(find.byKey(const ValueKey('a2')));
+    expect(a2.top, greaterThan(a1.bottom));
+  });
+
+  testWidgets('BackLink vuelve atrás o usa su callback', (tester) async {
+    var taps = 0;
+    await pump(
+      tester,
+      Column(children: [
+        BackLink(onPressed: () => taps++),
+        const InfoRow(label: 'Ciudad', value: 'Bogotá'),
+      ]),
+      600,
+    );
+    expect(find.text('Bogotá'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('page-back')));
+    expect(taps, 1);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: FixiaTheme.light,
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(body: BackLink()))),
+            child: const Text('abrir'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('abrir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('page-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('abrir'), findsOneWidget);
+  });
 }

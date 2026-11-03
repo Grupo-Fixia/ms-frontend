@@ -172,7 +172,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('client-profile-title')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('client-profile-nav-home')));
+    await tester.tap(find.byKey(const ValueKey('client-nav-inicio')));
     await tester.pumpAndSettle();
     expect(find.text('Bienvenido a Fixia'), findsOneWidget);
   });
