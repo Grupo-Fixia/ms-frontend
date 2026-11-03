@@ -10,6 +10,7 @@ import 'features/client/profile/application/ports/client_profile_repository.dart
 import 'features/client/profile/infrastructure/http_client_profile_repository.dart';
 import 'features/client/service_requests/application/ports/service_request_repository.dart';
 import 'features/client/service_requests/infrastructure/http_service_request_repository.dart';
+import 'features/client/service_requests/infrastructure/http_compatible_technicians_repository.dart';
 import 'features/contracts/application/ports/contract_repository.dart';
 import 'features/contracts/infrastructure/http_contract_repository.dart';
 import 'features/quotations/application/ports/quotation_repository.dart';
@@ -36,6 +37,7 @@ class BackendIntegrations {
     this.companyApplications,
     this.companyOpportunities,
     this.technicianAvailability,
+    this.compatibleTechnicians,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -92,6 +94,11 @@ class BackendIntegrations {
         authorizedHttp: authorizedHttp,
       ),
       contracts: contracts,
+      compatibleTechnicians: HttpCompatibleTechniciansRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
       technicianAvailability: HttpTechnicianAvailabilityRepository(
         client: client,
         baseUrl: usersBaseUrl,
@@ -114,4 +121,7 @@ class BackendIntegrations {
 
   /// Horario y zona de atención del técnico (GC-329, GC-330).
   final TechnicianAvailabilityRepository? technicianAvailability;
+
+  /// Técnicos compatibles con una solicitud del cliente (GC-474).
+  final HttpCompatibleTechniciansRepository? compatibleTechnicians;
 }

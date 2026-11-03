@@ -960,6 +960,12 @@ class _FixiaAppState extends State<FixiaApp> {
                     SelectProvider(backend.serviceRequests)(id, applicationId)),
             extraSections: (context, request, reload) =>
                 _clientRequestSections(context, backend, request, reload),
+            listCompatibleTechnicians: backend.compatibleTechnicians == null
+                ? null
+                : (cursor) => _serviceCall(
+                    context,
+                    () => backend.compatibleTechnicians!
+                        .list(request.id, cursor: cursor)),
           ),
         ),
       );
