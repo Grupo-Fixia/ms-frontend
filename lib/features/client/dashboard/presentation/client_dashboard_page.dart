@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../../service_requests/domain/service_request.dart';
 
-/// Inicio del cliente. Muestra solo datos reales de ms-services: sus
-/// solicitudes y lo que tiene pendiente en cada una (revisar postulantes o
-/// cotización, confirmar el cierre). No hay técnicos, precios ni
-/// calificaciones de ejemplo.
+/// Inicio del cliente. Solo datos reales de ms-services: el resumen de sus
+/// solicitudes, lo que le falta hacer en cada una y las más recientes. En
+/// escritorio usa el marco con barra lateral; en celular, barra inferior.
 class ClientDashboardPage extends StatefulWidget {
   const ClientDashboardPage({
     super.key,
@@ -43,9 +43,35 @@ class ClientDashboardPage extends StatefulWidget {
   /// Cuántas solicitudes recientes se muestran en el inicio.
   static const recentLimit = 3;
 
+  /// Cuántas acciones pendientes se muestran.
+  static const attentionLimit = 4;
+
   @override
   State<ClientDashboardPage> createState() => _ClientDashboardPageState();
 }
+
+/// Qué le toca hacer al cliente en cada estado, para destacarlo.
+String? pendingActionFor(ServiceRequestStatus status) => switch (status) {
+      ServiceRequestStatus.published => 'Revisa los postulantes',
+      ServiceRequestStatus.providerSelected => 'Revisa la cotización',
+      ServiceRequestStatus.technicianFinished => 'Confirma el cierre',
+      _ => null,
+    };
+
+/// Tono de la etiqueta de cada estado.
+PillTone toneFor(ServiceRequestStatus status) => switch (status) {
+      ServiceRequestStatus.published => PillTone.neutral,
+      ServiceRequestStatus.providerSelected ||
+      ServiceRequestStatus.contracted ||
+      ServiceRequestStatus.inProgress =>
+        PillTone.info,
+      ServiceRequestStatus.technicianFinished ||
+      ServiceRequestStatus.closed =>
+        PillTone.success,
+      ServiceRequestStatus.cancelled ||
+      ServiceRequestStatus.expired =>
+        PillTone.neutral,
+    };
 
 class _ClientDashboardPageState extends State<ClientDashboardPage> {
   Future<List<ServiceRequest>>? _requests;
@@ -77,357 +103,512 @@ class _ClientDashboardPageState extends State<ClientDashboardPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return DashboardShell(
-      bottomNavigationBar: _ClientNavigationBar(
-        onOpenHistory: widget.onOpenHistory,
-        onPublishProblem: widget.onPublishProblem,
-        onOpenProfile: widget.onOpenProfile ??
-            widget.onOpenSettings ??
-            _showClientProfileUnavailable,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ClientHeader(onLogout: widget.onLogout),
-          const SizedBox(height: 22),
-          Text(
-            widget.firstName == null || widget.firstName!.trim().isEmpty
-                ? 'Bienvenido a Fixia'
-                : 'Hola, ${widget.firstName}',
-            key: const ValueKey('client-dashboard-greeting'),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontSize: 26,
-                  height: 1.2,
-                ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            '¿Qué necesitas arreglar hoy?',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: FixiaColors.textSecondary,
-                ),
-          ),
-          const SizedBox(height: 16),
-          _PublishCard(onPublish: widget.onPublishProblem),
-          if (widget.onOpenChat != null) ...[
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                key: const ValueKey('client-open-chat-prototype'),
-                onPressed: widget.onOpenChat,
-                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                label: const Tooltip(
-                  message: 'Abrir chat',
-                  child: Text('Chat de demostración'),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 26),
-          DashboardSectionHeading(
-            title: 'Mis solicitudes',
-            trailing: TextButton(
-              onPressed: widget.onOpenHistory ?? _noop,
-              child: const Text('Ver todas'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _RequestsSection(
-            future: _requests,
-            onRetry: _reload,
-            onOpen: _open,
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-}
-
-/// Qué le toca hacer al cliente en cada estado, para destacarlo.
-String? pendingActionFor(ServiceRequestStatus status) => switch (status) {
-      ServiceRequestStatus.published => 'Revisa los postulantes',
-      ServiceRequestStatus.providerSelected => 'Revisa la cotización',
-      ServiceRequestStatus.technicianFinished => 'Confirma el cierre',
-      _ => null,
-    };
-
-class _PublishCard extends StatelessWidget {
-  const _PublishCard({required this.onPublish});
-
-  final VoidCallback? onPublish;
-
-  @override
-  Widget build(BuildContext context) {
-    return DashboardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.home_repair_service_outlined,
-                color: FixiaColors.secondary,
-                size: 28,
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Publica tu problema y recibe propuestas de técnicos.',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            key: const ValueKey('client-dashboard-publish'),
-            onPressed: onPublish ?? _noop,
-            child: const Text('Publicar un problema'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RequestsSection extends StatelessWidget {
-  const _RequestsSection({
-    required this.future,
-    required this.onRetry,
-    required this.onOpen,
-  });
-
-  final Future<List<ServiceRequest>>? future;
-  final VoidCallback onRetry;
-  final ValueChanged<ServiceRequest> onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final pending = future;
-    if (pending == null) {
-      return const _Message(
-          'Tus solicitudes aparecerán aquí cuando te conectes a Fixia.');
+  /// Navegación con los callbacks de la pantalla; si no los tiene, la del
+  /// marco (la que arma `main.dart`).
+  void _navigate(ShellDestination destination) {
+    final scope = FixiaShellScope.maybeOf(context);
+    switch (destination) {
+      case ShellDestination.clientRequests:
+        final open = widget.onOpenHistory;
+        if (open != null) return open();
+      case ShellDestination.clientProfile:
+        final open = widget.onOpenProfile ?? widget.onOpenSettings;
+        if (open != null) return open();
+        if (scope?.onNavigate == null) return _showClientProfileUnavailable();
+      default:
+        break;
     }
-    return FutureBuilder<List<ServiceRequest>>(
-      future: pending,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
+    scope?.onNavigate?.call(destination);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.firstName?.trim() ?? '';
+    return AppShell(
+      destination: ShellDestination.clientHome,
+      userName: name.isEmpty ? null : name,
+      onNavigate: _navigate,
+      onLogout: widget.onLogout,
+      onPrimaryAction: widget.onPublishProblem ?? _noop,
+      child: FutureBuilder<List<ServiceRequest>>(
+        future: _requests,
+        builder: (context, snapshot) {
+          final loading = _requests != null &&
+              snapshot.connectionState != ConnectionState.done;
+          final requests = snapshot.hasData ? snapshot.data! : null;
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _Message('${snapshot.error}'),
-              TextButton(onPressed: onRetry, child: const Text('Reintentar')),
+              PageHeader(
+                title: name.isEmpty ? 'Bienvenido a Fixia' : 'Hola, $name',
+                titleKey: const ValueKey('client-dashboard-greeting'),
+                subtitle: requests == null
+                    ? '¿Qué necesitas arreglar hoy?'
+                    : _subtitle(requests),
+                actions: [
+                  if (widget.onOpenChat != null)
+                    Tooltip(
+                      message: 'Abrir chat',
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('client-open-chat-prototype'),
+                        onPressed: widget.onOpenChat,
+                        icon: const Icon(Icons.chat_bubble_outline_rounded,
+                            size: 18),
+                        label: const Text('Chat de demostración'),
+                      ),
+                    ),
+                  FilledButton.icon(
+                    key: const ValueKey('client-dashboard-publish'),
+                    onPressed: widget.onPublishProblem ?? _noop,
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: const Text('Publicar un problema'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              StatGrid(
+                children: [
+                  StatCard(
+                    label: 'Abiertas',
+                    value: _count(requests, _isOpen),
+                    caption: 'Publicadas o con prestador elegido',
+                  ),
+                  StatCard(
+                    label: 'En curso',
+                    value: _count(requests, _isInProgress),
+                    caption: 'Contratadas o en ejecución',
+                  ),
+                  StatCard(
+                    label: 'Cerradas',
+                    value: _count(requests, _isClosed),
+                    caption: 'Servicios terminados',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              TwoColumns(
+                main: _main(loading, snapshot),
+                side: const _HowItWorks(),
+              ),
             ],
           );
-        }
-        final requests = snapshot.data!;
-        if (requests.isEmpty) {
-          return const _Message(
-              'Todavía no has publicado solicitudes. Publica tu primer problema para recibir propuestas.');
-        }
-        final recent = requests.take(ClientDashboardPage.recentLimit).toList();
-        return Column(
-          children: [
-            for (var i = 0; i < recent.length; i++) ...[
-              _RequestCard(request: recent[i], onOpen: () => onOpen(recent[i])),
-              if (i < recent.length - 1) const SizedBox(height: 10),
-            ],
+        },
+      ),
+    );
+  }
+
+  String _subtitle(List<ServiceRequest> requests) {
+    if (requests.isEmpty) return '¿Qué necesitas arreglar hoy?';
+    final pending = requests.where(_needsClient).length;
+    if (pending == 0) return 'Todo al día con tus solicitudes.';
+    return pending == 1
+        ? 'Tienes 1 solicitud que requiere tu atención.'
+        : 'Tienes $pending solicitudes que requieren tu atención.';
+  }
+
+  Widget _main(bool loading, AsyncSnapshot<List<ServiceRequest>> snapshot) {
+    if (_requests == null) {
+      return const EmptyState(
+        message: 'Tus solicitudes aparecerán aquí cuando te conectes a Fixia.',
+        icon: Icons.cloud_off_outlined,
+      );
+    }
+    if (loading) return const SectionLoading();
+    if (snapshot.hasError) {
+      return EmptyState(
+        message: '${snapshot.error}',
+        icon: Icons.error_outline_rounded,
+        action: TextButton(onPressed: _reload, child: const Text('Reintentar')),
+      );
+    }
+    final requests = snapshot.data!;
+    if (requests.isEmpty) {
+      return EmptyState(
+        message:
+            'Todavía no has publicado solicitudes. Publica tu primer problema para recibir propuestas.',
+        icon: Icons.home_repair_service_outlined,
+        action: FilledButton(
+          onPressed: widget.onPublishProblem ?? _noop,
+          child: const Text('Publicar un problema'),
+        ),
+      );
+    }
+    final attention = requests
+        .where(_needsClient)
+        .take(ClientDashboardPage.attentionLimit)
+        .toList();
+    final recent = requests.take(ClientDashboardPage.recentLimit).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (attention.isNotEmpty) ...[
+          const SectionTitle(title: 'Requiere tu atención'),
+          for (final r in attention) ...[
+            _AttentionCard(request: r, onOpen: () => _open(r)),
+            const SizedBox(height: 12),
           ],
-        );
-      },
+          const SizedBox(height: 16),
+        ],
+        SectionTitle(
+          title: 'Solicitudes recientes',
+          action: TextButton(
+            onPressed: widget.onOpenHistory ?? _noop,
+            child: const Text('Ver todas'),
+          ),
+        ),
+        _RecentRequests(requests: recent, onOpen: _open),
+      ],
     );
   }
 }
 
-class _RequestCard extends StatelessWidget {
-  const _RequestCard({required this.request, required this.onOpen});
+/// Solo lo que espera una decisión del cliente: la cotización recibida o la
+/// confirmación del cierre. «Revisa los postulantes» se ve en la lista.
+bool _needsClient(ServiceRequest r) =>
+    r.status == ServiceRequestStatus.providerSelected ||
+    r.status == ServiceRequestStatus.technicianFinished;
+
+bool _isOpen(ServiceRequest r) =>
+    r.status == ServiceRequestStatus.published ||
+    r.status == ServiceRequestStatus.providerSelected;
+
+bool _isInProgress(ServiceRequest r) =>
+    r.status == ServiceRequestStatus.contracted ||
+    r.status == ServiceRequestStatus.inProgress ||
+    r.status == ServiceRequestStatus.technicianFinished;
+
+bool _isClosed(ServiceRequest r) => r.status == ServiceRequestStatus.closed;
+
+String _count(
+        List<ServiceRequest>? requests, bool Function(ServiceRequest) test) =>
+    requests == null ? '–' : '${requests.where(test).length}';
+
+String _date(DateTime value) {
+  final d = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(d.day)}/${two(d.month)}/${d.year}';
+}
+
+class _AttentionCard extends StatelessWidget {
+  const _AttentionCard({required this.request, required this.onOpen});
 
   final ServiceRequest request;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final action = pendingActionFor(request.status);
-    return InkWell(
-      key: ValueKey('client-request-${request.id}'),
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(FixiaRadii.card),
-      child: DashboardCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              request.description,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
+    final finished = request.status == ServiceRequestStatus.technicianFinished;
+    final action = pendingActionFor(request.status)!;
+    return FixiaPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _CategoryBadge(label: request.category.label),
-                Text(request.status.label),
-                Text(
-                  '${request.approximateLocation.zone}, ${request.approximateLocation.city}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: finished
+                        ? const Color(0xFFDCF5EF)
+                        : FixiaColors.supportBackground,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    finished
+                        ? Icons.task_alt_rounded
+                        : Icons.request_quote_outlined,
+                    color: finished
+                        ? const Color(0xFF00745F)
+                        : FixiaColors.secondary,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        request.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${request.category.label} · ${request.approximateLocation.zone}, ${request.approximateLocation.city}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: FixiaColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            if (action != null) ...[
-              const SizedBox(height: 10),
-              Row(
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              StatusPill(
+                label: request.status.label,
+                tone: toneFor(request.status),
+              ),
+              FilledButton(
+                key: ValueKey('client-request-${request.id}'),
+                onPressed: onOpen,
+                child: Text(action),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tabla en pantallas anchas y tarjetas en celular.
+class _RecentRequests extends StatelessWidget {
+  const _RecentRequests({required this.requests, required this.onOpen});
+
+  final List<ServiceRequest> requests;
+  final ValueChanged<ServiceRequest> onOpen;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 600) return _table();
+          return Column(
+            children: [
+              for (final r in requests) ...[
+                _card(r),
+                const SizedBox(height: 10),
+              ],
+            ],
+          );
+        },
+      );
+
+  Widget _table() {
+    const header = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: FixiaColors.textSecondary,
+      letterSpacing: 0.4,
+    );
+    return FixiaPanel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 14, 20, 10),
+            child: Row(
+              children: [
+                Expanded(flex: 5, child: Text('SOLICITUD', style: header)),
+                Expanded(flex: 3, child: Text('ESTADO', style: header)),
+                Expanded(flex: 2, child: Text('PRESUPUESTO', style: header)),
+                Expanded(flex: 2, child: Text('PARA', style: header)),
+              ],
+            ),
+          ),
+          for (final r in requests)
+            InkWell(
+              key: ValueKey('client-request-row-${r.id}'),
+              onTap: () => onOpen(r),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFFEEF2F7))),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            '${r.category.label} · ${r.approximateLocation.zone}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: FixiaColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: StatusPill(
+                          label: r.status.label,
+                          tone: toneFor(r.status),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(r.budget?.label ?? 'No informado'),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        _date(r.expectedAt),
+                        style:
+                            const TextStyle(color: FixiaColors.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card(ServiceRequest r) => InkWell(
+        key: ValueKey('client-request-row-${r.id}'),
+        onTap: () => onOpen(r),
+        borderRadius: BorderRadius.circular(16),
+        child: FixiaPanel(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                r.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 18,
-                    color: FixiaColors.secondary,
-                  ),
-                  const SizedBox(width: 6),
+                  StatusPill(label: r.status.label, tone: toneFor(r.status)),
                   Text(
-                    action,
+                    '${r.category.label} · ${r.approximateLocation.zone}, ${r.approximateLocation.city}',
                     style: const TextStyle(
-                      color: FixiaColors.secondary,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: FixiaColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ],
-          ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(color: FixiaColors.textSecondary),
       );
 }
 
-class _ClientHeader extends StatelessWidget {
-  const _ClientHeader({this.onLogout});
+class _HowItWorks extends StatelessWidget {
+  const _HowItWorks();
 
-  final VoidCallback? onLogout;
+  static const _steps = [
+    ('Publica tu problema', 'Con presupuesto y ubicación aproximada.'),
+    ('Compara y elige', 'Precio, experiencia y verificación de cada técnico.'),
+    ('Acepta la cotización', 'Queda un contrato con lo acordado.'),
+    ('Confirma el cierre', 'Solo cuando el trabajo quedó bien.'),
+  ];
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Image.asset(
-          'assets/brand/fixia_logo.png',
-          width: 90,
-          height: 34,
-          fit: BoxFit.contain,
-          alignment: Alignment.centerLeft,
-          semanticLabel: 'Fixia',
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: FixiaColors.primary,
+          borderRadius: BorderRadius.circular(20),
         ),
-        const Spacer(),
-        if (onLogout != null)
-          IconButton(
-            key: const ValueKey('client-dashboard-logout'),
-            tooltip: 'Cerrar sesión',
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded),
-            style: IconButton.styleFrom(
-              backgroundColor: FixiaColors.supportBackground,
-              foregroundColor: FixiaColors.primary,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Cómo funciona Fixia',
+              style: TextStyle(
+                color: FixiaColors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-      ],
-    );
-  }
-}
-
-class _CategoryBadge extends StatelessWidget {
-  const _CategoryBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: FixiaColors.supportBackground,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: FixiaColors.secondary,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+            const SizedBox(height: 18),
+            for (var i = 0; i < _steps.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: i == _steps.length - 1
+                            ? FixiaColors.accent
+                            : FixiaColors.secondary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${i + 1}',
+                        style: const TextStyle(
+                          color: FixiaColors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _steps[i].$1,
+                            style: const TextStyle(
+                              color: FixiaColors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _steps[i].$2,
+                            style: const TextStyle(
+                              color: Color(0xFFB7CCE8),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _ClientNavigationBar extends StatelessWidget {
-  const _ClientNavigationBar({
-    required this.onOpenHistory,
-    required this.onPublishProblem,
-    required this.onOpenProfile,
-  });
-
-  final VoidCallback? onOpenHistory;
-  final VoidCallback? onPublishProblem;
-  final VoidCallback? onOpenProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    return MobileNavigationBar(
-      items: [
-        const MobileNavigationItem(
-          itemKey: ValueKey('client-nav-inicio'),
-          icon: Icons.home_rounded,
-          label: 'Inicio',
-          selected: true,
-          onPressed: _noop,
-        ),
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-nav-historial'),
-          icon: Icons.history_rounded,
-          label: 'Historial',
-          onPressed: onOpenHistory ?? _noop,
-        ),
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-publish-problem'),
-          icon: Icons.add_rounded,
-          label: 'Publicar',
-          isAction: true,
-          onPressed: onPublishProblem ?? _noop,
-        ),
-        MobileNavigationItem(
-          itemKey: const ValueKey('client-nav-perfil'),
-          icon: Icons.person_outline_rounded,
-          label: 'Perfil',
-          onPressed: onOpenProfile ?? _noop,
-        ),
-      ],
-    );
-  }
+      );
 }
 
 void _noop() {}

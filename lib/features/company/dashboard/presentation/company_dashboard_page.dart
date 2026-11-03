@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 
-/// Inicio de la cuenta de empresa prestadora (GC-467): navegación mínima,
-/// sin panel administrativo. Muestra el nombre real de la empresa y lleva a
-/// sus técnicos asociados y, cuando exista (GC-469), a las oportunidades
-/// para postularse.
+/// Inicio de la cuenta de empresa prestadora (GC-467, GC-469), en el mismo
+/// marco del prestador. Muestra el nombre real de la empresa y lleva a sus
+/// técnicos asociados y a las oportunidades para postularse.
 class CompanyDashboardPage extends StatefulWidget {
   const CompanyDashboardPage({
     super.key,
@@ -44,30 +44,32 @@ class _CompanyDashboardPageState extends State<CompanyDashboardPage> {
     });
   }
 
+  void _navigate(ShellDestination destination) {
+    switch (destination) {
+      case ShellDestination.companyTechnicians:
+        return widget.onOpenTechnicians();
+      case ShellDestination.companyOpportunities:
+        final open = widget.onOpenOpportunities;
+        if (open != null) return open();
+      default:
+        break;
+    }
+    FixiaShellScope.maybeOf(context)?.onNavigate?.call(destination);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DashboardShell(
+    return AppShell(
+      destination: ShellDestination.companyHome,
+      userName: widget.firstName,
+      userCaption: 'Empresa',
+      onNavigate: _navigate,
+      onLogout: widget.onLogout,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Hola, ${widget.firstName}',
-                  style: theme.textTheme.headlineMedium,
-                ),
-              ),
-              IconButton(
-                key: const ValueKey('company-logout'),
-                tooltip: 'Cerrar sesión',
-                onPressed: widget.onLogout,
-                icon: const Icon(Icons.logout_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
+          PageHeader(title: 'Hola, ${widget.firstName}'),
+          const SizedBox(height: 10),
           FutureBuilder<String>(
             future: _companyName,
             builder: (context, snapshot) {
@@ -82,8 +84,7 @@ class _CompanyDashboardPageState extends State<CompanyDashboardPage> {
                     Expanded(
                       child: Text(
                         snapshot.error.toString(),
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: FixiaColors.error),
+                        style: const TextStyle(color: FixiaColors.error),
                       ),
                     ),
                     TextButton(
@@ -97,37 +98,48 @@ class _CompanyDashboardPageState extends State<CompanyDashboardPage> {
               return Row(
                 children: [
                   const Icon(Icons.apartment_rounded,
-                      size: 18, color: FixiaColors.secondary),
-                  const SizedBox(width: 6),
+                      size: 20, color: FixiaColors.secondary),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       snapshot.data!,
                       key: const ValueKey('company-name'),
-                      style: theme.textTheme.titleMedium,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: FixiaColors.textPrimary,
+                      ),
                     ),
                   ),
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
-          _ActionCard(
-            key: const ValueKey('company-open-technicians'),
-            icon: Icons.groups_outlined,
-            title: 'Mis técnicos',
-            subtitle: 'Técnicos asociados a tu empresa.',
-            onTap: widget.onOpenTechnicians,
+          const SizedBox(height: 28),
+          ResponsiveGrid(
+            minItemWidth: 300,
+            children: [
+              _ActionCard(
+                key: const ValueKey('company-open-technicians'),
+                icon: Icons.groups_outlined,
+                title: 'Mis técnicos',
+                subtitle:
+                    'Los técnicos asociados a tu empresa, con su verificación y especialidades.',
+                action: 'Ver técnicos',
+                onTap: widget.onOpenTechnicians,
+              ),
+              if (widget.onOpenOpportunities != null)
+                _ActionCard(
+                  key: const ValueKey('company-open-opportunities'),
+                  icon: Icons.work_outline_rounded,
+                  title: 'Oportunidades',
+                  subtitle:
+                      'Solicitudes a las que tu empresa puede postular a uno de sus técnicos.',
+                  action: 'Ver oportunidades',
+                  onTap: widget.onOpenOpportunities!,
+                ),
+            ],
           ),
-          if (widget.onOpenOpportunities != null) ...[
-            const SizedBox(height: 12),
-            _ActionCard(
-              key: const ValueKey('company-open-opportunities'),
-              icon: Icons.work_outline_rounded,
-              title: 'Oportunidades',
-              subtitle: 'Solicitudes a las que tu empresa puede postularse.',
-              onTap: widget.onOpenOpportunities!,
-            ),
-          ],
         ],
       ),
     );
@@ -140,39 +152,65 @@ class _ActionCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.action,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final String action;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(FixiaRadii.card),
-      onTap: onTap,
-      child: DashboardCard(
-        child: Row(
-          children: [
-            Icon(icon, color: FixiaColors.secondary),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: FixiaPanel(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: FixiaColors.supportBackground,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: FixiaColors.secondary),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: FixiaColors.primary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: const TextStyle(color: FixiaColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              Row(
                 children: [
-                  Text(title, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: theme.textTheme.bodySmall),
+                  Text(
+                    action,
+                    style: const TextStyle(
+                      color: FixiaColors.secondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded,
+                      size: 18, color: FixiaColors.secondary),
                 ],
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }

@@ -59,15 +59,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hola, Ana'), findsOneWidget);
-    expect(find.text('Solicitud a'), findsOneWidget);
-    expect(find.text('Revisa la cotización'), findsOneWidget);
-    expect(find.text('Confirma el cierre'), findsOneWidget);
-    expect(find.text('Cerrada'), findsOneWidget);
-    // Solo las tres más recientes.
-    expect(find.text('Solicitud d'), findsNothing);
+    // Requiere tu atención: solo cotización recibida y cierre por confirmar.
+    expect(find.text('Requiere tu atención'), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-b')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-c')), findsNothing);
+    expect(find.byKey(const ValueKey('client-request-d')), findsNothing);
+    expect(find.text('Revisa la cotización'), findsWidgets);
+    expect(find.text('Confirma el cierre'), findsWidgets);
+    // Recientes: solo las tres primeras.
+    expect(find.byKey(const ValueKey('client-request-row-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-row-c')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-row-d')), findsNothing);
+    expect(find.text('Cerrada'), findsWidgets);
 
-    await tester.ensureVisible(find.text('Solicitud b'));
-    await tester.tap(find.text('Solicitud b'));
+    final open = find.byKey(const ValueKey('client-request-b'));
+    await tester.ensureVisible(open);
+    await tester.tap(open);
     await tester.pumpAndSettle();
     expect(opened, ['b']);
     expect(loads, 2);
@@ -213,9 +221,9 @@ void main() {
     });
   }
 
-  testWidgets('en navegador mantiene el layout limitado a formato móvil',
+  testWidgets('en escritorio usa menú lateral y el ancho disponible',
       (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -225,11 +233,17 @@ void main() {
       ),
     );
 
-    final card = tester.getRect(
+    final greeting = tester.getRect(
+      find.byKey(const ValueKey('client-dashboard-greeting')),
+    );
+    final publish = tester.getRect(
       find.byKey(const ValueKey('client-dashboard-publish')),
     );
-    expect(card.width, lessThanOrEqualTo(404));
-    expect(card.center.dx, closeTo(640, 1));
+    // El contenido empieza después del menú lateral y el botón va a la
+    // derecha del saludo, no a lo ancho como en celular.
+    expect(greeting.left, greaterThan(248));
+    expect(publish.left, greaterThan(greeting.right));
+    expect(publish.width, lessThan(500));
     expect(tester.takeException(), isNull);
   });
 }

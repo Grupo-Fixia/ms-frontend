@@ -46,6 +46,7 @@ import 'features/client/service_requests/presentation/request_progress_sections.
 import 'features/client/service_requests/presentation/service_request_detail_page.dart';
 import 'features/contracts/application/contract_use_cases.dart';
 import 'features/contracts/domain/contract_exceptions.dart';
+import 'features/contracts/domain/service_contract.dart';
 import 'features/contracts/presentation/service_actions.dart';
 import 'features/quotations/application/quotation_use_cases.dart';
 import 'features/quotations/domain/quotation_exceptions.dart';
@@ -61,6 +62,7 @@ import 'features/company/technicians/infrastructure/http_company_repository.dart
 import 'features/company/technicians/presentation/company_technicians_controller.dart';
 import 'features/company/technicians/presentation/company_technicians_page.dart';
 import 'backend_integrations.dart';
+import 'core/layout/app_shell.dart';
 import 'features/home/presentation/home_page.dart';
 import 'features/technician/dashboard/presentation/technician_dashboard_page.dart';
 import 'features/technician/applications/application/application_use_cases.dart';
@@ -714,9 +716,16 @@ class _FixiaAppState extends State<FixiaApp> {
       loadOpportunities: widget.backend == null
           ? null
           : () => _loadOpportunities(context, widget.backend!),
-      loadStats: widget.backend == null
+      loadWork: widget.backend == null
           ? null
-          : () => _technicianStats(context, widget.backend!),
+          : () => _technicianWork(context, widget.backend!),
+      onOpenQuotation: widget.backend == null
+          ? null
+          : (application) =>
+              _openQuotation(context, widget.backend!, application),
+      onOpenContract: widget.backend == null
+          ? null
+          : (contract) => _openContract(context, widget.backend!, contract),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
       onOpenChat: () =>
@@ -966,49 +975,33 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
-  /// Contadores del inicio del técnico, con sus postulaciones y
-  /// contrataciones reales.
-  Future<TechnicianWorkStats> _technicianStats(
+  /// Trabajo del técnico para su inicio: postulaciones donde lo
+  /// seleccionaron sin contrato todavía y sus contrataciones reales.
+  Future<TechnicianWork> _technicianWork(
       BuildContext context, BackendIntegrations backend) async {
     final applications = await _serviceCall(
         context, () => ListMyApplications(backend.applications)());
     if (!context.mounted) {
-      return const TechnicianWorkStats(toQuote: 0, active: 0, closed: 0);
+      return const TechnicianWork(toQuote: [], contracts: []);
     }
     final contracts =
         await _serviceCall(context, () => ListMyContracts(backend.contracts)());
     final contracted = {for (final c in contracts) c.serviceRequestId};
-    return TechnicianWorkStats(
-      toQuote: applications
-          .where((a) =>
-              a.status == ApplicationStatus.selected &&
+    return TechnicianWork(
+      toQuote: [
+        for (final a in applications)
+          if (a.status == ApplicationStatus.selected &&
               !contracted.contains(a.serviceRequest.id))
-          .length,
-      active: contracts
-          .where((c) => c.serviceStatus != null && !c.serviceStatus!.isTerminal)
-          .length,
-      closed: contracts
-          .where((c) => c.serviceStatus == ServiceRequestStatus.closed)
-          .length,
+            a,
+      ],
+      contracts: contracts,
     );
   }
 
-  /// «Mis trabajos» del técnico (GC-428, GC-429).
-  Widget _technicianJobsPage(BuildContext context) {
-    final backend = widget.backend;
-    if (backend == null) {
-      return const Scaffold(
-          body:
-              Center(child: Text('Esta sección requiere conexión con Fixia.')));
-    }
-    return TechnicianJobsPage(
-      loadApplications: () => _serviceCall(
-          context, () => ListMyApplications(backend.applications)()),
-      loadContracts: () =>
-          _serviceCall(context, () => ListMyContracts(backend.contracts)()),
-      onOpenOpportunities: () =>
-          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
-      onOpenQuotation: (application) => Navigator.of(context).push(
+  /// Cotización de una solicitud donde seleccionaron al técnico (GC-428).
+  Future<void> _openQuotation(BuildContext context, BackendIntegrations backend,
+          ServiceApplication application) =>
+      Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => TechnicianQuotationPage(
             application: application,
@@ -1020,8 +1013,12 @@ class _FixiaAppState extends State<FixiaApp> {
                 context, () => SendQuotation(backend.quotations)(quotation)),
           ),
         ),
-      ),
-      onOpenContract: (contract) => Navigator.of(context).push(
+      );
+
+  /// Contratación del técnico con sus acciones (GC-429, GC-442).
+  Future<void> _openContract(BuildContext context, BackendIntegrations backend,
+          ServiceContract contract) =>
+      Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => TechnicianContractPage(
             load: () => _serviceCall(
@@ -1040,7 +1037,25 @@ class _FixiaAppState extends State<FixiaApp> {
             ],
           ),
         ),
-      ),
+      );
+
+  /// «Mis trabajos» del técnico (GC-428, GC-429).
+  Widget _technicianJobsPage(BuildContext context) {
+    final backend = widget.backend;
+    if (backend == null) {
+      return const Scaffold(
+          body: Center(child: Text('Esta sección requiere conexión con Fixia.')));
+    }
+    return TechnicianJobsPage(
+      loadApplications: () => _serviceCall(
+          context, () => ListMyApplications(backend.applications)()),
+      loadContracts: () =>
+          _serviceCall(context, () => ListMyContracts(backend.contracts)()),
+      onOpenOpportunities: () =>
+          Navigator.of(context).pushNamed(AppRoutes.technicianOpportunities),
+      onOpenQuotation: (application) =>
+          _openQuotation(context, backend, application),
+      onOpenContract: (contract) => _openContract(context, backend, contract),
     );
   }
 
@@ -1105,6 +1120,31 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  /// Destino principal del marco → ruta. Son pantallas de primer nivel: se
+  /// abren sin apilar las anteriores.
+  void _navigateShell(ShellDestination destination) {
+    final route = switch (destination) {
+      ShellDestination.clientHome => AppRoutes.clientDashboard,
+      ShellDestination.clientRequests => AppRoutes.clientServiceRequests,
+      ShellDestination.clientProfile => AppRoutes.clientProfile,
+      ShellDestination.technicianHome => AppRoutes.technicianDashboard,
+      ShellDestination.technicianOpportunities =>
+        AppRoutes.technicianOpportunities,
+      ShellDestination.technicianJobs => AppRoutes.technicianJobs,
+      ShellDestination.technicianProfile => AppRoutes.technicianProfile,
+      ShellDestination.companyHome => AppRoutes.companyDashboard,
+      ShellDestination.companyTechnicians => AppRoutes.companyTechnicians,
+      ShellDestination.companyOpportunities => AppRoutes.companyOpportunities,
+    };
+    _navigatorKey.currentState?.pushNamedAndRemoveUntil(route, (_) => false);
+  }
+
+  Future<void> _logoutFromShell() async {
+    await _logoutUser();
+    _navigatorKey.currentState
+        ?.pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -1112,6 +1152,24 @@ class _FixiaAppState extends State<FixiaApp> {
       title: 'Fixia',
       debugShowCheckedModeBanner: false,
       theme: FixiaTheme.light,
+      // Datos de la cuenta y navegación principal para el marco de las
+      // pantallas con sesión (barra lateral o inferior).
+      builder: (context, child) => ListenableBuilder(
+        listenable: _sessionStore,
+        builder: (context, _) {
+          final profile = _sessionStore.profile;
+          return FixiaShellScope(
+            userName: profile == null
+                ? null
+                : '${profile.firstName} ${profile.lastName}'.trim(),
+            onNavigate: _navigateShell,
+            onLogout: _logoutFromShell,
+            onPrimaryAction: () => _navigatorKey.currentState
+                ?.pushNamed(AppRoutes.clientServiceRequest),
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
+      ),
       initialRoute: AppRoutes.home,
       routes: {
         // La bienvenida se ve siempre, también con sesión iniciada (por
@@ -1237,12 +1295,16 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onSessionExpired,
     this.onOpenJobs,
     this.loadOpportunities,
-    this.loadStats,
+    this.loadWork,
+    this.onOpenQuotation,
+    this.onOpenContract,
   });
 
   final VoidCallback? onOpenJobs;
   final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
-  final Future<TechnicianWorkStats> Function()? loadStats;
+  final Future<TechnicianWork> Function()? loadWork;
+  final Future<void> Function(ServiceApplication application)? onOpenQuotation;
+  final Future<void> Function(ServiceContract contract)? onOpenContract;
   final GetTechnicianProfile getProfile;
   final String firstName;
   final VoidCallback onOpenSettings;
@@ -1347,7 +1409,9 @@ class _TechnicianDashboardLoaderState
           onOpenOpportunities: widget.onOpenOpportunities,
           onOpenJobs: widget.onOpenJobs,
           loadOpportunities: widget.loadOpportunities,
-          loadStats: widget.loadStats,
+          loadWork: widget.loadWork,
+          onOpenQuotation: widget.onOpenQuotation,
+          onOpenContract: widget.onOpenContract,
           onOpenSpecialties: widget.onOpenSpecialties,
           onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
