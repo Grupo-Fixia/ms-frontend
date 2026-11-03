@@ -1,3 +1,7 @@
+import 'features/technician/availability/application/ports/technician_availability_repository.dart';
+import 'features/technician/availability/domain/coverage_zone.dart';
+import 'features/technician/availability/domain/weekly_availability.dart';
+import 'features/technician/availability/presentation/technician_availability_page.dart';
 import 'features/service_evidence/application/evidence_feature.dart';
 import 'features/service_evidence/presentation/service_evidence_flow.dart';
 import 'dart:async';
@@ -110,6 +114,9 @@ abstract final class AppRoutes {
   static const technicianOpportunities = '/tecnico/solicitudes';
   static const technicianJobs = '/tecnico/trabajos';
   static const technicianSpecialties = '/tecnico/especialidades';
+
+  /// Horario semanal y zona de atención del técnico (GC-329).
+  static const technicianAvailability = '/tecnico/horario';
   static const clientProfile = '/cliente/perfil';
   static const technicianProfile = '/tecnico/perfil';
 
@@ -701,6 +708,35 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  /// Si el técnico ya declaró zona y al menos una franja de horario. Si la
+  /// consulta falla no se muestra el aviso (no se afirma algo que no se
+  /// pudo comprobar).
+  Future<bool> _technicianSetupComplete(
+      TechnicianAvailabilityRepository repository) async {
+    try {
+      final results = await Future.wait<Object?>([
+        repository.fetchCoverageZone(),
+        repository.fetchAvailability(),
+      ]);
+      final zone = results[0] as CoverageZone?;
+      final availability = results[1] as WeeklyAvailability;
+      return zone != null && availability.slots.isNotEmpty;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Widget _technicianAvailabilityPage(BuildContext context) {
+    final repository = widget.backend?.technicianAvailability;
+    if (repository == null) {
+      return const Scaffold(body: Center(child: Text(_needsConnection)));
+    }
+    return TechnicianAvailabilityPage(
+      repository: repository,
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
+
   Widget _technicianDashboardPage(BuildContext context) {
     final profile = _sessionStore.profile!;
     return _TechnicianDashboardLoader(
@@ -728,6 +764,14 @@ class _FixiaAppState extends State<FixiaApp> {
           : (contract) => _openContract(context, widget.backend!, contract),
       onOpenSpecialties: () =>
           Navigator.of(context).pushNamed(AppRoutes.technicianSpecialties),
+      onOpenAvailability: widget.backend?.technicianAvailability == null
+          ? null
+          : () => Navigator.of(context)
+              .pushNamed<void>(AppRoutes.technicianAvailability),
+      loadSetupComplete: widget.backend?.technicianAvailability == null
+          ? null
+          : () =>
+              _technicianSetupComplete(widget.backend!.technicianAvailability!),
       onOpenChat: () =>
           Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -1044,7 +1088,8 @@ class _FixiaAppState extends State<FixiaApp> {
     final backend = widget.backend;
     if (backend == null) {
       return const Scaffold(
-          body: Center(child: Text('Esta sección requiere conexión con Fixia.')));
+          body:
+              Center(child: Text('Esta sección requiere conexión con Fixia.')));
     }
     return TechnicianJobsPage(
       loadApplications: () => _serviceCall(
@@ -1236,14 +1281,15 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.professional, _technicianJobsPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
+        AppRoutes.technicianAvailability:
+            _guard(RouteAccess.professional, _technicianAvailabilityPage),
         AppRoutes.companyDashboard:
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
             _guard(RouteAccess.company, _companyTechniciansPage),
         AppRoutes.companyOpportunities:
             _guard(RouteAccess.company, _companyOpportunitiesPage),
-        AppRoutes.chatPrototype:
-            _guard(
+        AppRoutes.chatPrototype: _guard(
           RouteAccess.authenticated,
           (_) => ChatPrototypePage(
             destination: _sessionStore.profile?.role == UserRole.client
@@ -1305,8 +1351,12 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     this.loadWork,
     this.onOpenQuotation,
     this.onOpenContract,
+    this.onOpenAvailability,
+    this.loadSetupComplete,
   });
 
+  final Future<void> Function()? onOpenAvailability;
+  final Future<bool> Function()? loadSetupComplete;
   final VoidCallback? onOpenJobs;
   final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
   final Future<TechnicianWork> Function()? loadWork;
@@ -1420,6 +1470,8 @@ class _TechnicianDashboardLoaderState
           onOpenQuotation: widget.onOpenQuotation,
           onOpenContract: widget.onOpenContract,
           onOpenSpecialties: widget.onOpenSpecialties,
+          onOpenAvailability: widget.onOpenAvailability,
+          loadSetupComplete: widget.loadSetupComplete,
           onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
         );

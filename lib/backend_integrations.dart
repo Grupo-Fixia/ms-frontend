@@ -18,6 +18,8 @@ import 'features/technician/applications/application/ports/application_repositor
 import 'features/technician/applications/infrastructure/http_application_repository.dart';
 import 'features/technician/opportunities/application/ports/opportunity_repository.dart';
 import 'features/technician/opportunities/infrastructure/http_opportunity_repository.dart';
+import 'features/technician/availability/application/ports/technician_availability_repository.dart';
+import 'features/technician/availability/infrastructure/http_technician_availability_repository.dart';
 
 /// Repositorios que conectan las pantallas con ms-users y ms-services
 /// (GC-320, GC-335, GC-340, GC-345, GC-426, GC-428, GC-429). Si la app no los recibe, esas pantallas
@@ -33,6 +35,7 @@ class BackendIntegrations {
     this.evidence,
     this.companyApplications,
     this.companyOpportunities,
+    this.technicianAvailability,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -89,6 +92,11 @@ class BackendIntegrations {
         authorizedHttp: authorizedHttp,
       ),
       contracts: contracts,
+      technicianAvailability: HttpTechnicianAvailabilityRepository(
+        client: client,
+        baseUrl: usersBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
     );
   }
 
@@ -103,4 +111,7 @@ class BackendIntegrations {
   final ContractRepository contracts;
   final CompanyApplicationRepository? companyApplications;
   final CompanyOpportunitiesRepository? companyOpportunities;
+
+  /// Horario y zona de atención del técnico (GC-329, GC-330).
+  final TechnicianAvailabilityRepository? technicianAvailability;
 }
