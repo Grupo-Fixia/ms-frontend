@@ -1343,6 +1343,13 @@ class _FixiaAppState extends State<FixiaApp> {
               context,
               () => GetServiceEvaluations(backend.evaluations!)(
                   [entry.serviceRequestId])),
+          submitEvaluation: (rating, comment) => _serviceCall(
+              context,
+              () => SubmitServiceEvaluation(backend.evaluations!)(
+                    serviceRequestId: entry.serviceRequestId,
+                    rating: rating,
+                    comment: comment,
+                  )),
         ),
       ),
     );

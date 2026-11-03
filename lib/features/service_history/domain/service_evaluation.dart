@@ -46,3 +46,40 @@ class ServiceEvaluation {
   /// ¿La recibió [userId]?
   bool isFor(String userId) => evaluatedId == userId;
 }
+
+/// Calificación que alguien quiere registrar (GC-445). Quién evalúa, a quién
+/// y en qué sentido los decide ms-users con el token y la participación en
+/// el servicio; aquí solo van el servicio, la nota y el comentario.
+class NewServiceEvaluation {
+  NewServiceEvaluation({
+    required this.serviceRequestId,
+    required this.rating,
+    String? comment,
+  }) : comment = _normalize(comment) {
+    if (rating < minRating || rating > maxRating) {
+      throw ArgumentError.value(rating, 'rating', 'Debe ir de 1 a 5');
+    }
+    if ((this.comment?.length ?? 0) > maxCommentLength) {
+      throw ArgumentError.value(
+          comment, 'comment', 'Admite hasta $maxCommentLength caracteres');
+    }
+  }
+
+  static const minRating = 1;
+  static const maxRating = 5;
+
+  /// Límite de ms-users (columna `comment VARCHAR(500)`).
+  static const maxCommentLength = 500;
+
+  final String serviceRequestId;
+  final int rating;
+
+  /// Sin espacios a los lados; `null` si queda vacío, como lo guarda
+  /// ms-users.
+  final String? comment;
+
+  static String? _normalize(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+}
