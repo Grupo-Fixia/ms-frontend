@@ -1,10 +1,37 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../../features/home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/widgets/fixia_ui.dart';
+import '../../../contracts/domain/service_contract.dart';
+import '../../../quotations/presentation/quotation_card.dart';
+import '../../applications/domain/service_application.dart';
+import '../../opportunities/domain/service_opportunity.dart';
+import '../../opportunities/presentation/match_setup_summary.dart';
 import '../../profile/domain/verification_status.dart';
 
-class TechnicianDashboardPage extends StatelessWidget {
+/// Trabajo real del técnico (GC-428, GC-429, GC-442): solicitudes donde lo
+/// seleccionaron y aún no hay contrato, y sus contrataciones.
+class TechnicianWork {
+  const TechnicianWork({required this.toQuote, required this.contracts});
+
+  final List<ServiceApplication> toQuote;
+  final List<ServiceContract> contracts;
+
+  /// Contratados, en ejecución o esperando el cierre del cliente.
+  List<ServiceContract> get active => [
+        for (final c in contracts)
+          if (c.serviceStatus != null && !c.serviceStatus!.isTerminal) c,
+      ];
+
+  int get closed => contracts
+      .where((c) => c.serviceStatus == ServiceRequestStatus.closed)
+      .length;
+}
+
+/// Inicio del técnico: resumen de su trabajo, oportunidades compatibles y
+/// lo que tiene pendiente. Todo sale de ms-services y ms-users.
+class TechnicianDashboardPage extends StatefulWidget {
   const TechnicianDashboardPage({
     super.key,
     this.firstName,
@@ -12,13 +39,17 @@ class TechnicianDashboardPage extends StatelessWidget {
     this.onOpenSettings,
     this.onLogout,
     this.onOpenOpportunities,
+    this.onOpenJobs,
     this.onOpenSpecialties,
-    this.onRecordEvidence,
-    this.onMarkFinished,
-    this.onRequestWithdrawal,
+    this.onOpenChat,
     this.onApplyToOpportunity,
-    this.onAvailabilityChanged,
     this.onOpenAvailability,
+    this.onOpenQuotation,
+    this.onOpenContract,
+    this.loadOpportunities,
+    this.loadWork,
+    this.loadSetupComplete,
+    this.loadMatchSetup,
   });
 
   final String? firstName;
@@ -26,384 +57,451 @@ class TechnicianDashboardPage extends StatelessWidget {
   final VoidCallback? onOpenSettings;
   final VoidCallback? onLogout;
   final VoidCallback? onOpenOpportunities;
+
+  /// «Mis trabajos»: cotizaciones y servicios contratados (GC-428, GC-429).
+  final VoidCallback? onOpenJobs;
   final VoidCallback? onOpenSpecialties;
-  final VoidCallback? onRecordEvidence;
-  final VoidCallback? onMarkFinished;
-  final VoidCallback? onRequestWithdrawal;
+
+  /// Abre el chat prototipo (simulación, GC-431).
+  final VoidCallback? onOpenChat;
   final ValueChanged<String>? onApplyToOpportunity;
-  final ValueChanged<bool>? onAvailabilityChanged;
-  final VoidCallback? onOpenAvailability;
+
+  /// Abre «Horario y zona de atención»; al volver se revisa de nuevo si
+  /// quedó configurado.
+  final Future<void> Function()? onOpenAvailability;
+
+  /// Si el técnico ya tiene zona y horario. Sin ellos ms-users no le
+  /// muestra ninguna solicitud, así que el inicio se lo advierte.
+  final Future<bool> Function()? loadSetupComplete;
+  final Future<MatchSetup> Function()? loadMatchSetup;
+
+  /// Abre la cotización de una solicitud donde lo seleccionaron.
+  final Future<void> Function(ServiceApplication application)? onOpenQuotation;
+
+  /// Abre una contratación.
+  final Future<void> Function(ServiceContract contract)? onOpenContract;
+
+  /// Solicitudes compatibles reales (GC-340). Sin conexión es `null` y no
+  /// se muestran oportunidades de ejemplo.
+  final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
+
+  /// Postulaciones seleccionadas y contrataciones. Sin conexión es `null`.
+  final Future<TechnicianWork> Function()? loadWork;
+
+  /// Oportunidades que se muestran en el inicio; el resto en la pantalla de
+  /// oportunidades.
+  static const opportunitiesLimit = 4;
+
+  /// Trabajos que se muestran en el inicio.
+  static const jobsLimit = 4;
+
+  @override
+  State<TechnicianDashboardPage> createState() =>
+      _TechnicianDashboardPageState();
+}
+
+class _TechnicianDashboardPageState extends State<TechnicianDashboardPage> {
+  late Future<List<ServiceOpportunity>>? _opportunities =
+      widget.loadOpportunities?.call();
+  late Future<TechnicianWork>? _work = widget.loadWork?.call();
+  late Future<bool>? _setup = widget.loadSetupComplete?.call();
+
+  Future<void> _openAvailability() async {
+    await widget.onOpenAvailability?.call();
+    if (!mounted) return;
+    setState(() {
+      _setup = widget.loadSetupComplete?.call();
+      _opportunities = widget.loadOpportunities?.call();
+    });
+  }
+
+  void _reloadOpportunities() => setState(() {
+        _opportunities = widget.loadOpportunities?.call();
+      });
+
+  void _reloadWork() => setState(() {
+        _work = widget.loadWork?.call();
+      });
+
+  Future<void> _openAndReload(Future<void> Function() open) async {
+    await open();
+    if (!mounted) return;
+    _reloadWork();
+    _reloadOpportunities();
+  }
+
+  void _showProfileMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Inicia sesión como técnico para ver tu perfil.'),
+      ),
+    );
+  }
+
+  void _navigate(ShellDestination destination) {
+    final scope = FixiaShellScope.maybeOf(context);
+    final VoidCallback? own = switch (destination) {
+      ShellDestination.technicianOpportunities => widget.onOpenOpportunities,
+      ShellDestination.technicianJobs => widget.onOpenJobs,
+      ShellDestination.technicianProfile => widget.onOpenSettings,
+      _ => null,
+    };
+    if (own != null) return own();
+    if (scope?.onNavigate != null) return scope!.onNavigate!(destination);
+    if (destination == ShellDestination.technicianProfile) {
+      _showProfileMessage();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isVerified = verificationStatus == VerificationStatus.valid;
-    return DashboardShell(
-      contentPadding: EdgeInsets.zero,
-      bottomNavigationBar: _TechnicianNavigationBar(
-        onOpenProfile: onOpenSettings ?? () => _showProfileMessage(context),
-        onOpenOpportunities: onOpenOpportunities,
+    final name = widget.firstName?.trim() ?? '';
+    final status = widget.verificationStatus;
+    return AppShell(
+      destination: ShellDestination.technicianHome,
+      userName: name.isEmpty ? null : name,
+      userCaption: status.label,
+      onNavigate: _navigate,
+      onLogout: widget.onLogout,
+      child: FutureBuilder<TechnicianWork>(
+        future: _work,
+        builder: (context, workSnapshot) {
+          final work = workSnapshot.hasData ? workSnapshot.data : null;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PageHeader(
+                title: name.isEmpty ? 'Técnico' : 'Hola, $name',
+                titleKey: const ValueKey('technician-dashboard-greeting'),
+                subtitle: work == null
+                    ? 'Tu panel de trabajo en Fixia.'
+                    : _subtitle(work),
+                actions: [
+                  _VerificationBadge(status: status),
+                  OutlinedButton.icon(
+                    key: const ValueKey('technician-dashboard-settings'),
+                    onPressed: widget.onOpenSettings ?? _showProfileMessage,
+                    icon: const Icon(Icons.badge_outlined, size: 18),
+                    label: const Text('Perfil profesional'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              FutureBuilder<bool>(
+                future: _setup,
+                builder: (context, setup) => setup.data == false
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _SetupBanner(
+                          onConfigure: widget.onOpenAvailability == null
+                              ? null
+                              : _openAvailability,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+              _VerificationBanner(status: status),
+              const SizedBox(height: 20),
+              StatGrid(
+                minItemWidth: 180,
+                children: [
+                  StatCard(
+                    label: 'Por cotizar',
+                    value: work == null ? '–' : '${work.toQuote.length}',
+                    emphasis: true,
+                  ),
+                  StatCard(
+                    label: 'En curso',
+                    value: work == null ? '–' : '${work.active.length}',
+                  ),
+                  StatCard(
+                    label: 'Cerrados',
+                    value: work == null ? '–' : '${work.closed}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              TwoColumns(
+                sideWidth: 360,
+                main: _opportunitiesSection(),
+                side: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _jobsSection(workSnapshot),
+                    const SizedBox(height: 20),
+                    _QuickLinks(
+                      onOpenSpecialties: widget.onOpenSpecialties,
+                      onOpenAvailability: widget.onOpenAvailability == null
+                          ? null
+                          : _openAvailability,
+                      onOpenChat: widget.onOpenChat,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _TechnicianHeader(
-            firstName: firstName,
-            status: verificationStatus,
-            onOpenSettings: onOpenSettings,
-            onLogout: onLogout,
+    );
+  }
+
+  String _subtitle(TechnicianWork work) {
+    final quote = work.toQuote.length;
+    final active = work.active.length;
+    if (quote == 0 && active == 0) {
+      return 'No tienes pendientes. Revisa las oportunidades para postularte.';
+    }
+    final parts = <String>[
+      if (quote > 0)
+        quote == 1
+            ? '1 cotización por enviar'
+            : '$quote cotizaciones por enviar',
+      if (active > 0)
+        active == 1 ? '1 servicio en curso' : '$active servicios en curso',
+    ];
+    return 'Tienes ${parts.join(' y ')}.';
+  }
+
+  Widget _opportunitiesSection() {
+    final future = _opportunities;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          title: 'Oportunidades para ti',
+          action: TextButton(
+            key: const ValueKey('technician-see-opportunities'),
+            onPressed: widget.onOpenOpportunities,
+            child: const Text('Ver todas'),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-            child: Column(
+        ),
+        if (future == null)
+          const EmptyState(
+            message:
+                'Las oportunidades aparecerán aquí cuando te conectes a Fixia.',
+            icon: Icons.cloud_off_outlined,
+          )
+        else
+          FutureBuilder<List<ServiceOpportunity>>(
+            future: future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SectionLoading();
+              }
+              if (snapshot.hasError) {
+                return EmptyState(
+                  message: '${snapshot.error}',
+                  icon: Icons.error_outline_rounded,
+                  action: TextButton(
+                    onPressed: _reloadOpportunities,
+                    child: const Text('Reintentar'),
+                  ),
+                );
+              }
+              final items = snapshot.data!
+                  .take(TechnicianDashboardPage.opportunitiesLimit)
+                  .toList();
+              if (items.isEmpty && widget.loadMatchSetup != null) {
+                return MatchSetupSummary(
+                  message:
+                      'No hay solicitudes compatibles con tus especialidades y zona en este momento.',
+                  load: widget.loadMatchSetup!,
+                  onOpenAvailability: widget.onOpenAvailability == null
+                      ? null
+                      : _openAvailability,
+                  onOpenSpecialties: widget.onOpenSpecialties,
+                );
+              }
+              if (items.isEmpty) {
+                return const EmptyState(
+                  message:
+                      'No hay solicitudes compatibles con tus especialidades y zona en este momento.',
+                  icon: Icons.search_off_rounded,
+                );
+              }
+              return ResponsiveGrid(
+                minItemWidth: 260,
+                children: [
+                  for (final o in items)
+                    _OpportunityCard(
+                      opportunity: o,
+                      onApply: () => widget.onApplyToOpportunity != null
+                          ? widget.onApplyToOpportunity!(o.id)
+                          : widget.onOpenOpportunities?.call(),
+                    ),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _jobsSection(AsyncSnapshot<TechnicianWork> snapshot) {
+    Widget body;
+    if (_work == null) {
+      body = const EmptyState(
+        message: 'Tus trabajos aparecerán aquí cuando te conectes a Fixia.',
+        icon: Icons.cloud_off_outlined,
+      );
+    } else if (snapshot.connectionState != ConnectionState.done) {
+      body = const SectionLoading();
+    } else if (snapshot.hasError) {
+      body = EmptyState(
+        message: '${snapshot.error}',
+        icon: Icons.error_outline_rounded,
+        action: TextButton(
+          onPressed: _reloadWork,
+          child: const Text('Reintentar'),
+        ),
+      );
+    } else {
+      final work = snapshot.data!;
+      final cards = <Widget>[
+        for (final a in work.toQuote)
+          _JobCard(
+            key: ValueKey('technician-home-quote-${a.id}'),
+            eyebrow: 'TE ELIGIERON',
+            highlight: true,
+            title:
+                '${a.serviceRequest.category.label} · ${a.serviceRequest.zone}',
+            detail: a.proposedPrice == null
+                ? 'Envía tu cotización formal'
+                : 'Propusiste ${a.proposedPrice!.label}',
+            action: 'Enviar cotización',
+            onTap: widget.onOpenQuotation == null
+                ? null
+                : () => _openAndReload(() => widget.onOpenQuotation!(a)),
+          ),
+        for (final c in work.active)
+          _JobCard(
+            key: ValueKey('technician-home-contract-${c.id}'),
+            eyebrow: (c.serviceStatus?.label ?? 'Contratado').toUpperCase(),
+            title: '${c.request.category.label} · ${c.request.description}',
+            detail:
+                '${formatCents(c.amountInCents, c.currency)} · ${formatDateTime(c.agreedAt)}',
+            action: 'Ver contrato',
+            onTap: widget.onOpenContract == null
+                ? null
+                : () => _openAndReload(() => widget.onOpenContract!(c)),
+          ),
+      ].take(TechnicianDashboardPage.jobsLimit).toList();
+      body = cards.isEmpty
+          ? const EmptyState(
+              message:
+                  'Cuando un cliente te seleccione o te contrate, aparecerá aquí.',
+              icon: Icons.work_outline_rounded,
+            )
+          : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _VerificationBanner(status: verificationStatus),
-                const SizedBox(height: 14),
-                _AvailabilityCard(
-                  onAvailabilityChanged: onAvailabilityChanged,
-                  onOpenAvailability: onOpenAvailability,
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    key: const ValueKey('technician-open-specialties'),
-                    onPressed: onOpenSpecialties,
-                    icon: const Icon(Icons.tune_rounded, size: 18),
-                    label: const Text('Editar especialidades'),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Oportunidades Disponibles',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: FixiaColors.primary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const _NewOpportunitiesBadge(),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _OpportunityCard(
-                  id: 'plumbing-repair',
-                  title: 'Reparar fuga bajo el lavaplatos',
-                  customer: 'María López',
-                  category: 'Plomería',
-                  location: 'Chapinero, Bogotá',
-                  posted: 'Hace 5 min',
-                  budget: '\$80.000 – \$140.000',
-                  icon: Icons.plumbing_rounded,
-                  urgent: true,
-                  isVerified: isVerified,
-                  onApply: () => onApplyToOpportunity?.call('plumbing-repair'),
-                ),
-                const SizedBox(height: 12),
-                _OpportunityCard(
-                  id: 'ceiling-fan',
-                  title: 'Instalar ventilador de techo',
-                  customer: 'Andrés Ruiz',
-                  category: 'Electricidad',
-                  location: 'Usaquén, Bogotá',
-                  posted: 'Hace 18 min',
-                  budget: '\$65.000 – \$110.000',
-                  icon: Icons.electrical_services_rounded,
-                  isVerified: isVerified,
-                  onApply: () => onApplyToOpportunity?.call('ceiling-fan'),
-                ),
-                const SizedBox(height: 12),
-                _OpportunityCard(
-                  id: 'kitchen-circuit',
-                  title: 'Reparación de circuito en cocina',
-                  customer: 'Sofía Mora',
-                  category: 'Electricidad',
-                  location: 'Teusaquillo, Bogotá',
-                  posted: 'Hace 32 min',
-                  budget: '\$90.000 – \$150.000',
-                  icon: Icons.electrical_services_rounded,
-                  urgent: true,
-                  isVerified: isVerified,
-                  onApply: () => onApplyToOpportunity?.call('kitchen-circuit'),
-                ),
-                const SizedBox(height: 32),
-                const DashboardSectionHeading(
-                  title: 'Trabajos Asignados / En Curso',
-                  subtitle: 'Mantén al cliente al tanto de cada avance.',
-                ),
-                const SizedBox(height: 14),
-                _AssignedJobCard(
-                  title: 'Mantenimiento de calentador',
-                  client: 'Valentina P. · En curso',
-                  onRecordEvidence: onRecordEvidence,
-                  onMarkFinished: onMarkFinished,
-                ),
-                const SizedBox(height: 32),
-                _WalletCard(onRequestWithdrawal: onRequestWithdrawal),
+                for (final card in cards) ...[
+                  card,
+                  const SizedBox(height: 12),
+                ],
               ],
-            ),
+            );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionTitle(
+          title: 'Mis trabajos',
+          action: TextButton(
+            key: const ValueKey('technician-open-jobs'),
+            onPressed: widget.onOpenJobs,
+            child: const Text('Ver todos'),
           ),
-        ],
-      ),
+        ),
+        body,
+      ],
     );
   }
 }
 
-class _TechnicianHeader extends StatelessWidget {
-  const _TechnicianHeader({
-    required this.firstName,
-    required this.status,
-    required this.onOpenSettings,
-    required this.onLogout,
-  });
+class _SetupBanner extends StatelessWidget {
+  const _SetupBanner({required this.onConfigure});
 
-  final String? firstName;
-  final VerificationStatus status;
-  final VoidCallback? onOpenSettings;
-  final VoidCallback? onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-      decoration: const BoxDecoration(
-        color: FixiaColors.primary,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Bienvenido,',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFFB7CCE8),
-                          ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      firstName == null || firstName!.trim().isEmpty
-                          ? 'Carlos Mendoza'
-                          : firstName!,
-                      key: const ValueKey('technician-dashboard-greeting'),
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: FixiaColors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    _VerificationBadge(status: status),
-                  ],
-                ),
-              ),
-              IconButton(
-                key: const ValueKey('technician-dashboard-settings'),
-                tooltip: 'Ajustes',
-                onPressed: onOpenSettings ?? () => _showProfileMessage(context),
-                icon: const Icon(
-                  Icons.settings_outlined,
-                  color: FixiaColors.white,
-                ),
-              ),
-              if (onLogout != null)
-                IconButton(
-                  key: const ValueKey('technician-dashboard-logout'),
-                  tooltip: 'Cerrar sesión',
-                  onPressed: onLogout,
-                  icon: const Icon(
-                    Icons.logout_rounded,
-                    color: FixiaColors.white,
-                  ),
-                ),
-              const SizedBox(width: 4),
-              InkWell(
-                key: const ValueKey('technician-dashboard-profile'),
-                onTap: onOpenSettings ?? () => _showProfileMessage(context),
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: const BoxDecoration(
-                    color: FixiaColors.supportBackground,
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    'CM',
-                    style: TextStyle(
-                      color: FixiaColors.primary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          const Row(
-            children: [
-              Expanded(
-                child: _TechnicianStat(value: '3', label: 'Trabajos hoy'),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _TechnicianStat(value: '4.8', label: 'Rating'),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: _TechnicianStat(value: '\$1.2M', label: 'Ingresos mes'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TechnicianStat extends StatelessWidget {
-  const _TechnicianStat({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
-      decoration: const BoxDecoration(
-        color: Color(0x1FFFFFFF),
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            maxLines: 1,
-            style: const TextStyle(
-              color: FixiaColors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFFB7CCE8),
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AvailabilityCard extends StatefulWidget {
-  const _AvailabilityCard({required this.onAvailabilityChanged, this.onOpenAvailability});
-
-  final ValueChanged<bool>? onAvailabilityChanged;
-  final VoidCallback? onOpenAvailability;
-
-  @override
-  State<_AvailabilityCard> createState() => _AvailabilityCardState();
-}
-
-class _AvailabilityCardState extends State<_AvailabilityCard> {
-  bool _isAvailable = true;
+  final VoidCallback? onConfigure;
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        key: const ValueKey('technician-setup-banner'),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: FixiaColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE3EAF4)),
-          boxShadow: const [BoxShadow(color: Color(0x1001255D), blurRadius: 10, offset: Offset(0, 3))],
+          color: FixiaColors.primary,
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Column(
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: const BoxDecoration(color: Color(0x2600B79E), shape: BoxShape.circle),
-                  child: const Icon(Icons.circle, color: FixiaColors.accent, size: 12),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(_isAvailable ? 'Disponible para trabajos' : 'No disponible', style: const TextStyle(color: FixiaColors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
-                      const SizedBox(height: 2),
-                      Text(_isAvailable ? 'Recibes solicitudes nuevas' : 'No recibirás solicitudes nuevas', style: Theme.of(context).textTheme.bodySmall),
-                    ],
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.event_busy_rounded, color: Color(0xFF7FE0CF)),
+                  SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Configura tu horario y zona de atención',
+                          style: TextStyle(
+                            color: FixiaColors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Sin ellos no te llega ninguna solicitud: los clientes buscan técnicos de su ciudad que atiendan a la hora que necesitan.',
+                          style:
+                              TextStyle(color: Color(0xFFDCEBFF), fontSize: 13),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Switch(
-                  key: const ValueKey('technician-availability-switch'),
-                  value: _isAvailable,
-                  activeColor: FixiaColors.secondary,
-                  onChanged: (value) {
-                    setState(() => _isAvailable = value);
-                    widget.onAvailabilityChanged?.call(value);
-                  },
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                key: const ValueKey('technician-open-availability'),
-                onPressed: widget.onOpenAvailability,
-                icon: const Icon(Icons.edit_calendar_rounded, size: 17),
-                label: const Text('Horario y zona de atención'),
-                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                ],
               ),
             ),
+            if (onConfigure != null)
+              FilledButton(
+                key: const ValueKey('technician-setup-configure'),
+                onPressed: onConfigure,
+                style: FilledButton.styleFrom(
+                  backgroundColor: FixiaColors.white,
+                  foregroundColor: FixiaColors.primary,
+                ),
+                child: const Text('Configurar ahora'),
+              ),
           ],
         ),
       );
 }
-class _NewOpportunitiesBadge extends StatelessWidget {
-  const _NewOpportunitiesBadge();
+
+class _VerificationBadge extends StatelessWidget {
+  const _VerificationBadge({required this.status});
+
+  final VerificationStatus status;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: FixiaColors.supportBackground,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-        child: Text(
-          '3 nuevas',
-          style: TextStyle(
-            color: FixiaColors.secondary,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
-        ),
-      ),
+    final (label, tone) = switch (status) {
+      VerificationStatus.pending => ('PENDIENTE', PillTone.warning),
+      VerificationStatus.valid => ('VIGENTE', PillTone.success),
+      VerificationStatus.rejected => ('RECHAZADA', PillTone.warning),
+      VerificationStatus.expired => ('VENCIDA', PillTone.warning),
+    };
+    return Padding(
+      key: const ValueKey('technician-verification-badge'),
+      padding: const EdgeInsets.only(top: 8),
+      child: StatusPill(label: label, tone: tone),
     );
   }
 }
@@ -415,592 +513,254 @@ class _VerificationBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPending = status == VerificationStatus.pending;
-    final isValid = status == VerificationStatus.valid;
-    final color = isValid
-        ? FixiaColors.accent
-        : status == VerificationStatus.rejected ||
-                status == VerificationStatus.expired
-            ? FixiaColors.error
-            : const Color(0xFF9A5B00);
-    final message = switch (status) {
-      VerificationStatus.pending =>
-        'Tu cuenta está en proceso de verificación. La opción de postularse se habilitará al ser aprobado.',
-      VerificationStatus.valid =>
-        'Tu cuenta está verificada. Ya puedes postularte a nuevas oportunidades.',
-      VerificationStatus.rejected =>
-        'Tu verificación fue rechazada. Revisa tus documentos para continuar.',
-      VerificationStatus.expired =>
-        'Tu verificación está vencida. Actualiza tus documentos para postularte.',
-    };
-    return Container(
-      key: const ValueKey('technician-verification-banner'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: switch (status) {
-          VerificationStatus.pending => const Color(0xFFFFF4DF),
-          VerificationStatus.valid => const Color(0xFFE5F7F3),
-          VerificationStatus.rejected ||
-          VerificationStatus.expired =>
-            const Color(0xFFFDECEA),
-        },
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isPending
-                ? Icons.hourglass_top_rounded
-                : Icons.info_outline_rounded,
-            color: color,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: FixiaColors.textPrimary,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VerificationBadge extends StatelessWidget {
-  const _VerificationBadge({required this.status});
-
-  final VerificationStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color, background) = switch (status) {
+    final (message, tone) = switch (status) {
       VerificationStatus.pending => (
-          'PENDIENTE',
-          const Color(0xFF9A5B00),
-          const Color(0xFFFFF4DF)
+          'Tu cuenta está en proceso de verificación. Los clientes verán este estado al comparar tu propuesta.',
+          PillTone.warning
         ),
       VerificationStatus.valid => (
-          'VIGENTE',
-          FixiaColors.accent,
-          const Color(0xFFE5F7F3)
+          'Tu cuenta está verificada. Ya puedes postularte a nuevas oportunidades.',
+          PillTone.success
         ),
       VerificationStatus.rejected => (
-          'RECHAZADA',
-          FixiaColors.error,
-          const Color(0xFFFDECEA)
+          'Tu verificación fue rechazada. Revisa tus documentos para continuar.',
+          PillTone.warning
         ),
       VerificationStatus.expired => (
-          'VENCIDA',
-          FixiaColors.error,
-          const Color(0xFFFDECEA)
+          'Tu verificación está vencida. Actualiza tus documentos para postularte.',
+          PillTone.warning
         ),
     };
-    return Container(
-      key: const ValueKey('technician-verification-badge'),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
+    return NoticeBanner(
+      key: const ValueKey('technician-verification-banner'),
+      message: message,
+      tone: tone,
+      icon: status == VerificationStatus.pending
+          ? Icons.hourglass_top_rounded
+          : Icons.info_outline_rounded,
     );
   }
 }
 
 class _OpportunityCard extends StatelessWidget {
-  const _OpportunityCard({
-    required this.id,
-    required this.title,
-    required this.customer,
-    required this.category,
-    required this.location,
-    required this.posted,
-    required this.budget,
-    required this.icon,
-    this.urgent = false,
-    required this.isVerified,
-    required this.onApply,
-  });
+  const _OpportunityCard({required this.opportunity, required this.onApply});
 
-  final String id;
-  final String title;
-  final String customer;
-  final String category;
-  final String location;
-  final String posted;
-  final String budget;
-  final IconData icon;
-  final bool urgent;
-  final bool isVerified;
+  final ServiceOpportunity opportunity;
   final VoidCallback onApply;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: FixiaColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE3EAF4)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1001255D),
-            blurRadius: 10,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEEF5FF),
-                  shape: BoxShape.circle,
+  Widget build(BuildContext context) => FixiaPanel(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Flexible(
+                  child: StatusPill(label: opportunity.category.label),
                 ),
-                alignment: Alignment.center,
-                child: Text(
-                  customer.split(' ').map((part) => part[0]).take(2).join(),
-                  style: const TextStyle(
-                    color: FixiaColors.secondary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 3),
-                    Text(customer, style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              if (urgent) ...[
-                const SizedBox(width: 6),
-                const _UrgentBadge(),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 10,
-            runSpacing: 6,
-            children: [
-              _OpportunityMeta(
-                icon: Icons.location_on_outlined,
-                label: location,
-              ),
-              _OpportunityMeta(
-                icon: Icons.schedule_rounded,
-                label: posted,
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              Text(
-                'Ubicación aproximada',
-                style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
-              ),
-              _OpportunityTag(label: category),
-            ],
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: Color(0xFFE7EDF5)),
-          ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final budgetSummary = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Presupuesto', style: theme.textTheme.bodySmall),
-                  const SizedBox(height: 2),
-                  Text(
-                    budget,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: FixiaColors.secondary,
-                      fontWeight: FontWeight.w800,
+                const SizedBox(width: 8),
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    opportunity.postedLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: FixiaColors.textSecondary,
                     ),
                   ),
-                ],
-              );
-              final applyButton = FilledButton(
-                key: ValueKey(
-                  id == 'plumbing-repair'
-                      ? 'technician-apply'
-                      : 'technician-apply-$id',
                 ),
-                onPressed: isVerified ? onApply : null,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(112, 46),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                ),
-                child: const Text('Postularme'),
-              );
-
-              if (constraints.maxWidth < 320) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    budgetSummary,
-                    const SizedBox(height: 10),
-                    applyButton,
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(child: budgetSummary),
-                  const SizedBox(width: 8),
-                  applyButton,
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TechnicianNavigationBar extends StatelessWidget {
-  const _TechnicianNavigationBar({
-    required this.onOpenProfile,
-    this.onOpenOpportunities,
-  });
-
-  final VoidCallback onOpenProfile;
-  final VoidCallback? onOpenOpportunities;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 64,
-      decoration: const BoxDecoration(
-        color: FixiaColors.white,
-        border: Border(top: BorderSide(color: FixiaColors.supportBackground)),
-      ),
-      child: Row(
-        children: [
-          const _TechnicianNavItem(
-            icon: Icons.home_rounded,
-            label: 'Inicio',
-            selected: true,
-          ),
-          _TechnicianNavItem(
-            icon: Icons.work_outline_rounded,
-            label: 'Trabajos',
-            onPressed: onOpenOpportunities,
-          ),
-          const _TechnicianNavItem(
-            icon: Icons.account_balance_wallet_outlined,
-            label: 'Billetera',
-          ),
-          _TechnicianNavItem(
-            icon: Icons.person_outline_rounded,
-            label: 'Perfil',
-            onPressed: onOpenProfile,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TechnicianNavItem extends StatelessWidget {
-  const _TechnicianNavItem({
-    required this.icon,
-    required this.label,
-    this.selected = false,
-    this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? FixiaColors.secondary : const Color(0xFF9AAABD);
-    return Expanded(
-      child: InkWell(
-        key: ValueKey('technician-nav-${label.toLowerCase()}'),
-        onTap: onPressed ??
-            (label == 'Perfil' ? () => _showProfileMessage(context) : _noop),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 21, color: color),
-            const SizedBox(height: 3),
+              ],
+            ),
+            const SizedBox(height: 12),
             Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? FixiaColors.secondary
-                    : FixiaColors.textSecondary,
-                fontSize: 10,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              opportunity.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${opportunity.approximateLocation} · ${opportunity.expectedMoment}',
+              style: const TextStyle(
+                fontSize: 13,
+                color: FixiaColors.textSecondary,
               ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Presupuesto',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: FixiaColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        opportunity.budget,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: FixiaColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton(
+                  key: ValueKey('technician-apply-${opportunity.id}'),
+                  onPressed: onApply,
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                  child: const Text('Postularme'),
+                ),
+              ],
             ),
           ],
         ),
-      ),
-    );
-  }
+      );
 }
 
-class _AssignedJobCard extends StatelessWidget {
-  const _AssignedJobCard({
+class _JobCard extends StatelessWidget {
+  const _JobCard({
+    super.key,
+    required this.eyebrow,
     required this.title,
-    required this.client,
-    required this.onRecordEvidence,
-    required this.onMarkFinished,
+    required this.detail,
+    required this.action,
+    required this.onTap,
+    this.highlight = false,
   });
 
+  final String eyebrow;
   final String title;
-  final String client;
-  final VoidCallback? onRecordEvidence;
-  final VoidCallback? onMarkFinished;
+  final String detail;
+  final String action;
+  final VoidCallback? onTap;
+  final bool highlight;
 
   @override
-  Widget build(BuildContext context) {
-    return DashboardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 6),
-          Text(client, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 14),
-          const ApproximateLocationLabel(),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('technician-record-evidence'),
-                onPressed: onRecordEvidence ?? _noop,
-                icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                label: const Text('Registrar Avance / Evidencia'),
+  Widget build(BuildContext context) => FixiaPanel(
+        padding: const EdgeInsets.all(16),
+        highlight: highlight ? FixiaColors.secondary : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              eyebrow,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+                color:
+                    highlight ? FixiaColors.secondary : const Color(0xFF00745F),
               ),
-              FilledButton.tonal(
-                key: const ValueKey('technician-mark-finished'),
-                onPressed: onMarkFinished ?? _noop,
-                child: const Text('Marcar Finalizado'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WalletCard extends StatelessWidget {
-  const _WalletCard({required this.onRequestWithdrawal});
-
-  final VoidCallback? onRequestWithdrawal;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('technician-wallet-summary'),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: FixiaColors.primary,
-        borderRadius: BorderRadius.circular(FixiaRadii.card),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.account_balance_wallet_outlined,
-                  color: FixiaColors.white),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Mi billetera',
-                  style: TextStyle(
-                    color: FixiaColors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          const Row(
-            children: [
-              Expanded(
-                child: _WalletBalance(
-                  label: 'Saldo disponible',
-                  amount: '\$385.000',
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: _WalletBalance(
-                  label: 'Saldo retenido',
-                  amount: '\$120.000',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          OutlinedButton.icon(
-            key: const ValueKey('technician-request-withdrawal'),
-            onPressed: onRequestWithdrawal ?? _noop,
-            icon: const Icon(Icons.south_west_rounded, size: 18),
-            label: const Text('Solicitar Retiro'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: FixiaColors.white,
-              side: const BorderSide(color: FixiaColors.white),
             ),
-          ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detail,
+              style: const TextStyle(
+                fontSize: 13,
+                color: FixiaColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (highlight)
+              FilledButton(
+                onPressed: onTap,
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+                child: Text(action),
+              )
+            else
+              OutlinedButton(
+                onPressed: onTap,
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 40)),
+                child: Text(action),
+              ),
+          ],
+        ),
+      );
+}
+
+class _QuickLinks extends StatelessWidget {
+  const _QuickLinks({
+    required this.onOpenSpecialties,
+    required this.onOpenAvailability,
+    required this.onOpenChat,
+  });
+
+  final VoidCallback? onOpenSpecialties;
+  final VoidCallback? onOpenAvailability;
+  final VoidCallback? onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onOpenSpecialties == null &&
+        onOpenAvailability == null &&
+        onOpenChat == null) {
+      return const SizedBox.shrink();
+    }
+    return FixiaPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (onOpenSpecialties != null)
+            _link(
+              key: 'technician-open-specialties',
+              icon: Icons.tune_rounded,
+              label: 'Editar especialidades',
+              onTap: onOpenSpecialties,
+            ),
+          if (onOpenAvailability != null)
+            _link(
+              key: 'technician-open-availability',
+              icon: Icons.edit_calendar_rounded,
+              label: 'Horario y zona de atención',
+              onTap: onOpenAvailability,
+            ),
+          if (onOpenChat != null)
+            _link(
+              key: 'technician-open-chat-prototype',
+              icon: Icons.chat_bubble_outline_rounded,
+              label: 'Chat de demostración',
+              onTap: onOpenChat,
+            ),
         ],
       ),
     );
   }
-}
 
-class _WalletBalance extends StatelessWidget {
-  const _WalletBalance({required this.label, required this.amount});
-
-  final String label;
-  final String amount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Color(0xFFDCEBFF), fontSize: 12),
+  Widget _link({
+    required String key,
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) =>
+      TextButton.icon(
+        key: ValueKey(key),
+        onPressed: onTap,
+        icon: Icon(icon, size: 19),
+        label: Align(alignment: Alignment.centerLeft, child: Text(label)),
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 46),
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
         ),
-        const SizedBox(height: 4),
-        Text(
-          amount,
-          style: const TextStyle(
-            color: FixiaColors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _OpportunityTag extends StatelessWidget {
-  const _OpportunityTag({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: FixiaColors.supportBackground,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.bodySmall),
-    );
-  }
-}
-
-class _UrgentBadge extends StatelessWidget {
-  const _UrgentBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFE7E6),
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        child: Text(
-          'URGENTE',
-          style: TextStyle(
-            color: FixiaColors.error,
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OpportunityMeta extends StatelessWidget {
-  const _OpportunityMeta({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: FixiaColors.textSecondary, size: 16),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-void _noop() {}
-
-void _showProfileMessage(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text(
-        'El perfil profesional existe para cuentas autenticadas; esta demo no tiene una sesión activa.',
-      ),
-    ),
-  );
+      );
 }

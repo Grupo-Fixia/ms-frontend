@@ -2,13 +2,18 @@
 enum UserRole {
   client('Cliente'),
   professional('Técnico'),
+
+  /// Administrador de una empresa prestadora (GC-466, GC-467). Distinto de
+  /// [admin], que es del equipo de Fixia.
+  company('Empresa'),
   admin('Administrador');
 
   const UserRole(this.label);
 
   final String label;
 
-  /// Valor del enum `Role` de ms-users (`CLIENT`, `PROFESSIONAL`, `ADMIN`).
+  /// Valor del enum `Role` de ms-users (`CLIENT`, `PROFESSIONAL`, `COMPANY`,
+  /// `ADMIN`).
   /// Devuelve `null` si el backend envía un rol que el frontend no conoce.
   static UserRole? fromApi(String? value) {
     for (final role in values) {

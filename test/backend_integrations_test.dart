@@ -28,6 +28,7 @@ import 'package:ms_frontend/features/technician/opportunities/domain/opportunity
 import 'package:ms_frontend/main.dart';
 
 import 'features/auth/login/fake_auth_repository.dart';
+import 'features/service_flow_fakes.dart';
 import 'features/auth/registration/fake_repository.dart';
 import 'features/technician/profile/fake_repository.dart';
 import 'features/technician/profile/fixtures.dart';
@@ -46,9 +47,14 @@ const _technician = UserProfile(
 class _Profiles implements ClientProfileRepository {
   ClientProfileUpdate? saved;
   Object? failure;
+  Object? fetchFailure;
+  ClientProfile? stored;
 
   @override
-  Future<ClientProfile> fetchProfile() => throw UnimplementedError();
+  Future<ClientProfile> fetchProfile() async {
+    if (fetchFailure != null) throw fetchFailure!;
+    return stored ?? (throw StateError('sin perfil guardado'));
+  }
 
   @override
   Future<ClientProfile> updateProfile(ClientProfileUpdate update) async {
@@ -79,6 +85,7 @@ class _Requests implements ServiceRequestRepository {
       status: ServiceRequestStatus.published,
       approximateLocation: request.approximateLocation,
       expectedAt: request.expectedAt!,
+      budget: request.budget,
     );
   }
 
@@ -118,14 +125,19 @@ class _Opportunities implements OpportunityRepository {
 
 class _Applications implements ApplicationRepository {
   final applied = <String>[];
+  final saved = <ServiceApplication>[];
+  ProposedPrice? price;
   Object? failure;
 
   @override
-  Future<ServiceApplication> apply(String serviceRequestId) async {
+  Future<ServiceApplication> apply(String serviceRequestId,
+      {ProposedPrice? proposedPrice}) async {
     if (failure != null) throw failure!;
     applied.add(serviceRequestId);
-    return ServiceApplication(
+    price = proposedPrice;
+    final result = ServiceApplication(
       id: 'app-1',
+      proposedPrice: proposedPrice,
       status: ApplicationStatus.applied,
       serviceRequest: ApplicationRequestSummary(
         id: serviceRequestId,
@@ -134,10 +146,12 @@ class _Applications implements ApplicationRepository {
         zone: 'Chapinero',
       ),
     );
+    saved.add(result);
+    return result;
   }
 
   @override
-  Future<List<ServiceApplication>> listMine() => throw UnimplementedError();
+  Future<List<ServiceApplication>> listMine() async => List.unmodifiable(saved);
 
   @override
   Future<ServiceApplication> getMine(String id) => throw UnimplementedError();
@@ -199,6 +213,8 @@ void main() {
           serviceRequests: requests,
           opportunities: opportunities,
           applications: applications,
+          quotations: FakeQuotations(),
+          contracts: FakeContracts(),
         ),
         clientRegistrationRepository: FakeAccountRegistrationRepository(),
         technicianRegistrationRepository: FakeAccountRegistrationRepository(),
@@ -217,12 +233,14 @@ void main() {
 
   Finder key(String value) => find.byKey(ValueKey(value));
 
-  Future<void> scrollTo(WidgetTester tester, Finder target) =>
-      tester.scrollUntilVisible(
-        target,
-        240,
-        scrollable: find.byType(Scrollable).first,
-      );
+  Future<void> scrollTo(WidgetTester tester, Finder target) async {
+    await tester.scrollUntilVisible(
+      target,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+  }
 
   group('GC-320 perfil del cliente', () {
     Future<void> editAndSave(WidgetTester tester) async {
@@ -264,6 +282,47 @@ void main() {
           reason: 'sigue editando');
     });
 
+    testWidgets(
+        'carga del servidor el teléfono que la sesión no trae y deja guardar '
+        'sin volver a escribirlo', (tester) async {
+      profiles.stored = const ClientProfile(
+        id: 'cli',
+        email: 'ana@fixia.com',
+        firstName: 'Ana',
+        lastName: 'Pérez',
+        phone: '3009998877',
+      );
+      await pump(
+        tester,
+        fixtureProfile.copyWith(phone: ''),
+        AppRoutes.clientProfile,
+      );
+      expect(find.text('3009998877'), findsOneWidget);
+
+      await tester.tap(key('client-profile-edit'));
+      await tester.pumpAndSettle();
+      await tester.enterText(key('client-profile-first-name'), 'Ana María');
+      await tester.ensureVisible(key('client-profile-save'));
+      await tester.tap(key('client-profile-save'));
+      await tester.pumpAndSettle();
+
+      expect(profiles.saved?.phone, '3009998877');
+      expect(profiles.saved?.firstName, 'Ana María');
+      expect(find.textContaining('/16'), findsNothing,
+          reason: 'sin el contador de 16 que confundía');
+    });
+
+    testWidgets('si la sesión venció al cargar el perfil, lleva al login',
+        (tester) async {
+      profiles.fetchFailure =
+          const ClientProfileFailure('Sesión vencida', isSessionExpired: true);
+
+      final store = await pump(tester, fixtureProfile, AppRoutes.clientProfile);
+
+      expect(store.isAuthenticated, isFalse);
+      expect(key('login-submit'), findsOneWidget);
+    });
+
     testWidgets('si la sesión venció, lleva al login', (tester) async {
       profiles.failure =
           const ClientProfileFailure('Sesión vencida', isSessionExpired: true);
@@ -284,27 +343,39 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(
           key('client-request-description'), 'Fuga en el lavaplatos');
+      await scrollTo(tester, key('client-request-budget'));
+      await tester.enterText(key('client-request-budget'), '150000');
       if (location) {
+        await scrollTo(tester, key('client-request-change-location'));
         await tester.tap(key('client-request-change-location'));
         await tester.pumpAndSettle();
-        await tester.enterText(key('client-request-city'), ' Bogotá ');
+        await tester.tap(key('client-request-city'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Bogotá').last);
+        await tester.pumpAndSettle();
         await tester.enterText(key('client-request-zone'), 'Chapinero');
         await tester.tap(key('client-request-location-save'));
         await tester.pumpAndSettle();
       }
+      await scrollTo(tester, key('client-request-expected-at'));
       await tester.tap(key('client-request-expected-at'));
       await tester.pumpAndSettle();
-      final now = DateTime.now();
-      // Mañana, para que siempre sea un momento futuro.
-      final tomorrow = now.add(const Duration(days: 1));
-      if (tomorrow.month != now.month) {
-        await tester.tap(find.byIcon(Icons.chevron_right));
+      // Mañana a las 10:00, para que siempre sea un momento futuro.
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      String two(int n) => n.toString().padLeft(2, '0');
+      final day = key(
+          'fixia-picker-day-${tomorrow.year}-${two(tomorrow.month)}-${two(tomorrow.day)}');
+      if (day.evaluate().isEmpty) {
+        await tester.tap(key('fixia-picker-next'));
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.text('${tomorrow.day}').last);
-      await tester.tap(find.text('Continuar'));
+      await tester.ensureVisible(day);
+      await tester.tap(day);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Aceptar'));
+      await tester.ensureVisible(key('fixia-picker-slot-10:00'));
+      await tester.tap(key('fixia-picker-slot-10:00'));
+      await tester.pumpAndSettle();
+      await tester.tap(key('fixia-picker-confirm'));
       await tester.pumpAndSettle();
     }
 
@@ -328,7 +399,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(key('client-request-location-save'));
       await tester.pumpAndSettle();
-      expect(find.text('Escribe la ciudad.'), findsOneWidget);
+      expect(find.text('Elige la ciudad.'), findsOneWidget);
       expect(find.text('Escribe el barrio o localidad.'), findsOneWidget);
 
       await tester.tap(find.text('Cancelar'));
@@ -354,6 +425,7 @@ void main() {
       expect(sent.approximateLocation.city, 'Bogotá');
       expect(sent.approximateLocation.zone, 'Chapinero');
       expect(sent.photoKeys, isEmpty);
+      expect(sent.budget!.amount, '150000');
       expect(find.text('Solicitud publicada'), findsOneWidget);
       expect(find.textContaining('demostración'), findsNothing);
 
@@ -377,6 +449,15 @@ void main() {
 
       expect(find.text('El momento esperado debe ser futuro.'), findsOneWidget);
       expect(find.text('Solicitud publicada'), findsNothing);
+      await scrollTo(tester, key('client-request-budget'));
+      expect(
+        tester
+            .widget<TextFormField>(key('client-request-budget'))
+            .controller!
+            .text,
+        '150000',
+        reason: 'un error no borra el presupuesto escrito',
+      );
     });
   });
 
@@ -422,7 +503,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Fuga en el baño principal'), findsWidgets);
       expect(find.textContaining('Demostración local'), findsNothing);
-      await tester.tap(key('technician-apply-sr-leak'));
+      final price = key('application-price');
+      await tester.ensureVisible(price);
+      await tester.enterText(price, '150000');
+      await tester.ensureVisible(key('application-price-submit'));
+      await tester.tap(key('application-price-submit'));
       await tester.pumpAndSettle();
     }
 
@@ -432,7 +517,26 @@ void main() {
       await applyTo(tester);
 
       expect(applications.applied, ['sr-leak']);
+      expect(applications.price?.amount, '150000');
       expect(key('technician-apply-done'), findsOneWidget);
+    });
+
+    testWidgets(
+        'precio confirmado se recupera al consultar y refrescar postulaciones',
+        (tester) async {
+      await pump(tester, _technician, AppRoutes.technicianOpportunities);
+      await applyTo(tester);
+      expect(find.text('Precio confirmado: 150.000 COP'), findsOneWidget);
+      await tester.tap(find.byTooltip('Cerrar detalle'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(key('open-my-applications'));
+      await tester.tap(key('open-my-applications'));
+      await tester.pumpAndSettle();
+      expect(find.text('150.000 COP'), findsOneWidget);
+      await tester.tap(key('my-applications-refresh'));
+      await tester.pumpAndSettle();
+      expect(find.text('150.000 COP'), findsOneWidget);
+      expect(applications.applied.length, 1);
     });
 
     testWidgets('si no puede postularse, explica el motivo', (tester) async {

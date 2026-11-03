@@ -43,6 +43,114 @@ Map<String, Object?> _selectedRequest() => {
 
 void main() {
   group('listApplicants', () {
+    test('trae precio propuesto y perfil público del prestador (GC-425)',
+        () async {
+      final applicants = await _repository((_) async => _json(200, [
+            {
+              'id': 'app-1',
+              'providerId': 'tec-1',
+              'providerType': 'INDEPENDENT',
+              'status': 'APPLIED',
+              'proposedAmount': 150000.0,
+              'currency': 'COP',
+              'provider': {
+                'displayName': 'Carlos G.',
+                'verificationStatus': 'PENDING',
+                'categories': ['PLUMBING', 'GARDENING'],
+                'professionalDescription': 'Plomero',
+                'yearsOfExperience': 8,
+                'city': 'Bogotá',
+              },
+            },
+          ])).listApplicants('req-1');
+
+      final applicant = applicants.single;
+      expect(applicant.providerType, ProviderType.independent);
+      expect(applicant.proposedPrice!.label, '150.000 COP');
+      expect(applicant.displayName, 'Carlos G.');
+      final profile = applicant.workerProfile!;
+      expect(profile.verificationStatus, VerificationStatus.pending);
+      expect(profile.categories.map((c) => c.apiValue), ['PLUMBING']);
+      expect(profile.yearsOfExperience, 8);
+      expect(profile.city, 'Bogotá');
+    });
+
+    test('sin perfil, sin precio o con perfil vacío no inventa datos',
+        () async {
+      final applicants = await _repository((_) async => _json(200, [
+            {
+              'id': 'app-1',
+              'providerId': 'tec-1',
+              'status': 'APPLIED',
+              'proposedAmount': null,
+              'currency': null,
+              'provider': null,
+            },
+            {
+              'id': 'app-2',
+              'providerId': 'tec-2',
+              'status': 'APPLIED',
+              'proposedAmount': 'no-es-número',
+              'currency': 'COP',
+              'provider': {
+                'displayName': null,
+                'verificationStatus': null,
+                'categories': null,
+                'professionalDescription': '  ',
+                'yearsOfExperience': null,
+                'city': null,
+              },
+            },
+          ])).listApplicants('req-1');
+
+      expect(applicants.first.provider, isNull);
+      expect(applicants.first.proposedPrice, isNull);
+      expect(applicants.first.displayName, 'Prestador no disponible');
+      expect(applicants.last.proposedPrice, isNull);
+      expect(applicants.last.provider!.professionalDescription, isNull);
+      expect(applicants.last.provider!.categories, isEmpty);
+      expect(applicants.last.displayName, 'Prestador no disponible');
+    });
+
+    test('empresa: nombre comercial y técnico propuesto (GC-468)', () async {
+      final applicant = (await _repository((_) async => _json(200, [
+                {
+                  'id': 'app-1',
+                  'providerId': 'emp-1',
+                  'providerType': 'COMPANY',
+                  'technicianId': 'tec-9',
+                  'status': 'APPLIED',
+                  'proposedAmount': 180000,
+                  'currency': 'COP',
+                  'provider': {'displayName': 'Arreglos SAS', 'categories': []},
+                  'executor': {
+                    'displayName': 'Laura M.',
+                    'verificationStatus': 'VALID',
+                    'categories': ['ELECTRICAL'],
+                  },
+                },
+              ])).listApplicants('req-1'))
+          .single;
+
+      expect(applicant.isCompany, isTrue);
+      expect(applicant.technicianId, 'tec-9');
+      expect(applicant.displayName, 'Arreglos SAS');
+      expect(applicant.workerProfile!.displayName, 'Laura M.');
+      expect(applicant.workerProfile!.verificationStatus,
+          VerificationStatus.valid);
+    });
+
+    test('503: los perfiles no están disponibles', () async {
+      await expectLater(
+        _repository((_) async => _json(503, {
+              'title': 'Perfiles no disponibles',
+              'status': 503,
+            })).listApplicants('req-1'),
+        throwsA(
+            _failure(HttpServiceRequestRepository.profilesUnavailableMessage)),
+      );
+    });
+
     test('consulta los postulantes en orden de llegada', () async {
       late http.Request sent;
       final applicants = await _repository((request) async {

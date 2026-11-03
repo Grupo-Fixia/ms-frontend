@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
+import '../../../../core/domain/service_budget.dart';
 import '../application/ports/opportunity_repository.dart';
 import '../domain/opportunity.dart';
 import '../domain/opportunity_exceptions.dart';
@@ -67,7 +68,7 @@ class HttpOpportunityRepository implements OpportunityRepository {
 
     switch (response.statusCode) {
       case 200:
-        return _parsePage(_decode(response));
+        return parsePage(_decode(response));
       case 400:
         throw const OpportunityFailure(invalidQueryMessage);
       case 403:
@@ -79,7 +80,7 @@ class HttpOpportunityRepository implements OpportunityRepository {
     }
   }
 
-  OpportunityPage _parsePage(Object? json) {
+  OpportunityPage parsePage(Object? json) {
     if (json is! Map || json['items'] is! List) {
       throw const OpportunityFailure(unexpectedErrorMessage);
     }
@@ -120,7 +121,17 @@ class HttpOpportunityRepository implements OpportunityRepository {
       latitude: _double(json['latitude']),
       longitude: _double(json['longitude']),
       publishedAt: _date(json['publishedAt']),
+      budget: _budget(json),
     );
+  }
+
+  ServiceBudget? _budget(Map json) {
+    try {
+      return ServiceBudget.fromJson(
+          json['budgetAmount'], json['budgetCurrency']);
+    } on FormatException {
+      throw const OpportunityFailure(unexpectedErrorMessage);
+    }
   }
 
   String? _string(Object? value) => value is String ? value : null;

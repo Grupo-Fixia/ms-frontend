@@ -1,5 +1,8 @@
 /// Configuración de la API, fijada al compilar con `--dart-define`.
 abstract final class ApiConfig {
+  static const paymentsBaseUrl = String.fromEnvironment('PAYMENTS_API_BASE_URL',
+      defaultValue: usersBaseUrl);
+
   /// URL base de ms-users. Por defecto, el origen que sirve Traefik; el
   /// `Dockerfile` la sobrescribe con `USERS_API_BASE_URL`.
   static const usersBaseUrl = String.fromEnvironment(

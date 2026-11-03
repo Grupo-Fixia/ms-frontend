@@ -1,5 +1,6 @@
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/constants/service_request_status.dart';
+import '../../../../core/domain/service_budget.dart';
 
 export '../../../../core/constants/service_request_status.dart';
 
@@ -43,6 +44,7 @@ class ServiceRequest {
     this.selectedProviderId,
     this.publishedAt,
     this.updatedAt,
+    this.budget,
   });
 
   final String id;
@@ -58,6 +60,9 @@ class ServiceRequest {
   final String? selectedProviderId;
   final DateTime? publishedAt;
   final DateTime? updatedAt;
+
+  /// Null para solicitudes históricas o respuestas sin el nuevo contrato.
+  final ServiceBudget? budget;
 }
 
 /// Datos que el cliente escribe para publicar una solicitud.
@@ -69,6 +74,7 @@ class NewServiceRequest {
     required this.expectedAt,
     this.exactLocation,
     this.photoKeys = const [],
+    this.budget,
   });
 
   final ServiceCategory? category;
@@ -76,6 +82,7 @@ class NewServiceRequest {
   final ApproximateLocation approximateLocation;
   final DateTime? expectedAt;
   final ExactLocation? exactLocation;
+  final ServiceBudget? budget;
 
   /// Claves de fotos ya subidas al almacenamiento (la subida no es parte de
   /// la API de solicitudes).

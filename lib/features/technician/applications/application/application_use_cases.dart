@@ -11,7 +11,8 @@ class ApplyToServiceRequest {
 
   final ApplicationRepository _repository;
 
-  Future<ServiceApplication> call(String serviceRequestId) async {
+  Future<ServiceApplication> call(String serviceRequestId,
+      {ProposedPrice? proposedPrice}) async {
     final id = serviceRequestId.trim();
     if (id.isEmpty) {
       throw const ApplicationFailure(
@@ -19,7 +20,15 @@ class ApplyToServiceRequest {
         fieldErrors: {'serviceRequestId': missingRequestMessage},
       );
     }
-    return _repository.apply(id);
+    if (proposedPrice == null) {
+      throw const ApplicationFailure(
+        'Ingresa el precio que propones en COP.',
+        fieldErrors: {
+          'proposedAmount': 'Ingresa el precio que propones en COP.'
+        },
+      );
+    }
+    return _repository.apply(id, proposedPrice: proposedPrice);
   }
 }
 

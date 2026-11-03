@@ -18,11 +18,14 @@ const _application = ServiceApplication(
 
 class _FakeRepository implements ApplicationRepository {
   String? appliedTo;
+  ProposedPrice? price;
   String? requestedId;
 
   @override
-  Future<ServiceApplication> apply(String serviceRequestId) async {
+  Future<ServiceApplication> apply(String serviceRequestId,
+      {ProposedPrice? proposedPrice}) async {
     appliedTo = serviceRequestId;
+    price = proposedPrice;
     return _application;
   }
 
@@ -70,9 +73,11 @@ void main() {
     test('se postula con el id sin espacios', () async {
       final repository = _FakeRepository();
 
-      final application = await ApplyToServiceRequest(repository)(' req-1 ');
+      final application = await ApplyToServiceRequest(repository)(' req-1 ',
+          proposedPrice: ProposedPrice.tryParse('150000,50'));
 
       expect(repository.appliedTo, 'req-1');
+      expect(repository.price?.amount, '150000.5');
       expect(application.status, ApplicationStatus.applied);
     });
 
@@ -87,6 +92,13 @@ void main() {
           ['serviceRequestId'],
         )),
       );
+      expect(repository.appliedTo, isNull);
+    });
+
+    test('sin precio no envía una postulación incompleta', () async {
+      final repository = _FakeRepository();
+      await expectLater(ApplyToServiceRequest(repository)('req-1'),
+          throwsA(isA<ApplicationFailure>()));
       expect(repository.appliedTo, isNull);
     });
 
