@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/domain/service_budget.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/applicant.dart';
+import 'package:ms_frontend/features/client/service_requests/domain/compatible_technician.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/service_request.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/service_request_exceptions.dart';
 import 'package:ms_frontend/features/client/service_requests/presentation/my_service_requests_page.dart';
@@ -236,5 +237,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(opened?.id, 'req-1');
     expect(loads, 2);
+  });
+
+  testWidgets('sugiere técnicos compatibles solo mientras está publicada',
+      (tester) async {
+    final backend = _FakeBackend();
+    var loads = 0;
+    Future<void> pumpWith() async {
+      tester.view.physicalSize = const Size(1440, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: ServiceRequestDetailPage(
+          key: UniqueKey(),
+          requestId: 'req-1',
+          get: backend.get,
+          listApplicants: backend.list,
+          selectProvider: backend.select,
+          listCompatibleTechnicians: (_) async {
+            loads++;
+            return const CompatibleTechniciansPage(items: [
+              CompatibleTechnician(
+                userId: 'u9',
+                displayName: 'Jorge R.',
+                categories: [ServiceCategory.plumbing],
+                city: 'Bogotá',
+              ),
+            ]);
+          },
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    await pumpWith();
+    expect(find.text('Técnicos que pueden atenderte'), findsOneWidget);
+    expect(find.text('Jorge R.'), findsOneWidget);
+    expect(loads, 1);
+
+    backend.status = ServiceRequestStatus.contracted;
+    await pumpWith();
+    expect(find.byKey(const ValueKey('compatible-technicians')), findsNothing);
+    expect(loads, 1);
   });
 }

@@ -30,11 +30,13 @@ void main() {
     late FakeQuotations quotations;
     late int changes;
 
-    Widget section() => ClientQuotationSection(
+    Widget section({Widget Function(Quotation)? preview}) =>
+        ClientQuotationSection(
           load: () => quotations.listForRequest('req-1'),
           accept: (id) => quotations.accept('req-1', id),
           reject: (id) => quotations.reject('req-1', id),
           onChanged: () async => changes++,
+          previewBuilder: preview,
         );
 
     setUp(() {
@@ -50,6 +52,17 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Aceptar'), findsNothing);
+    });
+
+    testWidgets('muestra el desglose antes de aceptar la vigente',
+        (tester) async {
+      quotations.add('req-1', 13800000);
+      await _pump(
+          tester,
+          section(
+              preview: (q) => Text('pagarás por ${q.amountInCents}',
+                  key: const ValueKey('preview'))));
+      expect(find.text('pagarás por 13800000'), findsOneWidget);
     });
 
     testWidgets('muestra la versión vigente y las anteriores', (tester) async {

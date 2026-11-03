@@ -47,6 +47,7 @@ class TechnicianDashboardPage extends StatefulWidget {
     this.onOpenContract,
     this.loadOpportunities,
     this.loadWork,
+    this.loadSetupComplete,
   });
 
   final String? firstName;
@@ -62,7 +63,14 @@ class TechnicianDashboardPage extends StatefulWidget {
   /// Abre el chat prototipo (simulación, GC-431).
   final VoidCallback? onOpenChat;
   final ValueChanged<String>? onApplyToOpportunity;
-  final VoidCallback? onOpenAvailability;
+
+  /// Abre «Horario y zona de atención»; al volver se revisa de nuevo si
+  /// quedó configurado.
+  final Future<void> Function()? onOpenAvailability;
+
+  /// Si el técnico ya tiene zona y horario. Sin ellos ms-users no le
+  /// muestra ninguna solicitud, así que el inicio se lo advierte.
+  final Future<bool> Function()? loadSetupComplete;
 
   /// Abre la cotización de una solicitud donde lo seleccionaron.
   final Future<void> Function(ServiceApplication application)? onOpenQuotation;
@@ -93,6 +101,16 @@ class _TechnicianDashboardPageState extends State<TechnicianDashboardPage> {
   late Future<List<ServiceOpportunity>>? _opportunities =
       widget.loadOpportunities?.call();
   late Future<TechnicianWork>? _work = widget.loadWork?.call();
+  late Future<bool>? _setup = widget.loadSetupComplete?.call();
+
+  Future<void> _openAvailability() async {
+    await widget.onOpenAvailability?.call();
+    if (!mounted) return;
+    setState(() {
+      _setup = widget.loadSetupComplete?.call();
+      _opportunities = widget.loadOpportunities?.call();
+    });
+  }
 
   void _reloadOpportunities() => setState(() {
         _opportunities = widget.loadOpportunities?.call();
@@ -166,6 +184,19 @@ class _TechnicianDashboardPageState extends State<TechnicianDashboardPage> {
                 ],
               ),
               const SizedBox(height: 20),
+              FutureBuilder<bool>(
+                future: _setup,
+                builder: (context, setup) => setup.data == false
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _SetupBanner(
+                          onConfigure: widget.onOpenAvailability == null
+                              ? null
+                              : _openAvailability,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
               _VerificationBanner(status: status),
               const SizedBox(height: 20),
               StatGrid(
@@ -197,7 +228,9 @@ class _TechnicianDashboardPageState extends State<TechnicianDashboardPage> {
                     const SizedBox(height: 20),
                     _QuickLinks(
                       onOpenSpecialties: widget.onOpenSpecialties,
-                      onOpenAvailability: widget.onOpenAvailability,
+                      onOpenAvailability: widget.onOpenAvailability == null
+                          ? null
+                          : _openAvailability,
                       onOpenChat: widget.onOpenChat,
                     ),
                   ],
@@ -371,6 +404,71 @@ class _TechnicianDashboardPageState extends State<TechnicianDashboardPage> {
       ],
     );
   }
+}
+
+class _SetupBanner extends StatelessWidget {
+  const _SetupBanner({required this.onConfigure});
+
+  final VoidCallback? onConfigure;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: const ValueKey('technician-setup-banner'),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: FixiaColors.primary,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 620),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.event_busy_rounded, color: Color(0xFF7FE0CF)),
+                  SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Configura tu horario y zona de atención',
+                          style: TextStyle(
+                            color: FixiaColors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Sin ellos no te llega ninguna solicitud: los clientes buscan técnicos de su ciudad que atiendan a la hora que necesitan.',
+                          style:
+                              TextStyle(color: Color(0xFFDCEBFF), fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onConfigure != null)
+              FilledButton(
+                key: const ValueKey('technician-setup-configure'),
+                onPressed: onConfigure,
+                style: FilledButton.styleFrom(
+                  backgroundColor: FixiaColors.white,
+                  foregroundColor: FixiaColors.primary,
+                ),
+                child: const Text('Configurar ahora'),
+              ),
+          ],
+        ),
+      );
 }
 
 class _VerificationBadge extends StatelessWidget {
