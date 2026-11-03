@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/fixia_date_time_picker.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../../../quotations/domain/quotation.dart';
 import '../../../quotations/domain/quotation_exceptions.dart';
@@ -262,35 +263,35 @@ class _QuotationFormState extends State<QuotationForm> {
 
   Future<void> _pickAgreedAt() async {
     final now = widget.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _agreedAt,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
+    final picked = await showFixiaDateTimePicker(
+      context,
+      first: now,
+      last: now.add(const Duration(days: 365)),
+      initial: _agreedAt,
+      title: 'Fecha acordada',
+      subtitle: 'Cuándo harás el trabajo.',
     );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_agreedAt),
-    );
-    if (!mounted) return;
+    if (picked == null || !mounted) return;
     setState(() {
-      _agreedAt = DateTime(date.year, date.month, date.day,
-          time?.hour ?? _agreedAt.hour, time?.minute ?? _agreedAt.minute);
+      _agreedAt = picked;
+      if (_validUntil.isAfter(_agreedAt)) _validUntil = _agreedAt;
     });
   }
 
   Future<void> _pickValidUntil() async {
     final now = widget.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _validUntil,
-      firstDate: now,
-      lastDate: _agreedAt.isAfter(now) ? _agreedAt : now,
+    final picked = await showFixiaDateTimePicker(
+      context,
+      first: now,
+      last: _agreedAt.isAfter(now) ? _agreedAt : now,
+      initial: _validUntil,
+      pickTime: false,
+      title: 'Válida hasta',
+      subtitle: 'Hasta qué día el cliente puede aceptar esta cotización.',
     );
-    if (date == null || !mounted) return;
+    if (picked == null || !mounted) return;
     setState(() {
-      final endOfDay = DateTime(date.year, date.month, date.day, 23, 59);
+      final endOfDay = DateTime(picked.year, picked.month, picked.day, 23, 59);
       _validUntil = endOfDay.isAfter(_agreedAt) ? _agreedAt : endOfDay;
     });
   }
