@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/layout/app_shell.dart';
+import '../../../core/widgets/fixia_ui.dart';
 import '../../auth/login/domain/user_profile.dart';
 import '../application/evidence_feature.dart';
 import '../domain/service_evidence.dart';
@@ -26,6 +28,10 @@ class _ServiceEvidenceFlowState extends State<ServiceEvidenceFlow> {
       widget.feature.connect(widget.target, widget.profile);
   final _picker = browserEvidenceFilePicker();
   bool _expiryHandled = false;
+
+  ShellDestination get _destination => widget.profile.role == UserRole.client
+      ? ShellDestination.clientRequests
+      : ShellDestination.technicianJobs;
   void _expired() {
     if (!_expiryHandled && mounted) {
       _expiryHandled = true;
@@ -46,23 +52,34 @@ class _ServiceEvidenceFlowState extends State<ServiceEvidenceFlow> {
               _expired();
             });
           }
-          return Scaffold(
-              appBar: AppBar(title: const Text('Evidencias del servicio')),
-              body: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(error is EvidenceFailure
-                    ? error.message
-                    : 'No pudimos consultar la contratación.'),
-                TextButton(
-                    onPressed: () => setState(() => _connection =
-                        widget.feature.connect(widget.target, widget.profile)),
-                    child: const Text('Reintentar')),
-              ])));
+          return AppShell(
+              destination: _destination,
+              subpage: true,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const BackLink(),
+                    const PageHeader(title: 'Evidencias del servicio'),
+                    const SizedBox(height: 24),
+                    EmptyState(
+                      icon: Icons.error_outline_rounded,
+                      message: error is EvidenceFailure
+                          ? error.message
+                          : 'No pudimos consultar la contratación.',
+                      action: TextButton(
+                          onPressed: () => setState(() => _connection = widget
+                              .feature
+                              .connect(widget.target, widget.profile)),
+                          child: const Text('Reintentar')),
+                    ),
+                  ]));
         }
         final connection = snapshot.data;
         if (connection == null) {
-          return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+          return AppShell(
+              destination: _destination,
+              subpage: true,
+              child: const SectionLoading());
         }
         Future<void> download(ServiceEvidence item) async =>
             saveEvidenceFile(await connection.repository.download(item));
@@ -96,6 +113,7 @@ class _ServiceEvidenceFlowState extends State<ServiceEvidenceFlow> {
             policy: EvidenceFilePolicy.backend,
             openEvidence: open,
             downloadEvidence: download,
-            onSessionExpired: _expired);
+            onSessionExpired: _expired,
+            destination: _destination);
       });
 }

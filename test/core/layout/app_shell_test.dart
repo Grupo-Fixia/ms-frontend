@@ -185,4 +185,38 @@ void main() {
       }
     });
   }
+
+  testWidgets('en una pantalla secundaria la sección marcada también navega',
+      (tester) async {
+    final visited = <ShellDestination>[];
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: AppShell(
+        destination: ShellDestination.clientRequests,
+        subpage: true,
+        onNavigate: visited.add,
+        child: const Text('detalle'),
+      ),
+    ));
+    await tester.tap(find.byKey(const ValueKey('client-nav-historial')));
+    expect(visited, [ShellDestination.clientRequests]);
+  });
+
+  testWidgets('sin desplazamiento el contenido ocupa el alto disponible',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(const MaterialApp(
+      home: AppShell(
+        destination: ShellDestination.technicianHome,
+        scrollable: false,
+        child: SizedBox.expand(key: ValueKey('fill')),
+      ),
+    ));
+    expect(tester.getRect(find.byKey(const ValueKey('fill'))).height,
+        greaterThan(780));
+  });
 }

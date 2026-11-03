@@ -69,11 +69,11 @@ void main() {
         findsOneWidget);
     expect(find.text('–'), findsNWidgets(3));
     expect(
-      find.byKey(const ValueKey('client-profile-nav-profile')),
+      find.byKey(const ValueKey('client-nav-perfil')),
       findsOneWidget,
     );
 
-    final editButton = tester.widget<IconButton>(
+    final editButton = tester.widget<ButtonStyleButton>(
       find.byKey(const ValueKey('client-profile-edit')),
     );
     expect(editButton.onPressed, isNotNull);
@@ -194,7 +194,7 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(const ValueKey('client-profile-nav-home')),
+      find.byKey(const ValueKey('client-nav-inicio')),
     );
 
     expect(homeCalls, 1);

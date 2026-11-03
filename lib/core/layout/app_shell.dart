@@ -105,6 +105,8 @@ class AppShell extends StatelessWidget {
     this.onPrimaryAction,
     this.mobileTitle,
     this.mobileActions = const [],
+    this.scrollable = true,
+    this.subpage = false,
   });
 
   /// Destino activo; también define el rol y su menú.
@@ -120,6 +122,14 @@ class AppShell extends StatelessWidget {
   final String? mobileTitle;
   final List<Widget> mobileActions;
 
+  /// `false` para pantallas que ocupan el alto disponible y manejan su
+  /// propio desplazamiento (p. ej. el chat).
+  final bool scrollable;
+
+  /// Pantalla secundaria (detalle, formulario): la sección marcada en el
+  /// menú también navega, para volver a su pantalla principal.
+  final bool subpage;
+
   ShellRole get role => destination.role;
 
   @override
@@ -133,14 +143,18 @@ class AppShell extends StatelessWidget {
       onNavigate: onNavigate ?? scope?.onNavigate,
       onLogout: onLogout ?? scope?.onLogout,
       onPrimaryAction: onPrimaryAction ?? scope?.onPrimaryAction,
+      subpage: subpage,
     );
     return Scaffold(
       backgroundColor: FixiaColors.neutralBackground,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth;
-          final content =
-              _Content(compact: width < ShellBreakpoints.tablet, child: child);
+          final content = _Content(
+            compact: width < ShellBreakpoints.tablet,
+            scrollable: scrollable,
+            child: child,
+          );
           if (width >= ShellBreakpoints.desktop) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -205,8 +219,10 @@ class _ShellConfig {
     required this.onNavigate,
     required this.onLogout,
     required this.onPrimaryAction,
+    this.subpage = false,
   });
 
+  final bool subpage;
   final ShellRole role;
   final ShellDestination current;
   final String userName;
@@ -222,15 +238,24 @@ class _ShellConfig {
   List<ShellDestination> get destinations => ShellDestination.of(role);
 
   void go(ShellDestination d) {
-    if (d == current) return;
+    if (d == current && !subpage) return;
     onNavigate?.call(d);
   }
 }
 
+EdgeInsets _contentPadding(bool compact) => compact
+    ? const EdgeInsets.fromLTRB(16, 20, 16, 28)
+    : const EdgeInsets.fromLTRB(40, 32, 40, 48);
+
 class _Content extends StatelessWidget {
-  const _Content({required this.compact, required this.child});
+  const _Content({
+    required this.compact,
+    required this.child,
+    this.scrollable = true,
+  });
 
   final bool compact;
+  final bool scrollable;
   final Widget child;
 
   @override
@@ -252,18 +277,27 @@ class _Content extends StatelessWidget {
               .merge(theme.outlinedButtonTheme.style),
         ),
       ),
-      child: SingleChildScrollView(
-        padding: compact
-            ? const EdgeInsets.fromLTRB(16, 20, 16, 28)
-            : const EdgeInsets.fromLTRB(40, 32, 40, 48),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-                maxWidth: ShellBreakpoints.contentMaxWidth),
-            child: child,
-          ),
-        ),
-      ),
+      child: scrollable
+          ? SingleChildScrollView(
+              padding: _contentPadding(compact),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      maxWidth: ShellBreakpoints.contentMaxWidth),
+                  child: child,
+                ),
+              ),
+            )
+          : Padding(
+              padding: _contentPadding(compact),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      maxWidth: ShellBreakpoints.contentMaxWidth),
+                  child: child,
+                ),
+              ),
+            ),
     );
   }
 }

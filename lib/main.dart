@@ -1243,7 +1243,14 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.companyOpportunities:
             _guard(RouteAccess.company, _companyOpportunitiesPage),
         AppRoutes.chatPrototype:
-            _guard(RouteAccess.authenticated, (_) => const ChatPrototypePage()),
+            _guard(
+          RouteAccess.authenticated,
+          (_) => ChatPrototypePage(
+            destination: _sessionStore.profile?.role == UserRole.client
+                ? ShellDestination.clientHome
+                : ShellDestination.technicianHome,
+          ),
+        ),
       },
       // Una URL que no existe lleva al inicio (el de la cuenta, con sesión)
       // en vez de mostrar un error.

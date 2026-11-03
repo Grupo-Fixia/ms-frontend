@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/domain/service_budget.dart';
+import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/applicant.dart';
 import '../domain/service_request.dart';
+import 'service_request_list.dart';
 
 /// Detalle de una solicitud del cliente con sus postulantes reales (GC-426,
 /// historia GC-403): compara precio y perfil público de cada propuesta y
@@ -128,35 +131,73 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
   @override
   Widget build(BuildContext context) {
     final request = _request;
-    return Scaffold(
-      backgroundColor: FixiaColors.neutralBackground,
-      appBar: AppBar(
-        title: const Text('Detalle de la solicitud'),
-        actions: [
-          IconButton(
-            tooltip: 'Actualizar detalle',
-            onPressed: _loading ? null : _reload,
-            icon: const Icon(Icons.refresh),
+    Widget body;
+    if (_loading && request == null) {
+      body = const SectionLoading();
+    } else if (request == null) {
+      body = EmptyState(
+        message: '$_requestError',
+        icon: Icons.error_outline_rounded,
+        action: OutlinedButton(
+          onPressed: _reload,
+          child: const Text('Reintentar'),
+        ),
+      );
+    } else {
+      final extra =
+          widget.extraSections?.call(context, request, _reload) ?? const [];
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          PageHeader(
+            title: request.category.label,
+            titleKey: const ValueKey('request-detail-title'),
+            subtitle: request.description,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: StatusPill(
+                  label: request.status.label,
+                  tone: toneFor(request.status),
+                ),
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('request-detail-refresh'),
+                onPressed: _loading ? null : _reload,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Actualizar'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_loading) const LinearProgressIndicator(),
+          const SizedBox(height: 16),
+          TwoColumns(
+            sideWidth: 340,
+            sideFirstWhenStacked: true,
+            main: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...extra,
+                if (extra.isNotEmpty) const SizedBox(height: 24),
+                _applicantsSection(request),
+              ],
+            ),
+            side: _RequestSummary(request: request),
           ),
         ],
+      );
+    }
+    return AppShell(
+      destination: ShellDestination.clientRequests,
+      subpage: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const BackLink(label: 'Mis solicitudes'),
+          body,
+        ],
       ),
-      body: _loading && request == null
-          ? const Center(child: CircularProgressIndicator())
-          : request == null
-              ? _ErrorRetry(message: '$_requestError', onRetry: _reload)
-              : RefreshIndicator(
-                  onRefresh: _reload,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (_loading) const LinearProgressIndicator(),
-                      _RequestSummary(request: request),
-                      ...?widget.extraSections?.call(context, request, _reload),
-                      const SizedBox(height: 16),
-                      _applicantsSection(request),
-                    ],
-                  ),
-                ),
     );
   }
 
@@ -166,20 +207,28 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
     final canSelect = request.status == ServiceRequestStatus.published;
     final children = <Widget>[];
     if (error != null) {
-      children.add(_ErrorRetry(message: '$error', onRetry: _reload));
+      children.add(EmptyState(
+        message: '$error',
+        icon: Icons.error_outline_rounded,
+        action: OutlinedButton(
+          onPressed: _reload,
+          child: const Text('Reintentar'),
+        ),
+      ));
     } else if (applicants == null) {
       children.add(const SizedBox.shrink());
     } else if (applicants.isEmpty) {
-      children.add(Text(
-        canSelect
+      children.add(EmptyState(
+        icon: Icons.groups_outlined,
+        message: canSelect
             ? 'Todavía no hay prestadores postulados. Te mostraremos sus propuestas aquí.'
             : 'Esta solicitud no tiene postulaciones.',
-        style: const TextStyle(color: FixiaColors.textSecondary),
       ));
     } else {
       children.add(_PriceSummary(applicants: applicants));
+      final cards = <Widget>[];
       for (final applicant in applicants) {
-        children.add(_ApplicantCard(
+        cards.add(_ApplicantCard(
           applicant: applicant,
           budget: request.budget,
           selecting: _selecting == applicant.id,
@@ -190,19 +239,14 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
               : null,
         ));
       }
+      children.add(ResponsiveGrid(minItemWidth: 300, children: cards));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          canSelect ? 'Compara las propuestas' : 'Postulantes',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: FixiaColors.primary,
-          ),
+        SectionTitle(
+          title: canSelect ? 'Compara las propuestas' : 'Postulantes',
         ),
-        const SizedBox(height: 8),
         ...children,
       ],
     );
@@ -218,50 +262,45 @@ class _RequestSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = request.approximateLocation;
     final exact = request.exactLocation;
-    return Card(
-      color: FixiaColors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(FixiaRadii.card),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    request.category.label,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: FixiaColors.primary,
-                    ),
-                  ),
-                ),
-                StatusChip(label: request.status.label),
-              ],
+    return FixiaPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Datos de la solicitud',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: FixiaColors.primary,
             ),
-            const SizedBox(height: 8),
-            Text(request.description),
-            const SizedBox(height: 12),
-            _InfoLine(
-              icon: Icons.place_outlined,
-              text: exact?.address ?? '${location.zone}, ${location.city}',
-            ),
-            _InfoLine(
-              icon: Icons.event_outlined,
-              text: 'Para el ${formatDate(request.expectedAt)}',
-            ),
-            _InfoLine(
-              icon: Icons.payments_outlined,
-              text:
-                  'Presupuesto orientativo: ${request.budget?.label ?? 'Presupuesto no informado'}',
+          ),
+          const SizedBox(height: 10),
+          _InfoLine(
+            icon: Icons.handyman_outlined,
+            text: request.category.label,
+          ),
+          _InfoLine(
+            icon: Icons.place_outlined,
+            text: exact?.address ?? '${location.zone}, ${location.city}',
+          ),
+          _InfoLine(
+            icon: Icons.event_outlined,
+            text: 'Para el ${formatDate(request.expectedAt)}',
+          ),
+          _InfoLine(
+            icon: Icons.payments_outlined,
+            text:
+                'Presupuesto orientativo: ${request.budget?.label ?? 'Presupuesto no informado'}',
+          ),
+          if (pendingActionFor(request.status) case final next?) ...[
+            const SizedBox(height: 14),
+            NoticeBanner(
+              message: 'Siguiente paso: $next.',
+              tone: PillTone.info,
+              icon: Icons.flag_outlined,
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -316,115 +355,103 @@ class _ApplicantCard extends StatelessWidget {
     final selected = applicant.status == ApplicationStatus.selected;
     final price = applicant.proposedPrice;
     final years = worker?.yearsOfExperience;
-    return Card(
+    return FixiaPanel(
       key: ValueKey('applicant-${applicant.id}'),
-      color: FixiaColors.white,
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(FixiaRadii.card),
-        side: BorderSide(
-          color: selected ? FixiaColors.accent : const Color(0xFFE3E8EF),
-          width: selected ? 2 : 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    applicant.displayName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+      highlight: selected ? FixiaColors.accent : null,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  applicant.displayName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                StatusChip(
-                    label: applicant.status.label, highlighted: selected),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                StatusChip(label: applicant.providerType.label),
-                if (worker?.verificationStatus != null)
-                  StatusChip(label: worker!.verificationStatus!.label),
-              ],
-            ),
-            if (applicant.isCompany) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Técnico propuesto: ${worker?.displayName ?? 'no disponible'}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
+              StatusChip(label: applicant.status.label, highlighted: selected),
             ],
-            if (applicant.provider == null)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'Este prestador ya no está activo en Fixia.',
-                  style: TextStyle(color: FixiaColors.textSecondary),
-                ),
-              ),
-            if (worker?.professionalDescription != null) ...[
-              const SizedBox(height: 8),
-              Text(worker!.professionalDescription!),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              StatusChip(label: applicant.providerType.label),
+              if (worker?.verificationStatus != null)
+                StatusChip(label: worker!.verificationStatus!.label),
             ],
+          ),
+          if (applicant.isCompany) ...[
             const SizedBox(height: 8),
-            if (years != null)
-              _InfoLine(
-                icon: Icons.workspace_premium_outlined,
-                text: years == 1
-                    ? '1 año de experiencia'
-                    : '$years años de experiencia',
-              ),
-            if (worker != null && worker.categories.isNotEmpty)
-              _InfoLine(
-                icon: Icons.handyman_outlined,
-                text: worker.categories.map((c) => c.label).join(', '),
-              ),
-            if (worker?.city != null)
-              _InfoLine(icon: Icons.place_outlined, text: worker!.city!),
-            const Divider(height: 24),
-            const Text(
-              'Precio propuesto',
-              style: TextStyle(fontSize: 12, color: FixiaColors.textSecondary),
-            ),
             Text(
-              price?.label ?? 'Sin precio propuesto',
-              style: TextStyle(
-                fontSize: price == null ? 14 : 18,
-                fontWeight: FontWeight.w700,
-                color: price == null
-                    ? FixiaColors.textSecondary
-                    : FixiaColors.secondary,
+              'Técnico propuesto: ${worker?.displayName ?? 'no disponible'}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+          if (applicant.provider == null)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Este prestador ya no está activo en Fixia.',
+                style: TextStyle(color: FixiaColors.textSecondary),
               ),
             ),
-            if (onSelect != null || selecting) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onSelect,
-                  child: selecting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Seleccionar'),
-                ),
-              ),
-            ],
+          if (worker?.professionalDescription != null) ...[
+            const SizedBox(height: 8),
+            Text(worker!.professionalDescription!),
           ],
-        ),
+          const SizedBox(height: 8),
+          if (years != null)
+            _InfoLine(
+              icon: Icons.workspace_premium_outlined,
+              text: years == 1
+                  ? '1 año de experiencia'
+                  : '$years años de experiencia',
+            ),
+          if (worker != null && worker.categories.isNotEmpty)
+            _InfoLine(
+              icon: Icons.handyman_outlined,
+              text: worker.categories.map((c) => c.label).join(', '),
+            ),
+          if (worker?.city != null)
+            _InfoLine(icon: Icons.place_outlined, text: worker!.city!),
+          const Divider(height: 24),
+          const Text(
+            'Precio propuesto',
+            style: TextStyle(fontSize: 12, color: FixiaColors.textSecondary),
+          ),
+          Text(
+            price?.label ?? 'Sin precio propuesto',
+            style: TextStyle(
+              fontSize: price == null ? 14 : 18,
+              fontWeight: FontWeight.w700,
+              color: price == null
+                  ? FixiaColors.textSecondary
+                  : FixiaColors.secondary,
+            ),
+          ),
+          if (onSelect != null || selecting) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onSelect,
+                child: selecting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Seleccionar'),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -476,29 +503,6 @@ class _InfoLine extends StatelessWidget {
                 text,
                 style: const TextStyle(color: FixiaColors.textSecondary),
               ),
-            ),
-          ],
-        ),
-      );
-}
-
-class _ErrorRetry extends StatelessWidget {
-  const _ErrorRetry({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: onRetry,
-              child: const Text('Reintentar'),
             ),
           ],
         ),

@@ -305,24 +305,28 @@ class SectionTitle extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: FixiaColors.primary,
-                ),
-              ),
+  Widget build(BuildContext context) {
+    final text = Text(
+      title,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: FixiaColors.primary,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      // Si no caben en una línea, la acción pasa debajo del título.
+      child: action == null
+          ? Row(children: [Expanded(child: text)])
+          : Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              runSpacing: 4,
+              children: [text, action!],
             ),
-            if (action != null) action!,
-          ],
-        ),
-      );
+    );
+  }
 }
 
 /// Tono de una etiqueta de estado.
@@ -461,5 +465,157 @@ class SectionLoading extends StatelessWidget {
   Widget build(BuildContext context) => const Padding(
         padding: EdgeInsets.all(24),
         child: Center(child: CircularProgressIndicator()),
+      );
+}
+
+/// Enlace «Volver» sobre el encabezado de una pantalla secundaria.
+class BackLink extends StatelessWidget {
+  const BackLink({
+    super.key,
+    this.label = 'Volver',
+    this.onPressed,
+    this.buttonKey = const ValueKey('page-back'),
+  });
+
+  final String label;
+  final Key buttonKey;
+
+  /// Por defecto vuelve a la pantalla anterior.
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Tooltip(
+            message: 'Volver',
+            child: TextButton.icon(
+              key: buttonKey,
+              onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+              label: Text(label),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+/// Filtros en forma de pastillas (Todas, Abiertas…).
+class FilterPills<T> extends StatelessWidget {
+  const FilterPills({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+    this.keyPrefix = 'filter',
+  });
+
+  /// Valor y texto de cada filtro.
+  final List<(T, String)> options;
+  final T selected;
+  final ValueChanged<T> onSelected;
+  final String keyPrefix;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final (value, label) in options)
+            ChoiceChip(
+              key: ValueKey('$keyPrefix-$label'),
+              label: Text(label),
+              selected: value == selected,
+              showCheckmark: false,
+              onSelected: (_) => onSelected(value),
+              selectedColor: FixiaColors.primary,
+              backgroundColor: FixiaColors.white,
+              side: BorderSide(
+                color: value == selected ? FixiaColors.primary : _border,
+              ),
+              labelStyle: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: value == selected
+                    ? FixiaColors.white
+                    : FixiaColors.textSecondary,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+        ],
+      );
+}
+
+/// Fila «etiqueta: valor» para fichas de datos.
+class InfoRow extends StatelessWidget {
+  const InfoRow({super.key, required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 150,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: FixiaColors.textSecondary,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// Botones de acción de una tarjeta: a la derecha y de su tamaño en
+/// pantallas anchas; uno debajo del otro, a lo ancho, en celular.
+class ActionBar extends StatelessWidget {
+  const ActionBar({super.key, required this.actions});
+
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 480) {
+            return SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 10,
+                runSpacing: 10,
+                children: actions,
+              ),
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < actions.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                actions[i],
+              ],
+            ],
+          );
+        },
       );
 }

@@ -187,6 +187,7 @@ void main() {
             .onPressed,
         isNull);
     repository.loadError = null;
+    await tester.ensureVisible(find.text('Reintentar consulta'));
     await tester.tap(find.text('Reintentar consulta'));
     await tester.pumpAndSettle();
     expect(find.text('Todavía no hay evidencias registradas.'), findsOneWidget);

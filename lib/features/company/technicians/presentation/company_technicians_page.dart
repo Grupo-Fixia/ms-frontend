@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import 'company_technicians_controller.dart';
 import 'widgets/associated_technician_tile.dart';
 
@@ -58,12 +59,35 @@ class _CompanyTechniciansPageState extends State<CompanyTechniciansPage> {
 
   @override
   Widget build(BuildContext context) {
-    return MobileFeatureShell(
-      title: 'Mis técnicos',
-      onBack: widget.onBack,
+    return AppShell(
+      destination: ShellDestination.companyTechnicians,
+      userCaption: 'Empresa',
       child: ListenableBuilder(
         listenable: widget.controller,
-        builder: (context, _) => _content(context),
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BackLink(onPressed: widget.onBack),
+            PageHeader(
+              title: 'Mis técnicos',
+              subtitle: 'Técnicos asociados a tu empresa. Al postularte a una '
+                  'solicitud propones a uno de ellos.',
+              actions: [
+                OutlinedButton.icon(
+                  key: const ValueKey('company-technicians-refresh'),
+                  onPressed: widget.controller.status ==
+                          CompanyTechniciansStatus.loading
+                      ? null
+                      : widget.controller.load,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Actualizar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _content(context),
+          ],
+        ),
       ),
     );
   }
@@ -73,9 +97,12 @@ class _CompanyTechniciansPageState extends State<CompanyTechniciansPage> {
     switch (controller.status) {
       case CompanyTechniciansStatus.idle:
       case CompanyTechniciansStatus.loading:
-        return const Center(
-          child: CircularProgressIndicator(
-            key: ValueKey('company-technicians-loading'),
+        return const Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(
+            child: CircularProgressIndicator(
+              key: ValueKey('company-technicians-loading'),
+            ),
           ),
         );
       case CompanyTechniciansStatus.failure:
@@ -96,26 +123,21 @@ class _CompanyTechniciansPageState extends State<CompanyTechniciansPage> {
             text: CompanyTechniciansPage.emptyMessage,
           );
         }
-        return RefreshIndicator(
-          onRefresh: controller.load,
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-            itemCount: controller.technicians.length + 1,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                final count = controller.technicians.length;
-                return DashboardSectionHeading(
-                  title: '$count ${count == 1 ? 'técnico' : 'técnicos'}',
-                  subtitle: 'Asociados a tu empresa. Al postularte a una '
-                      'solicitud propones a uno de ellos.',
-                );
-              }
-              return AssociatedTechnicianTile(
-                technician: controller.technicians[index - 1],
-              );
-            },
-          ),
+        final count = controller.technicians.length;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SectionTitle(
+              title: '$count ${count == 1 ? 'técnico' : 'técnicos'}',
+            ),
+            ResponsiveGrid(
+              minItemWidth: 320,
+              children: [
+                for (final technician in controller.technicians)
+                  AssociatedTechnicianTile(technician: technician),
+              ],
+            ),
+          ],
         );
     }
   }
@@ -130,9 +152,9 @@ class _Message extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
+    return FixiaPanel(
+      padding: const EdgeInsets.all(28),
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/fixia_theme.dart';
+import '../../../core/widgets/fixia_ui.dart';
 import '../domain/quotation.dart';
 
 /// Valor en centavos con separador de miles: 14500050 → «145.000,50 COP».
@@ -44,20 +45,12 @@ class QuotationCard extends StatelessWidget {
     final current = quotation.isCurrent;
     final accepted = quotation.status == QuotationStatus.accepted;
     final highlight = current || accepted;
-    return Card(
+    return Padding(
       key: ValueKey('quotation-${quotation.id}'),
-      color: FixiaColors.white,
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(FixiaRadii.card),
-        side: BorderSide(
-          color: highlight ? FixiaColors.secondary : const Color(0xFFE3E8EF),
-          width: highlight ? 2 : 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FixiaPanel(
+        highlight: highlight ? FixiaColors.secondary : null,
+        padding: EdgeInsets.all(compact ? 14 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -96,8 +89,14 @@ class QuotationCard extends StatelessWidget {
               const SizedBox(height: 8),
               _Field('Alcance', quotation.scope),
               _Field('Condiciones', quotation.conditions),
-              _Field('Fecha acordada', formatDateTime(quotation.agreedAt)),
-              _Field('Válida hasta', formatDateTime(quotation.validUntil)),
+              ResponsiveGrid(
+                minItemWidth: 200,
+                spacing: 8,
+                children: [
+                  _Field('Fecha acordada', formatDateTime(quotation.agreedAt)),
+                  _Field('Válida hasta', formatDateTime(quotation.validUntil)),
+                ],
+              ),
             ] else
               Text(
                 'Enviada el ${formatDateTime(quotation.createdAt ?? quotation.validUntil)}',
@@ -107,15 +106,8 @@ class QuotationCard extends StatelessWidget {
                 ),
               ),
             if (actions.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  for (var i = 0; i < actions.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 8),
-                    Expanded(child: actions[i]),
-                  ],
-                ],
-              ),
+              const SizedBox(height: 16),
+              ActionBar(actions: actions),
             ],
           ],
         ),

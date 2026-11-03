@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/technician_steps.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../application/get_technician_profile.dart';
 import '../application/update_technician_profile.dart';
 import '../domain/technician_profile.dart';
@@ -81,6 +82,20 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage> {
     }
   }
 
+  void _navigate(ShellDestination destination) {
+    final own = switch (destination) {
+      ShellDestination.technicianHome => widget.onOpenHome,
+      ShellDestination.technicianOpportunities => widget.onOpenOpportunities,
+      _ => null,
+    };
+    if (own != null) return own();
+    final scope = FixiaShellScope.maybeOf(context);
+    if (scope?.onNavigate != null) return scope!.onNavigate!(destination);
+    if (destination != ShellDestination.technicianProfile) {
+      widget.onBack?.call();
+    }
+  }
+
   Future<void> _logout() async {
     final logout = widget.onLogout;
     if (logout == null || _isLoggingOut) return;
@@ -121,44 +136,45 @@ class _TechnicianProfilePageState extends State<TechnicianProfilePage> {
               );
     }
     if (widget.onBack != null) {
-      return MobileFeatureShell(
-        title: 'Perfil profesional',
-        onBack: widget.onBack!,
-        bottomNavigationItems: [
-          MobileNavigationItem(
-            icon: Icons.home_rounded,
-            label: 'Inicio',
-            onPressed:
-                widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
-          ),
-          MobileNavigationItem(
-            icon: Icons.work_outline_rounded,
-            label: 'Trabajos',
-            onPressed: widget.onOpenOpportunities ??
-                () => Navigator.of(context).maybePop(),
-          ),
-          MobileNavigationItem(
-            icon: Icons.account_balance_wallet_outlined,
-            label: 'Billetera',
-            onPressed:
-                widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
-          ),
-          MobileNavigationItem(
-            icon: Icons.person_outline_rounded,
-            label: 'Perfil',
-            selected: true,
-            onPressed: () {},
-          ),
-        ],
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(18),
-          child: DecoratedBox(
-            decoration: FixiaDecorations.card,
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: content,
+      // Dentro de la app: el perfil usa el marco con el menú del técnico.
+      final isForm = _controller.status == TechnicianProfileStatus.ready &&
+          _controller.showForm;
+      return AppShell(
+        destination: ShellDestination.technicianProfile,
+        onNavigate: _navigate,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BackLink(onPressed: widget.onBack),
+            const PageHeader(
+              title: 'Perfil profesional',
+              subtitle:
+                  'Lo que ven los clientes al comparar tu propuesta: servicios, experiencia y verificación.',
             ),
-          ),
+            const SizedBox(height: 24),
+            if (isForm)
+              Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: FixiaPanel(
+                    padding: const EdgeInsets.all(28),
+                    child: content,
+                  ),
+                ),
+              )
+            else
+              LayoutBuilder(
+                builder: (context, constraints) =>
+                    _controller.status == TechnicianProfileStatus.ready &&
+                            constraints.maxWidth >= 860
+                        ? content
+                        : FixiaPanel(
+                            padding: const EdgeInsets.all(20),
+                            child: content,
+                          ),
+              ),
+          ],
         ),
       );
     }
@@ -557,14 +573,9 @@ class _ProfileSummary extends StatelessWidget {
     final name = firstName?.trim() ?? '';
     final status = profile.verificationStatus;
     final years = profile.yearsOfExperience ?? 0;
-    return Column(
-      key: const ValueKey('technician-profile-summary'),
+    final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (justSaved) ...[
-          const _SavedBanner(),
-          const SizedBox(height: 20),
-        ],
         Text(
           name.isEmpty ? 'Tu perfil profesional' : 'Hola, $name',
           style: theme.textTheme.headlineSmall,
@@ -578,7 +589,11 @@ class _ProfileSummary extends StatelessWidget {
           const SizedBox(height: 24),
           const TechnicianSteps(currentStep: 3),
         ],
-        const SizedBox(height: 28),
+      ],
+    );
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         _Section(
           title: 'Servicios que ofreces',
           child: Wrap(
@@ -631,6 +646,54 @@ class _ProfileSummary extends StatelessWidget {
         ),
       ],
     );
+    return LayoutBuilder(
+      key: const ValueKey('technician-profile-summary'),
+      builder: (context, constraints) {
+        final saved = [
+          if (justSaved) ...[
+            const _SavedBanner(),
+            const SizedBox(height: 20),
+          ],
+        ];
+        // En computador: verificación a la izquierda y datos a la derecha.
+        if (constraints.maxWidth >= 860) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ...saved,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 380,
+                    child: FixiaPanel(
+                      padding: const EdgeInsets.all(24),
+                      child: identity,
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: FixiaPanel(
+                      padding: const EdgeInsets.all(28),
+                      child: details,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ...saved,
+            identity,
+            const SizedBox(height: 28),
+            details,
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -666,8 +729,13 @@ class _VerificationStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (Color background, Color accent, IconData icon, String title,
-        String text) = switch (status) {
+    final (
+      Color background,
+      Color accent,
+      IconData icon,
+      String title,
+      String text
+    ) = switch (status) {
       VerificationStatus.valid => (
           const Color(0xFFE0F6F2),
           FixiaColors.accent,
@@ -750,7 +818,8 @@ class _VerificationBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (Color background, Color foreground, IconData icon) = switch (status) {
+    final (Color background, Color foreground, IconData icon) =
+        switch (status) {
       VerificationStatus.valid => (
           const Color(0xFFE0F6F2),
           FixiaColors.accent,

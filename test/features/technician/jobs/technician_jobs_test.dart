@@ -70,6 +70,39 @@ void main() {
       expect(opened, ['cotizar a1', 'contrato c1', 'oportunidades']);
     });
 
+    testWidgets('separa los servicios en curso de los finalizados',
+        (tester) async {
+      final quotations = FakeQuotations()
+        ..add('req-2', 13800000)
+        ..add('req-3', 9000000);
+      final contracts = FakeContracts()
+        ..contractFrom(quotations.items[0],
+            status: ServiceRequestStatus.inProgress)
+        ..contractFrom(quotations.items[1],
+            status: ServiceRequestStatus.closed);
+      await _pump(
+        tester,
+        TechnicianJobsPage(
+          loadApplications: () async => [],
+          loadContracts: contracts.listMine,
+          onOpenQuotation: (_) async {},
+          onOpenContract: (_) async {},
+        ),
+      );
+
+      expect(find.text('Finalizados'), findsWidgets);
+      expect(find.byKey(const ValueKey('contract-c1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('contract-c2')), findsOneWidget);
+      expect(
+        tester.getRect(find.byKey(const ValueKey('contract-c2'))).top,
+        greaterThan(
+            tester.getRect(find.byKey(const ValueKey('contract-c1'))).bottom),
+      );
+      await tester.tap(find.byKey(const ValueKey('technician-jobs-refresh')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('vacío sin datos de ejemplo y error con reintento',
         (tester) async {
       var fail = true;

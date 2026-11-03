@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../../../technician/applications/domain/application_exceptions.dart';
 import '../application/company_repositories.dart';
 import '../../technicians/presentation/company_technicians_controller.dart';
@@ -106,47 +107,73 @@ class _CompanyOpportunitiesPanelState extends State<CompanyOpportunitiesPanel> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        OutlinedButton(
-            onPressed: _loading || _sending ? null : () => _load(refresh: true),
-            child: const Text('Actualizar oportunidades')),
-        if (_loading) const Text('Consultando oportunidades empresariales…'),
-        if (_error != null) ...[
-          Text(_error!),
-          TextButton(
+  Widget build(BuildContext context) {
+    final list = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton(
+            onPressed:
+                _loading || _sending ? null : () => _load(refresh: true),
+            child: const Text('Actualizar oportunidades'),
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (_loading) ...[
+          const LinearProgressIndicator(),
+          const SizedBox(height: 8),
+          const Text('Consultando oportunidades empresariales…'),
+        ],
+        if (_error != null)
+          EmptyState(
+            icon: Icons.error_outline_rounded,
+            message: _error!,
+            action: TextButton(
               onPressed: _loading || _sending
                   ? null
                   : () => _load(refresh: _items.isEmpty && _next == null),
-              child: const Text('Reintentar oportunidades')),
-        ],
+              child: const Text('Reintentar oportunidades'),
+            ),
+          ),
         if (!_loading && _error == null && _items.isEmpty)
-          Text(_next == null
-              ? 'No hay oportunidades disponibles para tu empresa.'
-              : 'Esta página no contiene oportunidades. Puedes seguir consultando.'),
+          EmptyState(
+            icon: Icons.search_off_rounded,
+            message: _next == null
+                ? 'No hay oportunidades disponibles para tu empresa.'
+                : 'Esta página no contiene oportunidades. Puedes seguir consultando.',
+          ),
         for (final item in _items)
-          ListTile(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _OpportunityTile(
               key: ValueKey('company-opportunity-${item.request.id}'),
+              item: item,
               selected: _selected?.request.id == item.request.id,
-              title: Text(item.request.description),
-              subtitle: Text('${item.request.zone}, ${item.request.city}\n'
-                  '${item.budgetAmount == null ? 'Presupuesto no informado' : 'Presupuesto orientativo: ${item.budgetAmount} COP'}'),
-              trailing: const Icon(Icons.chevron_right),
               onTap: _sending || _loading
                   ? null
-                  : () => setState(() => _selected = item)),
+                  : () => setState(() => _selected = item),
+            ),
+          ),
         if (_next != null)
           TextButton(
               onPressed: _loading || _sending ? null : () => _load(),
               child: const Text('Ver más oportunidades')),
-        if (_selected != null) ...[
-          const SizedBox(height: 24),
-          Container(
+      ],
+    );
+    final selected = _selected;
+    final detail = selected == null
+        ? const EmptyState(
+            icon: Icons.touch_app_outlined,
+            message:
+                'Elige una oportunidad para postular a uno de tus técnicos.',
+          )
+        : Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: FixiaColors.neutralBackground,
-              borderRadius: BorderRadius.circular(FixiaRadii.card),
-              border: Border.all(color: FixiaColors.secondary, width: 1.2),
+              color: FixiaColors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: FixiaColors.secondary, width: 1.5),
             ),
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -172,7 +199,7 @@ class _CompanyOpportunitiesPanelState extends State<CompanyOpportunitiesPanel> {
                           ]),
                           const SizedBox(height: 8),
                           Text(
-                              'Solicitud seleccionada: ${_selected!.request.description}',
+                              'Solicitud seleccionada: ${selected.request.description}',
                               style: Theme.of(context)
                                   .textTheme
                                   .bodyMedium
@@ -180,14 +207,14 @@ class _CompanyOpportunitiesPanelState extends State<CompanyOpportunitiesPanel> {
                         ]),
                   ),
                   Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(16),
                       child: CompanyApplicationPanel(
                           key: ValueKey(
-                              '${widget.sessionKey}:${_selected!.request.id}'),
+                              '${widget.sessionKey}:${selected.request.id}'),
                           sessionKey: widget.sessionKey,
-                          serviceRequestId: _selected!.request.id,
+                          serviceRequestId: selected.request.id,
                           eligibleTechnicianIds:
-                              _selected!.eligibleTechnicianIds,
+                              selected.eligibleTechnicianIds,
                           techniciansController: widget.techniciansController,
                           applications: widget.applications,
                           onSessionExpired: widget.onSessionExpired,
@@ -196,7 +223,89 @@ class _CompanyOpportunitiesPanelState extends State<CompanyOpportunitiesPanel> {
                             widget.onBusyChanged?.call(value);
                           })),
                 ]),
-          ),
+          );
+    // En computador: lista a la izquierda y la postulación a la derecha.
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth >= 900) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: list),
+            const SizedBox(width: 24),
+            SizedBox(width: 420, child: detail),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          list,
+          if (selected != null) ...[const SizedBox(height: 24), detail],
         ],
-      ]);
+      );
+    });
+  }
+}
+
+class _OpportunityTile extends StatelessWidget {
+  const _OpportunityTile({
+    super.key,
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final CompanyOpportunity item;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: selected ? FixiaColors.supportBackground : FixiaColors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color:
+                    selected ? FixiaColors.secondary : const Color(0xFFE3EAF4),
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.request.description,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${item.request.zone}, ${item.request.city}\n'
+                        '${item.budgetAmount == null ? 'Presupuesto no informado' : 'Presupuesto orientativo: ${item.budgetAmount} COP'}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: FixiaColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right,
+                    color: FixiaColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      );
 }

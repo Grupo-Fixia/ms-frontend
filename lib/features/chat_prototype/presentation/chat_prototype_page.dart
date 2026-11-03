@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/layout/app_shell.dart';
 import '../../../core/theme/fixia_theme.dart';
+import '../../../core/widgets/fixia_ui.dart';
 import '../application/simulated_chat_controller.dart';
 import '../domain/simulated_message.dart';
 
@@ -11,7 +13,14 @@ import '../domain/simulated_message.dart';
 /// otra cuenta, no guarda mensajes y no toca precios, cotizaciones,
 /// contratación ni estados. Por eso no recibe repositorios ni clientes HTTP.
 class ChatPrototypePage extends StatefulWidget {
-  const ChatPrototypePage({super.key, this.controller});
+  const ChatPrototypePage({
+    super.key,
+    this.controller,
+    this.destination = ShellDestination.clientHome,
+  });
+
+  /// Inicio del rol que abre el chat, para el menú.
+  final ShellDestination destination;
 
   /// Solo para pruebas; por defecto la página crea su propio estado.
   final SimulatedChatController? controller;
@@ -38,39 +47,73 @@ class _ChatPrototypePageState extends State<ChatPrototypePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: FixiaColors.neutralBackground,
-      appBar: AppBar(
-        title: const Text('Chat de demostración'),
-        actions: [
-          IconButton(
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.width < ShellBreakpoints.tablet;
+    // La conversación ocupa el alto visible; la página se desplaza si no
+    // alcanza (pantallas muy bajas).
+    final chatHeight =
+        (size.height - (compact ? 190 : 270)).clamp(300.0, 760.0).toDouble();
+    final reset = compact
+        ? IconButton(
             key: const ValueKey('chat-prototype-reset'),
             tooltip: 'Reiniciar conversación',
             icon: const Icon(Icons.restart_alt_rounded),
             onPressed: _chat.reset,
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              children: [
-                const _SimulationBanner(),
-                Expanded(
-                  child: ListenableBuilder(
-                    listenable: _chat,
-                    builder: (context, _) => _chat.isEmpty
-                        ? const _EmptyState()
-                        : _MessageList(messages: _chat.messages),
-                  ),
+          )
+        : OutlinedButton.icon(
+            key: const ValueKey('chat-prototype-reset'),
+            onPressed: _chat.reset,
+            icon: const Icon(Icons.restart_alt_rounded, size: 18),
+            label: const Text('Reiniciar conversación'),
+          );
+    return AppShell(
+      destination: widget.destination,
+      subpage: true,
+      mobileTitle: 'Chat de demostración',
+      mobileActions: compact ? [reset] : const [],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!compact) ...[
+            const BackLink(),
+            PageHeader(
+              title: 'Chat de demostración',
+              subtitle:
+                  'Así se verá la conversación con el cliente o el técnico.',
+              actions: [reset],
+            ),
+            const SizedBox(height: 20),
+          ],
+          Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 860),
+              child: Container(
+                height: chatHeight,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: FixiaColors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE3EAF4)),
                 ),
-                _Composer(controller: _input, onSend: _send),
-              ],
+                child: Column(
+                  children: [
+                    const _SimulationBanner(),
+                    Expanded(
+                      child: ListenableBuilder(
+                        listenable: _chat,
+                        builder: (context, _) => _chat.isEmpty
+                            ? const _EmptyState()
+                            : _MessageList(messages: _chat.messages),
+                      ),
+                    ),
+                    _Composer(controller: _input, onSend: _send),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

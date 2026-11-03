@@ -42,7 +42,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     fail = true;
-    await tester.tap(find.byTooltip('Actualizar postulaciones'));
+    await tester.tap(find.byKey(const ValueKey('my-applications-refresh')));
     await tester.pumpAndSettle();
     expect(find.text('150.000 COP'), findsNothing);
     expect(find.textContaining('detalle interno'), findsNothing);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../../../quotations/domain/quotation.dart';
 import '../../../quotations/domain/quotation_exceptions.dart';
 import '../../../quotations/domain/quotation_rules.dart';
@@ -43,93 +45,144 @@ class _TechnicianQuotationPageState extends State<TechnicianQuotationPage> {
   @override
   Widget build(BuildContext context) {
     final request = widget.application.serviceRequest;
-    return Scaffold(
-      backgroundColor: FixiaColors.neutralBackground,
-      appBar: AppBar(title: const Text('Cotización')),
-      body: FutureBuilder<List<Quotation>>(
-        future: _quotations,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${snapshot.error}', textAlign: TextAlign.center),
-                  TextButton(
+    return AppShell(
+      destination: ShellDestination.technicianJobs,
+      subpage: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const BackLink(label: 'Mis trabajos'),
+          PageHeader(
+            title: 'Cotización',
+            subtitle:
+                '${request.category.label} · ${request.zone}, ${request.city}',
+          ),
+          const SizedBox(height: 24),
+          FutureBuilder<List<Quotation>>(
+            future: _quotations,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SectionLoading();
+              }
+              if (snapshot.hasError) {
+                return EmptyState(
+                  message: '${snapshot.error}',
+                  icon: Icons.error_outline_rounded,
+                  action: TextButton(
                     onPressed: _reload,
                     child: const Text('Reintentar'),
                   ),
+                );
+              }
+              final versions = splitVersions(snapshot.data!);
+              final main = versions.main;
+              final accepted = main?.status == QuotationStatus.accepted;
+              final showForm = !accepted && (_editing || main == null);
+              final content = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (accepted)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: NoticeBanner(
+                        message:
+                            'El cliente aceptó esta cotización: el servicio quedó contratado. Lo ves en Servicios contratados.',
+                        tone: PillTone.success,
+                        icon: Icons.check_circle_outline_rounded,
+                      ),
+                    ),
+                  if (main != null) QuotationCard(quotation: main),
+                  if (main != null && !accepted && !_editing)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: () => setState(() => _editing = true),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Ajustar cotización (nueva versión)'),
+                      ),
+                    ),
+                  if (showForm) ...[
+                    if (main != null) const SizedBox(height: 16),
+                    QuotationForm(
+                      serviceRequestId: request.id,
+                      base: main,
+                      expectedAt: request.expectedAt,
+                      now: widget.now ?? DateTime.now,
+                      send: widget.send,
+                      onSent: () {
+                        setState(() => _editing = false);
+                        _reload();
+                      },
+                      onCancel: main == null
+                          ? null
+                          : () => setState(() => _editing = false),
+                    ),
+                  ],
+                  if (versions.history.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    const SectionTitle(title: 'Versiones anteriores'),
+                    for (final q in versions.history)
+                      QuotationCard(quotation: q, compact: true),
+                  ],
                 ],
-              ),
-            );
-          }
-          final versions = splitVersions(snapshot.data!);
-          final main = versions.main;
-          final accepted = main?.status == QuotationStatus.accepted;
-          final showForm = !accepted && (_editing || main == null);
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(
-                '${request.category.label} · ${request.zone}, ${request.city}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: FixiaColors.primary,
-                ),
-              ),
-              if (widget.application.proposedPrice != null)
-                Text(
-                  'Precio que propusiste al postularte: ${widget.application.proposedPrice!.label}',
-                  style: const TextStyle(color: FixiaColors.textSecondary),
-                ),
-              const SizedBox(height: 12),
-              if (accepted)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'El cliente aceptó esta cotización: el servicio quedó contratado. Lo ves en Servicios contratados.',
-                    style: TextStyle(color: FixiaColors.accent),
-                  ),
-                ),
-              if (main != null) QuotationCard(quotation: main),
-              if (main != null && !accepted && !_editing)
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _editing = true),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Ajustar cotización (nueva versión)'),
-                ),
-              if (showForm)
-                QuotationForm(
-                  serviceRequestId: request.id,
-                  base: main,
-                  expectedAt: request.expectedAt,
-                  now: widget.now ?? DateTime.now,
-                  send: widget.send,
-                  onSent: () {
-                    setState(() => _editing = false);
-                    _reload();
-                  },
-                  onCancel: main == null
-                      ? null
-                      : () => setState(() => _editing = false),
-                ),
-              if (versions.history.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  'Versiones anteriores',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                for (final q in versions.history)
-                  QuotationCard(quotation: q, compact: true),
-              ],
-            ],
-          );
-        },
+              );
+              return TwoColumns(
+                sideWidth: 320,
+                sideFirstWhenStacked: true,
+                main: content,
+                side: _RequestPanel(application: widget.application),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lo que el técnico sabe de la solicitud antes de contratar.
+class _RequestPanel extends StatelessWidget {
+  const _RequestPanel({required this.application});
+
+  final ServiceApplication application;
+
+  @override
+  Widget build(BuildContext context) {
+    final request = application.serviceRequest;
+    return FixiaPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Solicitud',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: FixiaColors.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          InfoRow(label: 'Categoría', value: request.category.label),
+          InfoRow(
+            label: 'Ubicación aproximada',
+            value: '${request.zone}, ${request.city}',
+          ),
+          if (request.expectedAt != null)
+            InfoRow(
+              label: 'Para el',
+              value: formatDateTime(request.expectedAt!),
+            ),
+          if (application.proposedPrice != null)
+            InfoRow(
+              label: 'Precio que propusiste',
+              value: application.proposedPrice!.label,
+            ),
+          const SizedBox(height: 10),
+          const Text(
+            'La dirección exacta se comparte cuando el cliente acepte tu cotización.',
+            style: TextStyle(fontSize: 12, color: FixiaColors.textSecondary),
+          ),
+        ],
       ),
     );
   }
@@ -286,81 +339,86 @@ class _QuotationFormState extends State<QuotationForm> {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-        color: FixiaColors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(FixiaRadii.card),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.base == null
-                    ? 'Enviar cotización formal'
-                    : 'Nueva versión de la cotización',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: FixiaColors.primary,
+  Widget build(BuildContext context) => FixiaPanel(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.base == null
+                  ? 'Enviar cotización formal'
+                  : 'Nueva versión de la cotización',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: FixiaColors.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('quotation-amount'),
+              controller: _amount,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Valor (COP)',
+                hintText: 'Ej. 145000',
+                errorText: _errors['amount'],
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('quotation-scope'),
+              controller: _scope,
+              maxLines: 3,
+              maxLength: QuotationRules.textMaxLength,
+              decoration: InputDecoration(
+                labelText: 'Alcance del trabajo',
+                errorText: _errors['scope'],
+              ),
+            ),
+            TextField(
+              key: const ValueKey('quotation-conditions'),
+              controller: _conditions,
+              maxLines: 3,
+              maxLength: QuotationRules.textMaxLength,
+              decoration: InputDecoration(
+                labelText: 'Condiciones (materiales, garantía…)',
+                errorText: _errors['conditions'],
+              ),
+            ),
+            ResponsiveGrid(
+              minItemWidth: 220,
+              children: [
+                _DateField(
+                  label: 'Fecha acordada',
+                  value: formatDateTime(_agreedAt),
+                  error: _errors['agreedAt'],
+                  onTap: _pickAgreedAt,
+                ),
+                _DateField(
+                  label: 'Válida hasta',
+                  value: formatDateTime(_validUntil),
+                  error: _errors['validUntil'],
+                  onTap: _pickValidUntil,
+                ),
+              ],
+            ),
+            if (_message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _message!,
+                  style: const TextStyle(color: FixiaColors.error),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('quotation-amount'),
-                controller: _amount,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Valor (COP)',
-                  hintText: 'Ej. 145000',
-                  errorText: _errors['amount'],
+            const SizedBox(height: 16),
+            ActionBar(actions: [
+              if (widget.onCancel != null)
+                TextButton(
+                  onPressed: _sending ? null : widget.onCancel,
+                  child: const Text('Cancelar'),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('quotation-scope'),
-                controller: _scope,
-                maxLines: 3,
-                maxLength: QuotationRules.textMaxLength,
-                decoration: InputDecoration(
-                  labelText: 'Alcance del trabajo',
-                  errorText: _errors['scope'],
-                ),
-              ),
-              TextField(
-                key: const ValueKey('quotation-conditions'),
-                controller: _conditions,
-                maxLines: 3,
-                maxLength: QuotationRules.textMaxLength,
-                decoration: InputDecoration(
-                  labelText: 'Condiciones (materiales, garantía…)',
-                  errorText: _errors['conditions'],
-                ),
-              ),
-              _DateField(
-                label: 'Fecha acordada',
-                value: formatDateTime(_agreedAt),
-                error: _errors['agreedAt'],
-                onTap: _pickAgreedAt,
-              ),
-              _DateField(
-                label: 'Válida hasta',
-                value: formatDateTime(_validUntil),
-                error: _errors['validUntil'],
-                onTap: _pickValidUntil,
-              ),
-              if (_message != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    _message!,
-                    style: const TextStyle(color: FixiaColors.error),
-                  ),
-                ),
-              const SizedBox(height: 12),
               FilledButton(
                 onPressed: _sending ? null : _submit,
                 child: _sending
@@ -373,13 +431,8 @@ class _QuotationFormState extends State<QuotationForm> {
                         ? 'Enviar cotización'
                         : 'Enviar nueva versión'),
               ),
-              if (widget.onCancel != null)
-                TextButton(
-                  onPressed: _sending ? null : widget.onCancel,
-                  child: const Text('Cancelar'),
-                ),
-            ],
-          ),
+            ]),
+          ],
         ),
       );
 }

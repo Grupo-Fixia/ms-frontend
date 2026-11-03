@@ -2,6 +2,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/layout/app_shell.dart';
+import '../../../core/theme/fixia_theme.dart';
+import '../../../core/widgets/fixia_ui.dart';
+
 import '../application/ports/evidence_repository.dart';
 import '../domain/service_evidence.dart';
 
@@ -18,6 +22,7 @@ class ServiceEvidencePage extends StatefulWidget {
     required this.openEvidence,
     this.downloadEvidence,
     this.onSessionExpired,
+    this.destination = ShellDestination.technicianJobs,
   });
   final String serviceId;
   final bool canUpload;
@@ -27,6 +32,9 @@ class ServiceEvidencePage extends StatefulWidget {
   final Future<void> Function(ServiceEvidence) openEvidence;
   final Future<void> Function(ServiceEvidence)? downloadEvidence;
   final VoidCallback? onSessionExpired;
+
+  /// Sección del menú que queda marcada (la del rol que abre la pantalla).
+  final ShellDestination destination;
 
   @override
   State<ServiceEvidencePage> createState() => _ServiceEvidencePageState();
@@ -218,117 +226,190 @@ class _ServiceEvidencePageState extends State<ServiceEvidencePage> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-        canPop: !_busy,
-        child: Scaffold(
-          appBar: AppBar(title: const Text('Evidencias del servicio')),
-          body: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  const Text(
-                      'JPEG, PNG, WebP o PDF. Máximo 10 MB por archivo y 10 evidencias por servicio.'),
-                  if (!widget.canUpload)
-                    const Text(
-                        'Solo consulta: la carga requiere al técnico contratado y un servicio en curso o finalizado por él.'),
-                  if ((_items?.length ?? 0) >= EvidenceFilePolicy.maxEvidences)
-                    const Text(
-                        'Se alcanzó el límite de 10 evidencias para este servicio.'),
-                  if (widget.canUpload) ...[
-                    OutlinedButton(
-                      key: const ValueKey('evidence-pick'),
-                      onPressed: _busy ||
-                              _loading ||
-                              _loadError != null ||
-                              (_items?.length ?? 0) >=
-                                  EvidenceFilePolicy.maxEvidences
-                          ? null
-                          : _pick,
-                      child: const Text('Seleccionar archivo'),
-                    ),
-                    if (_selected != null) ...[
-                      Text(_selected!.name,
-                          key: const ValueKey('evidence-selected')),
-                      const Text('Archivo local, pendiente de cargar.'),
-                      if (_preview != null)
-                        Image.memory(_preview!,
-                            height: 160,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                const Text('Vista previa no disponible.')),
-                      TextButton(
-                        key: const ValueKey('evidence-remove'),
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                  _selected = null;
-                                  _preview = null;
-                                }),
-                        child: const Text('Quitar archivo'),
-                      ),
-                      FilledButton(
-                        key: const ValueKey('evidence-upload'),
-                        onPressed: _busy ||
-                                _loading ||
-                                _loadError != null ||
-                                _uncertain
-                            ? null
-                            : _upload,
-                        child: const Text('Cargar evidencia'),
-                      ),
-                    ],
-                  ],
-                  if (_busy)
-                    const LinearProgressIndicator(
-                        key: ValueKey('evidence-busy')),
-                  if (_actionError != null)
-                    Text(_actionError!,
-                        key: const ValueKey('evidence-action-error')),
-                  if (_notice != null)
-                    Text(_notice!, key: const ValueKey('evidence-notice')),
-                  const SizedBox(height: 20),
-                  const Text('Evidencias registradas'),
-                  TextButton(
-                      onPressed: _busy || _loading ? null : _load,
-                      child: const Text('Actualizar evidencias')),
-                  if (_loading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_loadError != null) ...[
-                    Text(_loadError!,
-                        key: const ValueKey('evidence-load-error')),
-                    TextButton(
-                        onPressed: _busy ? null : _load,
-                        child: const Text('Reintentar consulta')),
-                  ] else if (_items!.isEmpty)
-                    const Text('Todavía no hay evidencias registradas.')
-                  else
-                    for (final item in _items!)
-                      ListTile(
-                        title: Text(item.fileName),
-                        subtitle: Text(
-                            '${item.author} · ${item.createdAt.toLocal()}'),
-                        trailing:
-                            Row(mainAxisSize: MainAxisSize.min, children: [
-                          IconButton(
-                            tooltip: 'Abrir evidencia',
-                            onPressed: _busy ? null : () => _open(item),
-                            icon: const Icon(Icons.open_in_new),
-                          ),
-                          if (widget.downloadEvidence != null)
-                            IconButton(
-                                tooltip: 'Descargar evidencia',
-                                onPressed: _busy
-                                    ? null
-                                    : () => _open(item, download: true),
-                                icon: const Icon(Icons.download_outlined)),
-                        ]),
-                      ),
-                ],
-              ),
+  Widget build(BuildContext context) {
+    final full = (_items?.length ?? 0) >= EvidenceFilePolicy.maxEvidences;
+    const muted = TextStyle(color: FixiaColors.textSecondary, fontSize: 13);
+    final upload = FixiaPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Agregar evidencia',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: FixiaColors.primary,
             ),
           ),
+          const SizedBox(height: 6),
+          const Text(
+              'JPEG, PNG, WebP o PDF. Máximo 10 MB por archivo y 10 evidencias por servicio.',
+              style: muted),
+          if (!widget.canUpload) ...[
+            const SizedBox(height: 10),
+            const NoticeBanner(
+              message:
+                  'Solo consulta: la carga requiere al técnico contratado y un servicio en curso o finalizado por él.',
+              tone: PillTone.neutral,
+              icon: Icons.visibility_outlined,
+            ),
+          ],
+          if (full) ...[
+            const SizedBox(height: 10),
+            const Text(
+                'Se alcanzó el límite de 10 evidencias para este servicio.'),
+          ],
+          if (widget.canUpload) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              key: const ValueKey('evidence-pick'),
+              onPressed: _busy || _loading || _loadError != null || full
+                  ? null
+                  : _pick,
+              icon: const Icon(Icons.upload_file_outlined, size: 18),
+              label: const Text('Seleccionar archivo'),
+            ),
+            if (_selected != null) ...[
+              const SizedBox(height: 12),
+              Text(_selected!.name,
+                  key: const ValueKey('evidence-selected'),
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const Text('Archivo local, pendiente de cargar.', style: muted),
+              if (_preview != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(_preview!,
+                      height: 180,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          const Text('Vista previa no disponible.')),
+                ),
+              ],
+              const SizedBox(height: 10),
+              ActionBar(actions: [
+                TextButton(
+                  key: const ValueKey('evidence-remove'),
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() {
+                            _selected = null;
+                            _preview = null;
+                          }),
+                  child: const Text('Quitar archivo'),
+                ),
+                FilledButton(
+                  key: const ValueKey('evidence-upload'),
+                  onPressed:
+                      _busy || _loading || _loadError != null || _uncertain
+                          ? null
+                          : _upload,
+                  child: const Text('Cargar evidencia'),
+                ),
+              ]),
+            ],
+          ],
+          if (_busy) ...[
+            const SizedBox(height: 10),
+            const LinearProgressIndicator(key: ValueKey('evidence-busy')),
+          ],
+          if (_actionError != null) ...[
+            const SizedBox(height: 10),
+            Text(_actionError!,
+                key: const ValueKey('evidence-action-error'),
+                style: const TextStyle(color: FixiaColors.error)),
+          ],
+          if (_notice != null) ...[
+            const SizedBox(height: 10),
+            Text(_notice!,
+                key: const ValueKey('evidence-notice'),
+                style: const TextStyle(color: Color(0xFF00745F))),
+          ],
+        ],
+      ),
+    );
+    Widget list;
+    if (_loading) {
+      list = const SectionLoading();
+    } else if (_loadError != null) {
+      list = EmptyState(
+        icon: Icons.error_outline_rounded,
+        message: _loadError!,
+        action: TextButton(
+            onPressed: _busy ? null : _load,
+            child: const Text('Reintentar consulta')),
+      );
+      list =
+          KeyedSubtree(key: const ValueKey('evidence-load-error'), child: list);
+    } else if (_items!.isEmpty) {
+      list = const EmptyState(
+        icon: Icons.photo_library_outlined,
+        message: 'Todavía no hay evidencias registradas.',
+      );
+    } else {
+      list = FixiaPanel(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          children: [
+            for (final item in _items!)
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file_outlined,
+                    color: FixiaColors.secondary),
+                title: Text(item.fileName),
+                subtitle: Text('${item.author} · ${item.createdAt.toLocal()}'),
+                trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    tooltip: 'Abrir evidencia',
+                    onPressed: _busy ? null : () => _open(item),
+                    icon: const Icon(Icons.open_in_new),
+                  ),
+                  if (widget.downloadEvidence != null)
+                    IconButton(
+                        tooltip: 'Descargar evidencia',
+                        onPressed:
+                            _busy ? null : () => _open(item, download: true),
+                        icon: const Icon(Icons.download_outlined)),
+                ]),
+              ),
+          ],
         ),
       );
+    }
+    return PopScope(
+      canPop: !_busy,
+      child: AppShell(
+        destination: widget.destination,
+        subpage: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BackLink(onPressed: _busy ? () {} : null),
+            const PageHeader(
+              title: 'Evidencias del servicio',
+              subtitle:
+                  'Fotos y documentos del trabajo, visibles para el cliente y el técnico.',
+            ),
+            const SizedBox(height: 24),
+            TwoColumns(
+              sideWidth: 360,
+              sideFirstWhenStacked: true,
+              main: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SectionTitle(
+                    title: 'Evidencias registradas',
+                    action: TextButton(
+                        onPressed: _busy || _loading ? null : _load,
+                        child: const Text('Actualizar evidencias')),
+                  ),
+                  list,
+                ],
+              ),
+              side: upload,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
