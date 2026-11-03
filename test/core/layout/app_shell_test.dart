@@ -47,9 +47,10 @@ void main() {
     expect(ShellDestination.of(ShellRole.client), [
       ShellDestination.clientHome,
       ShellDestination.clientRequests,
+      ShellDestination.clientServices,
       ShellDestination.clientProfile,
     ]);
-    expect(ShellDestination.of(ShellRole.technician), hasLength(4));
+    expect(ShellDestination.of(ShellRole.technician), hasLength(5));
     expect(ShellDestination.of(ShellRole.company), hasLength(3));
   });
 
