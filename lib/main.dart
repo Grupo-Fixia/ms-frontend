@@ -51,7 +51,14 @@ import 'features/client/service_requests/presentation/service_request_detail_pag
 import 'features/contracts/application/contract_use_cases.dart';
 import 'features/contracts/domain/contract_exceptions.dart';
 import 'features/contracts/domain/service_contract.dart';
+import 'features/contracts/presentation/contract_card.dart';
 import 'features/contracts/presentation/service_actions.dart';
+import 'features/service_history/application/service_history_use_cases.dart';
+import 'features/service_history/domain/service_history_entry.dart';
+import 'features/service_history/domain/service_history_exceptions.dart';
+import 'features/service_history/presentation/service_history_controller.dart';
+import 'features/service_history/presentation/service_history_detail_page.dart';
+import 'features/service_history/presentation/service_history_page.dart';
 import 'features/quotations/application/quotation_use_cases.dart';
 import 'features/quotations/domain/quotation_exceptions.dart';
 import 'features/technician/jobs/presentation/technician_contract_page.dart';
@@ -124,6 +131,10 @@ abstract final class AppRoutes {
   static const companyDashboard = '/empresa/inicio';
   static const companyTechnicians = '/empresa/tecnicos';
   static const companyOpportunities = '/empresa/oportunidades';
+
+  /// Historial propio de servicios (GC-449), uno por rol.
+  static const clientServiceHistory = '/cliente/servicios';
+  static const technicianServiceHistory = '/tecnico/servicios';
 
   /// Chat prototipo, solo simulación (GC-431). No es mensajería real.
   static const chatPrototype = '/demo/chat';
@@ -356,6 +367,17 @@ class _FixiaAppState extends State<FixiaApp> {
               ListCompanyTechnicians(widget.companyRepository!),
             );
 
+  /// Historial propio (GC-449). Se vuelve a consultar cada vez que se abre.
+  late final ServiceHistoryController? _serviceHistory =
+      widget.backend?.serviceHistory == null ||
+              widget.backend?.evaluations == null
+          ? null
+          : ServiceHistoryController(
+              listHistory: ListServiceHistory(widget.backend!.serviceHistory!),
+              getEvaluations:
+                  GetServiceEvaluations(widget.backend!.evaluations!),
+            );
+
   late final TechnicianSpecialtiesRepository _specialtiesRepository =
       widget.technicianSpecialtiesRepository ??
           DemoTechnicianSpecialtiesRepository();
@@ -384,6 +406,7 @@ class _FixiaAppState extends State<FixiaApp> {
   void dispose() {
     _otherTabs?.cancel();
     _companyTechnicians?.dispose();
+    _serviceHistory?.dispose();
     _sessionStore.removeListener(_onSessionChanged);
     if (widget.sessionStore == null) _sessionStore.dispose();
     super.dispose();
@@ -932,6 +955,7 @@ class _FixiaAppState extends State<FixiaApp> {
         ContractFailure(:final isSessionExpired) => isSessionExpired,
         ApplicationFailure(:final isSessionExpired) => isSessionExpired,
         ServiceRequestFailure(:final isSessionExpired) => isSessionExpired,
+        ServiceHistoryFailure(:final isSessionExpired) => isSessionExpired,
         _ => false,
       };
       if (expired && context.mounted) _endExpiredSession(context);
@@ -1110,6 +1134,98 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  /// «Mis servicios» del cliente o del técnico (GC-449).
+  Widget _serviceHistoryPage(BuildContext context) {
+    final controller = _serviceHistory;
+    final backend = widget.backend;
+    final profile = _sessionStore.profile;
+    if (controller == null || backend == null || profile == null) {
+      return const Scaffold(
+          body: Center(child: Text('Esta sección requiere conexión con Fixia.')));
+    }
+    final destination = profile.role == UserRole.professional
+        ? ShellDestination.technicianServices
+        : ShellDestination.clientServices;
+    return ServiceHistoryPage(
+      controller: controller,
+      destination: destination,
+      userId: profile.id,
+      onOpen: (entry) =>
+          _openServiceHistoryEntry(context, backend, destination, entry),
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
+
+  /// Detalle de un servicio del historial: la contratación con las mismas
+  /// acciones y evidencias que ya tiene cada rol (GC-429, GC-442, GC-440) y
+  /// sus evaluaciones reales (GC-444).
+  Future<void> _openServiceHistoryEntry(
+    BuildContext context,
+    BackendIntegrations backend,
+    ShellDestination destination,
+    ServiceHistoryEntry entry,
+  ) {
+    final userId = _sessionStore.profile?.id ?? '';
+    final Widget contractSection;
+    if (entry.role == HistoryRole.professional) {
+      contractSection = ServerSection<ServiceContract>(
+        title: 'Contratación',
+        load: () => _serviceCall(
+            context, () => GetMyContract(backend.contracts)(entry.contractId)),
+        builder: (context, contract, reload) => ContractCard(
+          contract: contract,
+          actions: [
+            ...technicianServiceActions(
+              contract: contract,
+              start: () => _serviceCall(
+                  context, () => StartService(backend.contracts)(contract.id)),
+              finish: () => _serviceCall(
+                  context, () => FinishService(backend.contracts)(contract.id)),
+              onDone: reload,
+            ),
+            ..._evidenceActions(
+                context, EvidenceTarget.forContract(contract.id)),
+          ],
+        ),
+      );
+    } else {
+      contractSection = ClientContractSection(
+        load: () => _serviceCall(context,
+            () => GetRequestContract(backend.contracts)(entry.serviceRequestId)),
+        actionsBuilder: (context, contract, reload) => [
+          ...clientServiceActions(
+            contract: contract,
+            confirmClosure: () => _serviceCall(
+                context,
+                () => ConfirmServiceClosure(backend.contracts)(
+                    entry.serviceRequestId)),
+            object: (reason) => _serviceCall(
+                context,
+                () => ObjectServiceClosure(backend.contracts)(
+                    entry.serviceRequestId, reason)),
+            onDone: reload,
+          ),
+          ..._evidenceActions(
+              context, EvidenceTarget.forRequest(contract.serviceRequestId)),
+        ],
+      );
+    }
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ServiceHistoryDetailPage(
+          entry: entry,
+          destination: destination,
+          userId: userId,
+          contractSection: contractSection,
+          loadEvaluations: () => _serviceCall(
+              context,
+              () => GetServiceEvaluations(backend.evaluations!)(
+                  [entry.serviceRequestId])),
+        ),
+      ),
+    );
+  }
+
   /// La sesión venció mientras se usaba una pantalla: se vuelve al login.
   List<Widget> _evidenceActions(BuildContext context, EvidenceTarget target) {
     final feature = widget.backend?.evidence;
@@ -1177,11 +1293,13 @@ class _FixiaAppState extends State<FixiaApp> {
     final route = switch (destination) {
       ShellDestination.clientHome => AppRoutes.clientDashboard,
       ShellDestination.clientRequests => AppRoutes.clientServiceRequests,
+      ShellDestination.clientServices => AppRoutes.clientServiceHistory,
       ShellDestination.clientProfile => AppRoutes.clientProfile,
       ShellDestination.technicianHome => AppRoutes.technicianDashboard,
       ShellDestination.technicianOpportunities =>
         AppRoutes.technicianOpportunities,
       ShellDestination.technicianJobs => AppRoutes.technicianJobs,
+      ShellDestination.technicianServices => AppRoutes.technicianServiceHistory,
       ShellDestination.technicianProfile => AppRoutes.technicianProfile,
       ShellDestination.companyHome => AppRoutes.companyDashboard,
       ShellDestination.companyTechnicians => AppRoutes.companyTechnicians,
@@ -1285,6 +1403,10 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.professional, _technicianOpportunitiesPage),
         AppRoutes.technicianJobs:
             _guard(RouteAccess.professional, _technicianJobsPage),
+        AppRoutes.clientServiceHistory:
+            _guard(RouteAccess.client, _serviceHistoryPage),
+        AppRoutes.technicianServiceHistory:
+            _guard(RouteAccess.professional, _serviceHistoryPage),
         AppRoutes.technicianSpecialties:
             _guard(RouteAccess.professional, _technicianSpecialtiesPage),
         AppRoutes.technicianAvailability:
