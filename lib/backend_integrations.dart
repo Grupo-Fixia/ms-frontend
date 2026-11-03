@@ -1,3 +1,5 @@
+import 'features/service_evidence/application/evidence_feature.dart';
+import 'features/service_evidence/infrastructure/http_evidence_repository.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/http/authorized_http.dart';
@@ -28,6 +30,7 @@ class BackendIntegrations {
     required this.applications,
     required this.quotations,
     required this.contracts,
+    this.evidence,
     this.companyApplications,
     this.companyOpportunities,
   });
@@ -39,48 +42,57 @@ class BackendIntegrations {
     required Uri usersBaseUrl,
     required Uri servicesBaseUrl,
     required AuthorizedHttp authorizedHttp,
-  }) =>
-      BackendIntegrations(
-        companyApplications: HttpCompanyApplicationRepository(
-            client: client,
-            baseUrl: servicesBaseUrl,
-            authorizedHttp: authorizedHttp),
-        companyOpportunities: HttpCompanyOpportunitiesRepository(
-            client: client,
-            baseUrl: servicesBaseUrl,
-            authorizedHttp: authorizedHttp),
-        clientProfile: HttpClientProfileRepository(
-          client: client,
-          baseUrl: usersBaseUrl,
-          authorizedHttp: authorizedHttp,
-        ),
-        serviceRequests: HttpServiceRequestRepository(
+  }) {
+    final contracts = HttpContractRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp);
+    return BackendIntegrations(
+      evidence: EvidenceFeature(
+          contracts: contracts,
+          repositoryFor: (access) => HttpEvidenceRepository(
+              client: client,
+              baseUrl: servicesBaseUrl,
+              authorizedHttp: authorizedHttp,
+              access: access)),
+      companyApplications: HttpCompanyApplicationRepository(
           client: client,
           baseUrl: servicesBaseUrl,
-          authorizedHttp: authorizedHttp,
-        ),
-        opportunities: HttpOpportunityRepository(
+          authorizedHttp: authorizedHttp),
+      companyOpportunities: HttpCompanyOpportunitiesRepository(
           client: client,
           baseUrl: servicesBaseUrl,
-          authorizedHttp: authorizedHttp,
-        ),
-        applications: HttpApplicationRepository(
-          client: client,
-          baseUrl: servicesBaseUrl,
-          authorizedHttp: authorizedHttp,
-        ),
-        quotations: HttpQuotationRepository(
-          client: client,
-          baseUrl: servicesBaseUrl,
-          authorizedHttp: authorizedHttp,
-        ),
-        contracts: HttpContractRepository(
-          client: client,
-          baseUrl: servicesBaseUrl,
-          authorizedHttp: authorizedHttp,
-        ),
-      );
+          authorizedHttp: authorizedHttp),
+      clientProfile: HttpClientProfileRepository(
+        client: client,
+        baseUrl: usersBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      serviceRequests: HttpServiceRequestRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      opportunities: HttpOpportunityRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      applications: HttpApplicationRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      quotations: HttpQuotationRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      contracts: contracts,
+    );
+  }
 
+  final EvidenceFeature? evidence;
   final ClientProfileRepository clientProfile;
   final ServiceRequestRepository serviceRequests;
   final OpportunityRepository opportunities;
