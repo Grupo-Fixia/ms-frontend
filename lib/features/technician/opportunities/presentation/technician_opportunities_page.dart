@@ -6,6 +6,7 @@ import '../../../../core/layout/app_shell.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/service_opportunity.dart';
 import '../infrastructure/mock_service_opportunities.dart';
+import 'match_setup_summary.dart';
 import '../../applications/domain/proposed_price.dart';
 import '../../applications/presentation/application_price_form.dart';
 
@@ -21,6 +22,8 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
     this.loadOpportunities,
     this.applyTo,
     this.onOpenMyApplications,
+    this.loadMatchSetup,
+    this.onOpenAvailability,
   });
 
   final ValueChanged<String>? onApply;
@@ -34,6 +37,11 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
   /// Consulta las solicitudes compatibles en el servidor (GC-340). Si es
   /// `null`, se muestran solicitudes de ejemplo.
   final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
+
+  /// Configuración del técnico que se muestra cuando no hay oportunidades,
+  /// para que vea por qué no le llega nada.
+  final Future<MatchSetup> Function()? loadMatchSetup;
+  final VoidCallback? onOpenAvailability;
 
   /// Envía la postulación al servidor (GC-345). Si es `null`, la postulación
   /// es solo de demostración. Si falla, lanza una excepción con el mensaje
@@ -133,6 +141,16 @@ class _TechnicianOpportunitiesPageState
             ),
           ],
         ),
+      );
+    } else if (visible.isEmpty &&
+        _live &&
+        _selectedCategory == null &&
+        widget.loadMatchSetup != null) {
+      body = MatchSetupSummary(
+        message: 'Por ahora no hay solicitudes compatibles contigo.',
+        load: widget.loadMatchSetup!,
+        onOpenAvailability: widget.onOpenAvailability,
+        onOpenSpecialties: widget.onOpenSpecialties,
       );
     } else if (visible.isEmpty) {
       body = EmptyState(
