@@ -383,6 +383,43 @@ void main() {
     expect(find.byType(ServiceHistoryPage), findsOneWidget);
   });
 
+  testWidgets(
+      'el cliente califica desde el detalle y al volver el historial lo '
+      'refleja', (tester) async {
+    final closed = historyEntry('3', closedAt: DateTime.utc(2026, 10, 30, 18));
+    final evaluations = FakeEvaluations()..evaluatorId = fixtureProfile.id;
+    await _pumpApp(
+      tester,
+      profile: fixtureProfile,
+      history: FakeServiceHistory({
+        null: ServiceHistoryResult(items: [closed]),
+      }),
+      evaluations: evaluations,
+      contracts: FakeContracts()..items.add(_contract(closed)),
+    );
+    _navigator(tester).pushNamed(AppRoutes.clientServiceHistory);
+    await tester.pumpAndSettle();
+    expect(find.text('Sin evaluaciones'), findsOneWidget);
+
+    await tester.tap(_key('service-history-con-3'));
+    await tester.pumpAndSettle();
+    expect(find.text('Califica al técnico'), findsOneWidget);
+
+    await tester.tap(_key('service-evaluation-star-5'));
+    await tester.pump();
+    await tester.tap(_key('service-evaluation-submit'));
+    await tester.pumpAndSettle();
+
+    expect(evaluations.submitted.single.serviceRequestId, 'req-3');
+    expect(evaluations.submitted.single.rating, 5);
+    expect(find.text('Tu evaluación'), findsOneWidget);
+
+    await tester.tap(_key('page-back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ServiceHistoryPage), findsOneWidget);
+    expect(find.text('Calificaste '), findsOneWidget);
+  });
+
   testWidgets('cada rol solo abre su ruta de historial', (tester) async {
     await _pumpApp(tester, profile: fixtureProfile);
     _navigator(tester).pushNamed(AppRoutes.technicianServiceHistory);

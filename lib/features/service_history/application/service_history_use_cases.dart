@@ -37,3 +37,23 @@ class GetServiceEvaluations {
     return List.unmodifiable(evaluations);
   }
 }
+
+/// Caso de uso: calificar a la contraparte de un servicio cerrado (GC-445).
+/// Las reglas de quién puede evaluar y cuándo las decide ms-users; un
+/// rechazo llega como `ServiceHistoryFailure`.
+class SubmitServiceEvaluation {
+  const SubmitServiceEvaluation(this._repository);
+
+  final ServiceEvaluationRepository _repository;
+
+  Future<ServiceEvaluation> call({
+    required String serviceRequestId,
+    required int rating,
+    String? comment,
+  }) =>
+      _repository.submit(NewServiceEvaluation(
+        serviceRequestId: serviceRequestId,
+        rating: rating,
+        comment: comment,
+      ));
+}
