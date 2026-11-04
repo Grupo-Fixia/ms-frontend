@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/domain/service_budget.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
@@ -54,6 +55,8 @@ Map<String, Object?> _requestJson({
   Object? exactLocation,
 }) =>
     {
+      'budgetAmount': 150000,
+      'budgetCurrency': 'COP',
       'id': id,
       'category': category,
       'description': 'Fuga de agua en el baño',
@@ -79,6 +82,7 @@ void main() {
         sent = request;
         return _json(201, _requestJson());
       }).publish(NewServiceRequest(
+        budget: ServiceBudget.tryParse('150000'),
         category: ServiceCategory.plumbing,
         description: 'Fuga de agua en el baño',
         approximateLocation: const ApproximateLocation(
@@ -98,6 +102,8 @@ void main() {
       expect(sent.headers['Content-Type'], startsWith('application/json'));
       expect(jsonDecode(sent.body), {
         'category': 'PLUMBING',
+        'budgetAmount': 150000,
+        'budgetCurrency': 'COP',
         'description': 'Fuga de agua en el baño',
         'approximateLocation': {
           'city': 'Bogotá',
@@ -124,6 +130,7 @@ void main() {
         sent = request;
         return _json(201, _requestJson());
       }).publish(NewServiceRequest(
+        budget: ServiceBudget.tryParse('150000'),
         category: ServiceCategory.painting,
         description: 'Pintar',
         approximateLocation:
@@ -148,10 +155,11 @@ void main() {
                 {'field': 'x', 'message': ' '},
                 'basura',
               ],
-            })).publish(const NewServiceRequest(
+            })).publish(NewServiceRequest(
+          budget: ServiceBudget.tryParse('150000'),
           category: null,
           description: '',
-          approximateLocation: ApproximateLocation(city: '', zone: ''),
+          approximateLocation: const ApproximateLocation(city: '', zone: ''),
           expectedAt: null,
         )),
         throwsA(_failure(
@@ -167,10 +175,11 @@ void main() {
     test('400 por regla de negocio muestra el detail', () async {
       await expectLater(
         _repository((_) async => _json(400, {'detail': 'Regla del backend'}))
-            .publish(const NewServiceRequest(
+            .publish(NewServiceRequest(
+          budget: ServiceBudget.tryParse('150000'),
           category: ServiceCategory.plumbing,
           description: 'x',
-          approximateLocation: ApproximateLocation(city: 'a', zone: 'b'),
+          approximateLocation: const ApproximateLocation(city: 'a', zone: 'b'),
           expectedAt: null,
         )),
         throwsA(_failure(message: 'Regla del backend', fieldErrors: {})),
@@ -180,10 +189,11 @@ void main() {
     test('si la respuesta no trae una solicitud válida, es un error', () async {
       await expectLater(
         _repository((_) async => _json(201, {'id': 'req-1'}))
-            .publish(const NewServiceRequest(
+            .publish(NewServiceRequest(
+          budget: ServiceBudget.tryParse('150000'),
           category: ServiceCategory.plumbing,
           description: 'x',
-          approximateLocation: ApproximateLocation(city: 'a', zone: 'b'),
+          approximateLocation: const ApproximateLocation(city: 'a', zone: 'b'),
           expectedAt: null,
         )),
         throwsA(_failure(
@@ -194,6 +204,20 @@ void main() {
   });
 
   group('listMine', () {
+    test('incluye solicitudes en ejecución, finalizadas y cerradas', () async {
+      final requests = await _repository((_) async => _json(200, [
+            _requestJson(id: 'req-1', status: 'IN_PROGRESS'),
+            _requestJson(id: 'req-2', status: 'TECHNICIAN_FINISHED'),
+            _requestJson(id: 'req-3', status: 'CLOSED'),
+          ])).listMine();
+
+      expect(requests.map((r) => r.status), [
+        ServiceRequestStatus.inProgress,
+        ServiceRequestStatus.technicianFinished,
+        ServiceRequestStatus.closed,
+      ]);
+    });
+
     test('lista las solicitudes y descarta las que no entiende', () async {
       late http.Request sent;
       final requests = await _repository((request) async {
@@ -306,10 +330,12 @@ void main() {
       );
       await expectLater(
         _repository((_) async => _json(200, _requestJson())).publish(
-          const NewServiceRequest(
+          NewServiceRequest(
+            budget: ServiceBudget.tryParse('150000'),
             category: ServiceCategory.plumbing,
             description: 'x',
-            approximateLocation: ApproximateLocation(city: 'a', zone: 'b'),
+            approximateLocation:
+                const ApproximateLocation(city: 'a', zone: 'b'),
             expectedAt: null,
           ),
         ),
@@ -337,5 +363,28 @@ void main() {
         )),
       );
     });
+  });
+
+  test(
+      'si ms-services rechaza el token recién renovado, es un error y no una '
+      'sesión vencida', () async {
+    var token = 'token-1';
+    final repository = HttpServiceRequestRepository(
+      client: MockClient((_) async => _json(401, {})),
+      baseUrl: Uri.parse('http://localhost'),
+      authorizedHttp: AuthorizedHttp(
+        accessToken: () => token,
+        renewSession: () async {
+          token = 'token-2';
+          return true;
+        },
+      ),
+    );
+
+    await expectLater(
+      repository.listMine(),
+      throwsA(isA<ServiceRequestFailure>()
+          .having((f) => f.isSessionExpired, 'isSessionExpired', isFalse)),
+    );
   });
 }

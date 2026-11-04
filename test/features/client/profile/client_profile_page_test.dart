@@ -61,17 +61,20 @@ void main() {
     );
     expect(find.text('ana@fixia.com'), findsOneWidget);
     expect(find.text('No registrado'), findsOneWidget);
-    expect(find.text('MÉTODOS DE PAGO'), findsOneWidget);
-    expect(find.text('Débito •••• 4582'), findsOneWidget);
-    expect(find.text('Crédito •••• 7893'), findsOneWidget);
-    expect(find.text('Datos de demostración'), findsOneWidget);
-    expect(find.byKey(const ValueKey('client-profile-wallet')), findsOneWidget);
+    // Sin datos de ejemplo: ni métodos de pago ni saldo inventados.
+    expect(find.text('Débito •••• 4582'), findsNothing);
+    expect(find.text('Datos de demostración'), findsNothing);
+    expect(find.byKey(const ValueKey('client-profile-wallet')), findsNothing);
+    expect(find.byKey(const ValueKey('client-profile-payments-note')),
+        findsOneWidget);
+    expect(find.text('–'), findsNWidgets(3));
+    // En celular «Mi perfil» va dentro de «Más».
     expect(
-      find.byKey(const ValueKey('client-profile-nav-profile')),
+      find.byKey(const ValueKey('client-nav-mas')),
       findsOneWidget,
     );
 
-    final editButton = tester.widget<IconButton>(
+    final editButton = tester.widget<ButtonStyleButton>(
       find.byKey(const ValueKey('client-profile-edit')),
     );
     expect(editButton.onPressed, isNotNull);
@@ -192,7 +195,7 @@ void main() {
     );
 
     await tester.tap(
-      find.byKey(const ValueKey('client-profile-nav-home')),
+      find.byKey(const ValueKey('client-nav-inicio')),
     );
 
     expect(homeCalls, 1);

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../application/get_service_catalog.dart';
 import '../application/get_technician_specialties.dart';
 import '../application/update_technician_specialties.dart';
@@ -120,39 +121,52 @@ class _TechnicianSpecialtiesPageState extends State<TechnicianSpecialtiesPage> {
     );
   }
 
+  void _navigate(ShellDestination destination) {
+    final own = switch (destination) {
+      ShellDestination.technicianHome => widget.onOpenHome,
+      ShellDestination.technicianOpportunities => widget.onOpenOpportunities,
+      ShellDestination.technicianProfile => widget.onOpenProfile,
+      _ => null,
+    };
+    if (own != null) return own();
+    final scope = FixiaShellScope.maybeOf(context);
+    if (scope?.onNavigate != null) return scope!.onNavigate!(destination);
+    _showNavigationHint(context, destination.label);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MobileFeatureShell(
-      title: 'Mis especialidades',
-      onBack: widget.onCancel ?? () => Navigator.of(context).maybePop(),
-      bottomNavigationItems: _buildNavigationItems(context),
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _loadError != null
-              ? _LoadError(message: _loadError!, onRetry: _load)
-              : _buildContent(context),
+    return AppShell(
+      destination: ShellDestination.technicianProfile,
+      subpage: true,
+      onNavigate: _navigate,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BackLink(onPressed: widget.onCancel),
+          const PageHeader(
+            title: 'Mis especialidades',
+            subtitle:
+                'Activa una o más categorías para recibir solicitudes compatibles.',
+          ),
+          const SizedBox(height: 24),
+          if (_loading)
+            const SectionLoading()
+          else if (_loadError != null)
+            _LoadError(message: _loadError!, onRetry: _load)
+          else
+            _buildContent(context),
+        ],
+      ),
     );
   }
 
   Widget _buildContent(BuildContext context) {
     final hasChanges =
         !(_selection.length == _saved.length && _selection.containsAll(_saved));
-    return ListView(
-      padding: const EdgeInsets.all(18),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Elige los trabajos que realizas',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Activa una o más categorías para recibir solicitudes compatibles.',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: FixiaColors.textSecondary),
-        ),
-        const SizedBox(height: 14),
         Container(
           key: const ValueKey('technician-specialties-summary'),
           padding: const EdgeInsets.all(14),
@@ -174,55 +188,35 @@ class _TechnicianSpecialtiesPageState extends State<TechnicianSpecialtiesPage> {
             ],
           ),
         ),
-        const SizedBox(height: 14),
-        for (final option in _catalog)
-          _SpecialtyCard(
-            option: option,
-            selected: _selection.contains(option.category),
-            onChanged: (value) => _toggle(option.category, value),
+        const SizedBox(height: 16),
+        ResponsiveGrid(
+          minItemWidth: 260,
+          spacing: 12,
+          children: [
+            for (final option in _catalog)
+              _SpecialtyCard(
+                option: option,
+                selected: _selection.contains(option.category),
+                onChanged: (value) => _toggle(option.category, value),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        ActionBar(actions: [
+          TextButton(
+            key: const ValueKey('technician-specialties-cancel'),
+            onPressed: _saving ? null : _cancel,
+            child: const Text('Cancelar'),
           ),
-        const SizedBox(height: 12),
-        FilledButton(
-          key: const ValueKey('technician-specialties-save'),
-          onPressed: _saving || !hasChanges ? null : _save,
-          child: Text(_saving ? 'Guardando...' : 'Guardar Cambios'),
-        ),
-        TextButton(
-          key: const ValueKey('technician-specialties-cancel'),
-          onPressed: _saving ? null : _cancel,
-          child: const Text('Cancelar'),
-        ),
+          FilledButton(
+            key: const ValueKey('technician-specialties-save'),
+            onPressed: _saving || !hasChanges ? null : _save,
+            child: Text(_saving ? 'Guardando...' : 'Guardar cambios'),
+          ),
+        ]),
       ],
     );
   }
-
-  List<MobileNavigationItem> _buildNavigationItems(BuildContext context) => [
-        MobileNavigationItem(
-          icon: Icons.home_rounded,
-          label: 'Inicio',
-          onPressed:
-              widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
-        ),
-        MobileNavigationItem(
-          icon: Icons.work_outline_rounded,
-          label: 'Trabajos',
-          onPressed: widget.onOpenOpportunities ??
-              () => _showNavigationHint(context, 'Trabajos'),
-        ),
-        MobileNavigationItem(
-          icon: Icons.account_balance_wallet_outlined,
-          label: 'Billetera',
-          onPressed: widget.onOpenWallet ??
-              () => _showNavigationHint(context, 'Billetera'),
-        ),
-        MobileNavigationItem(
-          icon: Icons.person_outline_rounded,
-          label: 'Perfil',
-          selected: true,
-          onPressed: widget.onOpenProfile ??
-              () => _showNavigationHint(context, 'Perfil'),
-        ),
-      ];
 
   void _showNavigationHint(BuildContext context, String section) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -248,7 +242,9 @@ class _SpecialtyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final category = option.category;
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      color: selected ? FixiaColors.supportBackground : FixiaColors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(

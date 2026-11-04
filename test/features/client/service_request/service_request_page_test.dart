@@ -4,7 +4,48 @@ import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/client/service_request/domain/service_request_draft.dart';
 import 'package:ms_frontend/features/client/service_request/presentation/service_request_page.dart';
 
+/// Elige mañana a las 10:00 a. m. en el selector de Fixia.
+Future<void> pickTomorrowAt10(WidgetTester tester) async {
+  final tomorrow = DateTime.now().add(const Duration(days: 1));
+  String two(int n) => n.toString().padLeft(2, '0');
+  final day = find.byKey(ValueKey(
+      'fixia-picker-day-${tomorrow.year}-${two(tomorrow.month)}-${two(tomorrow.day)}'));
+  if (day.evaluate().isEmpty) {
+    await tester.tap(find.byKey(const ValueKey('fixia-picker-next')));
+    await tester.pumpAndSettle();
+  }
+  await tester.ensureVisible(day);
+  await tester.tap(day);
+  await tester.pumpAndSettle();
+  final slot = find.byKey(const ValueKey('fixia-picker-slot-10:00'));
+  await tester.ensureVisible(slot);
+  await tester.tap(slot);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const ValueKey('fixia-picker-confirm')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('presupuesto requerido, positivo y conservado al corregirlo',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: ServiceRequestPage()));
+    final budget = find.byKey(const ValueKey('client-request-budget'));
+    await tester.ensureVisible(budget);
+    for (final input in ['0', '-10', 'texto', '', '1.001', '10000000000']) {
+      await tester.enterText(budget, input);
+      await tester.pump();
+      expect(
+        tester.widget<TextFormField>(budget).validator!(input),
+        isNotNull,
+      );
+    }
+    await tester.enterText(budget, '150000');
+    await tester.pump();
+    expect(tester.widget<TextFormField>(budget).validator!('150000'), isNull);
+    expect(find.textContaining('El técnico podrá proponer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('muestra formulario, privacidad y envío deshabilitado',
       (tester) async {
     await tester.pumpWidget(
@@ -16,8 +57,6 @@ void main() {
 
     expect(find.text('Publicar un problema'), findsOneWidget);
     expect(find.text('Descripción del problema'), findsOneWidget);
-    expect(find.text('Ubicación aproximada'), findsOneWidget);
-    expect(find.textContaining('dirección exacta se protege'), findsOneWidget);
     final description = find.byKey(
       const ValueKey('client-request-description'),
     );
@@ -26,6 +65,13 @@ void main() {
     await tester.enterText(description, '');
     await tester.pump();
     expect(find.text('La descripción es obligatoria.'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Ubicación aproximada'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Ubicación aproximada'), findsOneWidget);
+    expect(find.textContaining('dirección exacta se protege'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Fotografías (opcional)'),
       240,
@@ -66,6 +112,9 @@ void main() {
       find.byKey(const ValueKey('client-request-description')),
       'Hay una fuga en el lavaplatos.',
     );
+    final budget = find.byKey(const ValueKey('client-request-budget'));
+    await tester.ensureVisible(budget);
+    await tester.enterText(budget, '150000,25');
     final expectedMoment =
         find.byKey(const ValueKey('client-request-expected-at'));
     await tester.scrollUntilVisible(
@@ -75,10 +124,7 @@ void main() {
     );
     await tester.tap(expectedMoment);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Aceptar'));
-    await tester.pumpAndSettle();
+    await pickTomorrowAt10(tester);
     final addPhoto = find.byKey(const ValueKey('client-request-add-photo'));
     await tester.scrollUntilVisible(
       addPhoto,
@@ -97,6 +143,23 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    await tester.ensureVisible(budget);
+    await tester.enterText(budget, '0');
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      submit,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.ensureVisible(budget);
+    await tester.enterText(budget, '150000,25');
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      submit,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(submit);
     await tester.pumpAndSettle();
 
@@ -104,6 +167,7 @@ void main() {
     expect(submittedDraft!.category.label, 'Plomería');
     expect(submittedDraft!.description, 'Hay una fuga en el lavaplatos.');
     expect(submittedDraft!.photoCount, 1);
+    expect(submittedDraft!.budget!.amount, '150000.25');
     expect(find.byKey(const ValueKey('client-request-confirmation')),
         findsOneWidget);
     expect(
@@ -126,10 +190,15 @@ void main() {
       const MaterialApp(home: ServiceRequestPage()),
     );
 
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('client-request-budget')),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('muestra navegación móvil de cliente y permite volver a inicio',
+  testWidgets('muestra el menú del cliente y permite volver a inicio',
       (tester) async {
     var homeOpens = 0;
     await tester.pumpWidget(
@@ -138,8 +207,8 @@ void main() {
       ),
     );
 
-    expect(find.byKey(const ValueKey('mobile-nav-publicar')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('mobile-nav-inicio')));
+    expect(find.byKey(const ValueKey('client-nav-historial')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('client-nav-inicio')));
     expect(homeOpens, 1);
   });
 }

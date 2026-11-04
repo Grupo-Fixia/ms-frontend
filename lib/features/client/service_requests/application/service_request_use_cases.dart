@@ -41,6 +41,7 @@ class PublishServiceRequest {
                 longitude: exact.longitude,
               ),
         photoKeys: List.unmodifiable(request.photoKeys),
+        budget: request.budget,
       ),
     );
   }

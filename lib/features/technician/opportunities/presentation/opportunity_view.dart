@@ -4,15 +4,14 @@ import '../domain/service_opportunity.dart';
 /// Convierte una solicitud compatible del backend (GC-340) en la tarjeta que
 /// muestra la pantalla de oportunidades.
 ///
-/// La solicitud no trae presupuesto (el precio lo propone el técnico en su
-/// cotización) ni título: el título es el inicio de la descripción.
+/// La solicitud tampoco trae título: se usa el inicio de la descripción.
 ServiceOpportunity opportunityView(Opportunity opportunity, {DateTime? now}) {
   return ServiceOpportunity(
     id: opportunity.id,
     title: _title(opportunity.description),
     category: opportunity.category,
     postedLabel: _postedLabel(opportunity.publishedAt, now ?? DateTime.now()),
-    budget: 'Por cotizar',
+    budget: opportunity.budget?.label ?? 'Presupuesto no informado',
     approximateLocation: '${opportunity.zone}, ${opportunity.city}',
     description: opportunity.description,
     expectedMoment: _moment(opportunity.expectedAt.toLocal()),

@@ -1,124 +1,114 @@
-import 'dart:ui' show PointerDeviceKind;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'package:ms_frontend/features/client/profile/presentation/client_profile_page.dart';
+import 'package:ms_frontend/features/client/service_requests/domain/service_request.dart';
+import 'package:ms_frontend/features/client/service_requests/domain/service_request_exceptions.dart';
 
-void main() {
-  testWidgets('muestra el catálogo de técnicos con acciones y datos mock',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: FixiaTheme.light,
-        home: const ClientDashboardPage(),
-      ),
+ServiceRequest _request(String id, ServiceRequestStatus status) =>
+    ServiceRequest(
+      id: id,
+      category: ServiceCategory.plumbing,
+      description: 'Solicitud $id',
+      status: status,
+      approximateLocation:
+          const ApproximateLocation(city: 'Bogotá', zone: 'Chapinero'),
+      expectedAt: DateTime.utc(2030),
     );
 
-    expect(find.text('Encuentra tu técnico'), findsOneWidget);
-    expect(find.text('Usaquén, Bogotá'), findsOneWidget);
-    expect(find.text('Ana García'), findsOneWidget);
-    expect(find.text('Pedro Rojas'), findsOneWidget);
-    expect(find.text('Laura Torres'), findsOneWidget);
-    expect(find.text('4.8 (64)'), findsOneWidget);
-    expect(find.text('\$70.000'), findsOneWidget);
-    expect(find.text('Solicitar'), findsNWidgets(4));
-    expect(find.text('Ubicación aproximada'), findsNWidgets(9));
-    expect(find.text('3 postulantes'), findsOneWidget);
-    expect(find.byTooltip('Abrir chat'), findsOneWidget);
-    expect(find.byTooltip('Revisar cotización'), findsOneWidget);
-    expect(find.byTooltip('Confirmar cierre'), findsOneWidget);
-    expect(find.byKey(const ValueKey('client-nav-historial')), findsOneWidget);
-    expect(find.text('Publicar'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+void main() {
+  testWidgets('sin conexión no muestra técnicos ni servicios de ejemplo',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(theme: FixiaTheme.light, home: const ClientDashboardPage()),
+    );
+    expect(find.text('Ana García'), findsNothing);
+    expect(find.text('Recomendados para ti'), findsNothing);
+    expect(find.text('Mantenimiento de calentador'), findsNothing);
+    expect(find.text('3 postulantes'), findsNothing);
+    expect(
+      find.text('Tus solicitudes aparecerán aquí cuando te conectes a Fixia.'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('la acción Solicitar identifica al técnico seleccionado',
+  testWidgets('muestra las solicitudes reales recientes y lo que falta hacer',
       (tester) async {
-    String? requestedTechnician;
+    final opened = <String>[];
+    var loads = 0;
     await tester.pumpWidget(
       MaterialApp(
         theme: FixiaTheme.light,
         home: ClientDashboardPage(
-          onRequestTechnician: (technicianId) =>
-              requestedTechnician = technicianId,
+          firstName: 'Ana',
+          loadRequests: () async {
+            loads++;
+            return [
+              _request('a', ServiceRequestStatus.providerSelected),
+              _request('b', ServiceRequestStatus.technicianFinished),
+              _request('c', ServiceRequestStatus.closed),
+              _request('d', ServiceRequestStatus.published),
+            ];
+          },
+          onOpenRequest: (request) async => opened.add(request.id),
         ),
       ),
     );
-
-    final requestButton =
-        find.byKey(const ValueKey('client-request-ana-garcia'));
-    await tester.ensureVisible(requestButton);
     await tester.pumpAndSettle();
-    await tester.tap(requestButton);
 
-    expect(requestedTechnician, 'ana-garcia');
+    expect(find.text('Hola, Ana'), findsOneWidget);
+    // Requiere tu atención: solo cotización recibida y cierre por confirmar.
+    expect(find.text('Requiere tu atención'), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-b')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-c')), findsNothing);
+    expect(find.byKey(const ValueKey('client-request-d')), findsNothing);
+    expect(find.text('Revisa la cotización'), findsWidgets);
+    expect(find.text('Confirma el cierre'), findsWidgets);
+    // Recientes: solo las tres primeras.
+    expect(find.byKey(const ValueKey('client-request-row-a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-row-c')), findsOneWidget);
+    expect(find.byKey(const ValueKey('client-request-row-d')), findsNothing);
+    expect(find.text('Cerrada'), findsWidgets);
+
+    final open = find.byKey(const ValueKey('client-request-b'));
+    await tester.ensureVisible(open);
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+    expect(opened, ['b']);
+    expect(loads, 2);
   });
 
-  testWidgets('filtra técnicos por categoría y texto de búsqueda',
+  testWidgets('sin solicitudes invita a publicar; con error permite reintentar',
       (tester) async {
+    var fail = true;
     await tester.pumpWidget(
       MaterialApp(
         theme: FixiaTheme.light,
-        home: const ClientDashboardPage(),
+        home: ClientDashboardPage(
+          loadRequests: () async {
+            if (fail) throw const ServiceRequestFailure('Sin conexión');
+            return [];
+          },
+        ),
       ),
     );
-
-    await tester.tap(find.byKey(const ValueKey('client-category-Plomería')));
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('client-technician-ana-garcia')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('client-technician-pedro-rojas')),
-      findsNothing,
-    );
-
-    await tester.enterText(
-      find.byKey(const ValueKey('client-technician-search')),
-      'Ana',
-    );
+    expect(find.text('Sin conexión'), findsOneWidget);
+    fail = false;
+    await tester.ensureVisible(find.text('Reintentar'));
+    await tester.tap(find.text('Reintentar'));
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('client-technician-ana-garcia')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('client-clear-filters')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('client-technician-ana-garcia')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('client-technician-pedro-rojas')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('muestra estado vacío cuando los filtros no tienen resultados',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: FixiaTheme.light,
-        home: const ClientDashboardPage(),
-      ),
-    );
-
-    await tester.enterText(
-      find.byKey(const ValueKey('client-technician-search')),
-      'carpintería',
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('client-no-technicians-found')),
+    expect(find.textContaining('Todavía no has publicado solicitudes'),
         findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('client-technician-ana-garcia')),
-      findsNothing,
-    );
+  });
+
+  test('acciones pendientes por estado', () {
+    expect(pendingActionFor(ServiceRequestStatus.published),
+        'Revisa los postulantes');
+    expect(pendingActionFor(ServiceRequestStatus.inProgress), isNull);
   });
 
   testWidgets('el acceso al perfil del cliente solicita una sesión',
@@ -182,9 +172,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('client-profile-title')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('client-profile-nav-home')));
+    await tester.tap(find.byKey(const ValueKey('client-nav-inicio')));
     await tester.pumpAndSettle();
-    expect(find.text('Encuentra tu técnico'), findsOneWidget);
+    expect(find.text('Bienvenido a Fixia'), findsOneWidget);
   });
 
   testWidgets('el encabezado ya no muestra la campana de notificaciones',
@@ -198,37 +188,6 @@ void main() {
       find.byKey(const ValueKey('client-dashboard-settings')),
       findsNothing,
     );
-  });
-
-  testWidgets('la barra de categorías se desplaza con mouse', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(300, 800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(theme: FixiaTheme.light, home: const ClientDashboardPage()),
-    );
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('client-technician-categories')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-
-    final list = find.byKey(const ValueKey('client-technician-categories'));
-    final gesture = await tester.startGesture(
-      tester.getCenter(list),
-      kind: PointerDeviceKind.mouse,
-    );
-    await gesture.moveBy(const Offset(-30, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(-170, 0));
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
-
-    final scrollable = tester.state<ScrollableState>(
-      find.descendant(of: list, matching: find.byType(Scrollable)),
-    );
-    expect(scrollable.position.maxScrollExtent, greaterThan(0));
-    expect(scrollable.position.pixels, greaterThan(0));
   });
 
   testWidgets('el botón Publicar usa el callback correspondiente',
@@ -262,9 +221,9 @@ void main() {
     });
   }
 
-  testWidgets('en navegador mantiene el layout limitado a formato móvil',
+  testWidgets('en escritorio usa menú lateral y el ancho disponible',
       (tester) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = const Size(1440, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -274,11 +233,17 @@ void main() {
       ),
     );
 
-    final card = tester.getRect(
-      find.byKey(const ValueKey('client-technician-ana-garcia')),
+    final greeting = tester.getRect(
+      find.byKey(const ValueKey('client-dashboard-greeting')),
     );
-    expect(card.width, lessThanOrEqualTo(404));
-    expect(card.center.dx, closeTo(640, 1));
+    final publish = tester.getRect(
+      find.byKey(const ValueKey('client-dashboard-publish')),
+    );
+    // El contenido empieza después del menú lateral y el botón va a la
+    // derecha del saludo, no a lo ancho como en celular.
+    expect(greeting.left, greaterThan(248));
+    expect(publish.left, greaterThan(greeting.right));
+    expect(publish.width, lessThan(500));
     expect(tester.takeException(), isNull);
   });
 }

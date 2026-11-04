@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/colombian_cities.dart';
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/domain/service_budget.dart';
 import '../../../../core/theme/fixia_theme.dart';
-import '../../../home/presentation/widgets/dashboard_components.dart';
+import '../../../../core/layout/app_shell.dart';
+import '../../../../core/widgets/fixia_date_time_picker.dart';
+import '../../../../core/widgets/fixia_ui.dart';
 import '../domain/service_request_draft.dart';
 
 class ServiceRequestPage extends StatefulWidget {
@@ -34,6 +38,7 @@ class ServiceRequestPage extends StatefulWidget {
 class _ServiceRequestPageState extends State<ServiceRequestPage> {
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
+  final _budgetController = TextEditingController();
   ServiceCategory? _category;
   DateTime? _expectedAt;
   final List<int> _photos = [];
@@ -49,46 +54,29 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
       !_submitting &&
       _category != null &&
       _descriptionController.text.trim().isNotEmpty &&
+      ServiceBudget.tryParse(_budgetController.text) != null &&
       _expectedAt != null &&
       (!_publishes || _hasLocation);
 
   @override
   void dispose() {
     _descriptionController.dispose();
+    _budgetController.dispose();
     super.dispose();
   }
 
   Future<void> _pickExpectedMoment() async {
     final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _expectedAt ?? now,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 2),
-      helpText: 'Selecciona el día esperado',
-      cancelText: 'Cancelar',
-      confirmText: 'Continuar',
+    final picked = await showFixiaDateTimePicker(
+      context,
+      first: now,
+      last: DateTime(now.year + 2, now.month, now.day),
+      initial: _expectedAt,
+      title: '¿Cuándo necesitas el servicio?',
+      subtitle: 'Elige el día y una hora aproximada de atención.',
     );
-    if (!mounted || date == null) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _expectedAt == null
-          ? TimeOfDay.now()
-          : TimeOfDay.fromDateTime(_expectedAt!),
-      helpText: 'Selecciona la hora aproximada',
-      cancelText: 'Cancelar',
-      confirmText: 'Aceptar',
-    );
-    if (!mounted || time == null) return;
-    setState(() {
-      _expectedAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+    if (!mounted || picked == null) return;
+    setState(() => _expectedAt = picked);
   }
 
   void _addPhoto() {
@@ -97,6 +85,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (!_formKey.currentState!.validate() ||
         _category == null ||
         _expectedAt == null) {
@@ -109,6 +98,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
       photoCount: _photos.length,
       city: _city,
       zone: _zone,
+      budget: ServiceBudget.tryParse(_budgetController.text),
     );
     final publish = widget.publish;
     if (publish != null) {
@@ -139,7 +129,8 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
           color: FixiaColors.accent,
           size: 42,
         ),
-        title: Text(publish != null ? 'Solicitud publicada' : 'Solicitud lista'),
+        title:
+            Text(publish != null ? 'Solicitud publicada' : 'Solicitud lista'),
         content: Text(
           publish != null
               ? 'Los técnicos compatibles de tu zona ya pueden verla y postularse.'
@@ -159,158 +150,199 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
     widget.onOpenHome?.call();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return MobileFeatureShell(
-      title: 'Publicar un problema',
-      onBack: widget.onBack ?? () => Navigator.of(context).maybePop(),
-      maxWidth: 440,
-      bottomNavigationItems: _buildNavigationItems(context),
-      child: Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  Text(
-                    'Cuéntanos qué necesitas',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Completa los datos para que profesionales puedan evaluar tu solicitud.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: FixiaColors.textSecondary),
-                  ),
-                  const SizedBox(height: 22),
-                  DropdownButtonFormField<ServiceCategory>(
-                    key: const ValueKey('client-request-category'),
-                    // Flutter 3.22 needs `value`; `initialValue` was added later.
-                    // ignore: deprecated_member_use
-                    value: _category,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Categoría',
-                      prefixIcon: Icon(Icons.category_outlined),
-                    ),
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    items: [
-                      for (final category in ServiceCategory.values)
-                        DropdownMenuItem(
-                          value: category,
-                          child: Text(category.label),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() => _category = value),
-                    validator: (value) =>
-                        value == null ? 'Selecciona una categoría.' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    key: const ValueKey('client-request-description'),
-                    controller: _descriptionController,
-                    minLines: 4,
-                    maxLines: 7,
-                    maxLength: 500,
-                    textCapitalization: TextCapitalization.sentences,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    decoration: const InputDecoration(
-                      labelText: 'Descripción del problema',
-                      hintText: 'Describe qué sucede y qué necesitas reparar.',
-                      alignLabelWithHint: true,
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'La descripción es obligatoria.'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  _LocationPrivacyCard(
-                    location: !_publishes
-                        ? 'Chapinero, Bogotá'
-                        : _hasLocation
-                            ? '$_zone, $_city'
-                            : null,
-                    onChangeLocation: _publishes
-                        ? _pickLocation
-                        : () => _showLocationDemo(context),
-                  ),
-                  const SizedBox(height: 18),
-                  OutlinedButton.icon(
-                    key: const ValueKey('client-request-expected-at'),
-                    onPressed: _pickExpectedMoment,
-                    icon: const Icon(Icons.calendar_month_outlined),
-                    label: Text(
-                      _expectedAt == null
-                          ? 'Elegir momento esperado *'
-                          : 'Atención: ${_formatDateTime(_expectedAt!)}',
-                    ),
-                  ),
-                  if (_expectedAt == null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 12, top: 6),
-                      child: Text(
-                        'Selecciona una fecha y hora aproximadas.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: FixiaColors.textSecondary),
-                      ),
-                    ),
-                  const SizedBox(height: 22),
-                  _PhotoPicker(
-                    photos: _photos,
-                    onAdd: _addPhoto,
-                    onRemove: (index) =>
-                        setState(() => _photos.removeAt(index)),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    key: const ValueKey('client-request-submit'),
-                    onPressed: _canSubmit ? _submit : null,
-                    icon: const Icon(Icons.send_rounded),
-                    label: Text(_submitting ? 'Enviando…' : 'Enviar solicitud'),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Los campos marcados con * son obligatorios.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-    );
+  void _navigate(ShellDestination destination) {
+    final own = switch (destination) {
+      ShellDestination.clientHome => widget.onOpenHome,
+      ShellDestination.clientRequests => widget.onOpenHistory,
+      ShellDestination.clientProfile => widget.onOpenProfile,
+      _ => null,
+    };
+    if (own != null) return own();
+    final scope = FixiaShellScope.maybeOf(context);
+    if (scope?.onNavigate != null) return scope!.onNavigate!(destination);
+    if (destination == ShellDestination.clientRequests) {
+      _showHistoryHint(context);
+    } else if (destination == ShellDestination.clientProfile) {
+      _showProfileHint(context);
+    } else {
+      Navigator.of(context).maybePop();
+    }
   }
 
-  List<MobileNavigationItem> _buildNavigationItems(BuildContext context) => [
-        MobileNavigationItem(
-          icon: Icons.home_rounded,
-          label: 'Inicio',
-          onPressed:
-              widget.onOpenHome ?? () => Navigator.of(context).maybePop(),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final category = DropdownButtonFormField<ServiceCategory>(
+      key: const ValueKey('client-request-category'),
+      // Flutter 3.22 needs `value`; `initialValue` was added later.
+      // ignore: deprecated_member_use
+      value: _category,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Categoría',
+        prefixIcon: Icon(Icons.category_outlined),
+      ),
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      items: [
+        for (final category in ServiceCategory.values)
+          DropdownMenuItem(value: category, child: Text(category.label)),
+      ],
+      onChanged: (value) => setState(() => _category = value),
+      validator: (value) => value == null ? 'Selecciona una categoría.' : null,
+    );
+    final description = TextFormField(
+      key: const ValueKey('client-request-description'),
+      controller: _descriptionController,
+      minLines: 4,
+      maxLines: 7,
+      maxLength: 500,
+      textCapitalization: TextCapitalization.sentences,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      decoration: const InputDecoration(
+        labelText: 'Descripción del problema',
+        hintText: 'Describe qué sucede y qué necesitas reparar.',
+        alignLabelWithHint: true,
+      ),
+      onChanged: (_) => setState(() {}),
+      validator: (value) => value == null || value.trim().isEmpty
+          ? 'La descripción es obligatoria.'
+          : null,
+    );
+    final budget = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          key: const ValueKey('client-request-budget'),
+          controller: _budgetController,
+          enabled: !_submitting,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          decoration: const InputDecoration(
+            labelText: 'Presupuesto aproximado *',
+            prefixText: 'COP ',
+            hintText: 'Ej. 150000',
+            helperText:
+                'Máximo 10 dígitos enteros y 2 decimales. Sin separadores de miles.',
+            helperMaxLines: 2,
+            errorMaxLines: 3,
+          ),
+          onChanged: (_) => setState(() {}),
+          validator: ServiceBudget.validate,
         ),
-        MobileNavigationItem(
-          icon: Icons.history_rounded,
-          label: 'Historial',
-          onPressed:
-              widget.onOpenHistory ?? () => _showHistoryHint(context),
+        const SizedBox(height: 8),
+        Text(
+          'Es orientativo: no es un pago ni un precio acordado. '
+          'El técnico podrá proponer un precio diferente.',
+          style: theme.textTheme.bodySmall,
         ),
-        MobileNavigationItem(
-          icon: Icons.add_rounded,
-          label: 'Publicar',
-          isAction: true,
-          selected: true,
-          onPressed: () {},
+      ],
+    );
+    final moment = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          key: const ValueKey('client-request-expected-at'),
+          onPressed: _pickExpectedMoment,
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 56)),
+          icon: const Icon(Icons.calendar_month_outlined),
+          label: Text(
+            _expectedAt == null
+                ? 'Elegir momento esperado *'
+                : 'Atención: ${_formatDateTime(_expectedAt!)}',
+          ),
         ),
-        MobileNavigationItem(
-          icon: Icons.person_outline_rounded,
-          label: 'Perfil',
-          onPressed:
-              widget.onOpenProfile ?? () => _showProfileHint(context),
+        if (_expectedAt == null)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 6),
+            child: Text(
+              'Selecciona una fecha y hora aproximadas.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: FixiaColors.textSecondary),
+            ),
+          ),
+      ],
+    );
+    final form = FixiaPanel(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _StepTitle(number: 1, title: '¿Qué necesitas?'),
+          category,
+          const SizedBox(height: 16),
+          description,
+          const SizedBox(height: 20),
+          const _StepTitle(number: 2, title: 'Presupuesto y fecha'),
+          _Pair(first: budget, second: moment),
+          const SizedBox(height: 24),
+          const _StepTitle(number: 3, title: 'Ubicación'),
+          _LocationPrivacyCard(
+            location: !_publishes
+                ? 'Chapinero, Bogotá'
+                : _hasLocation
+                    ? '$_zone, $_city'
+                    : null,
+            onChangeLocation:
+                _publishes ? _pickLocation : () => _showLocationDemo(context),
+          ),
+          // La carga de fotos aún no existe en el backend: solo se muestra
+          // en la demostración sin conexión, nunca como si se guardaran.
+          if (!_publishes) ...[
+            const SizedBox(height: 22),
+            _PhotoPicker(
+              photos: _photos,
+              onAdd: _addPhoto,
+              onRemove: (index) => setState(() => _photos.removeAt(index)),
+            ),
+          ],
+          const SizedBox(height: 28),
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 12,
+            children: [
+              Text(
+                'Los campos marcados con * son obligatorios.',
+                style: theme.textTheme.bodySmall,
+              ),
+              FilledButton.icon(
+                key: const ValueKey('client-request-submit'),
+                onPressed: _canSubmit ? _submit : null,
+                icon: const Icon(Icons.send_rounded),
+                label: Text(_submitting ? 'Enviando…' : 'Enviar solicitud'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    return AppShell(
+      destination: ShellDestination.clientHome,
+      subpage: true,
+      onNavigate: _navigate,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            BackLink(onPressed: widget.onBack),
+            const PageHeader(
+              title: 'Publicar un problema',
+              subtitle: 'Cuéntanos qué necesitas. Completa los datos para que '
+                  'profesionales puedan evaluar tu solicitud.',
+            ),
+            const SizedBox(height: 24),
+            TwoColumns(
+              sideWidth: 320,
+              main: form,
+              side: const _PublishTips(),
+            ),
+          ],
         ),
-      ];
+      ),
+    );
+  }
 
   void _showHistoryHint(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -320,7 +352,8 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
 
   void _showProfileHint(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Abre tu perfil desde la pantalla de Inicio.')),
+      const SnackBar(
+          content: Text('Abre tu perfil desde la pantalla de Inicio.')),
     );
   }
 
@@ -372,12 +405,11 @@ class _LocationDialog extends StatefulWidget {
 
 class _LocationDialogState extends State<_LocationDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final _city = TextEditingController(text: widget.city);
+  late String? _city = ColombianCities.match(widget.city);
   late final _zone = TextEditingController(text: widget.zone);
 
   @override
   void dispose() {
-    _city.dispose();
     _zone.dispose();
     super.dispose();
   }
@@ -395,14 +427,25 @@ class _LocationDialogState extends State<_LocationDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
+            DropdownButtonFormField<String>(
               key: const ValueKey('client-request-city'),
-              controller: _city,
-              maxLength: 80,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Ciudad'),
-              validator: (value) => _required(value, 'la ciudad'),
+              // Flutter 3.22 necesita `value`.
+              // ignore: deprecated_member_use
+              value: _city,
+              isExpanded: true,
+              menuMaxHeight: 360,
+              decoration: const InputDecoration(
+                labelText: 'Ciudad',
+                helperText: 'Los técnicos de esa ciudad verán tu solicitud.',
+              ),
+              items: [
+                for (final city in ColombianCities.all)
+                  DropdownMenuItem(value: city, child: Text(city)),
+              ],
+              onChanged: (value) => setState(() => _city = value),
+              validator: (value) => value == null ? 'Elige la ciudad.' : null,
             ),
+            const SizedBox(height: 12),
             TextFormField(
               key: const ValueKey('client-request-zone'),
               controller: _zone,
@@ -426,7 +469,7 @@ class _LocationDialogState extends State<_LocationDialog> {
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
             Navigator.of(context).pop(
-              (city: _city.text.trim(), zone: _zone.text.trim()),
+              (city: _city!, zone: _zone.text.trim()),
             );
           },
           child: const Text('Guardar'),
@@ -605,4 +648,147 @@ class _PhotoPlaceholder extends StatelessWidget {
       ],
     );
   }
+}
+
+class _StepTitle extends StatelessWidget {
+  const _StepTitle({required this.number, required this.title});
+
+  final int number;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: FixiaColors.supportBackground,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '$number',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: FixiaColors.secondary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: FixiaColors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// Dos campos lado a lado en pantallas anchas; uno debajo del otro en
+/// celular.
+class _Pair extends StatelessWidget {
+  const _Pair({required this.first, required this.second});
+
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 560) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: first),
+                const SizedBox(width: 16),
+                Expanded(child: second),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: 16), second],
+          );
+        },
+      );
+}
+
+class _PublishTips extends StatelessWidget {
+  const _PublishTips();
+
+  static const _tips = [
+    (
+      Icons.description_outlined,
+      'Sé específico',
+      'Cuenta qué falla, desde cuándo y qué ya intentaste.'
+    ),
+    (
+      Icons.payments_outlined,
+      'Presupuesto orientativo',
+      'Los técnicos proponen su precio; tú eliges y luego recibes una cotización formal.'
+    ),
+    (
+      Icons.shield_outlined,
+      'Tu dirección está protegida',
+      'Solo ven tu barrio. La dirección exacta se comparte al contratar.'
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) => FixiaPanel(
+        color: FixiaColors.supportBackground,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Antes de publicar',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: FixiaColors.primary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            for (final (icon, title, text) in _tips)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(icon, size: 20, color: FixiaColors.secondary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            text,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: FixiaColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
 }

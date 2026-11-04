@@ -1,9 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/domain/service_budget.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/features/technician/opportunities/domain/opportunity.dart';
 import 'package:ms_frontend/features/technician/opportunities/presentation/opportunity_view.dart';
 
 void main() {
+  test('distingue presupuesto orientativo de importe ausente sin inventarlo',
+      () {
+    final view = opportunityView(Opportunity(
+      id: 'budget-request',
+      category: ServiceCategory.plumbing,
+      description: 'Reparar fuga',
+      city: 'Bogotá',
+      zone: 'Chapinero',
+      expectedAt: DateTime(2026, 11, 1),
+      budget: ServiceBudget.tryParse('150000,25'),
+    ));
+    expect(view.budget, '150.000,25 COP');
+  });
+
   final now = DateTime(2026, 10, 22, 15);
 
   Opportunity at(DateTime? publishedAt) => Opportunity(
@@ -25,7 +40,7 @@ void main() {
     expect(view.approximateLocation, 'Usaquén, Bogotá');
     expect(view.description, 'Cambiar un tomacorriente');
     expect(view.expectedMoment, '24/10/2026 · 08:05');
-    expect(view.budget, 'Por cotizar');
+    expect(view.budget, 'Presupuesto no informado');
   });
 
   test('un título largo se acorta y une las líneas', () {
