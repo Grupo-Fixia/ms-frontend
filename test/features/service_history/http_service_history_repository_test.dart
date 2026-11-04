@@ -62,7 +62,8 @@ Map<String, Object?> _item({
       'lastTransitionAt': '2026-10-30T18:00:00Z',
     };
 
-Matcher _failure(String message, {bool isSessionExpired = false}) =>
+TypeMatcher<ServiceHistoryFailure> _failure(String message,
+        {bool isSessionExpired = false}) =>
     isA<ServiceHistoryFailure>()
         .having((f) => f.message, 'message', message)
         .having(
@@ -288,6 +289,154 @@ void main() {
             throwsA(_failure(
                 HttpServiceEvaluationRepository.unexpectedErrorMessage)));
       }
+    });
+  });
+  group('registrar evaluación', () {
+    Map<String, Object?> saved({int rating = 4, String? comment = 'Puntual'}) =>
+        {
+          'id': 'eva-1',
+          'serviceRequestId': 'req-1',
+          'direction': 'CLIENT_TO_PROVIDER',
+          'evaluatorId': 'cli-1',
+          'evaluatedId': 'tec-1',
+          'rating': rating,
+          'comment': comment,
+          'source': 'CONFIRMED_CLOSURE',
+          'createdAt': '2026-11-03T15:00:00Z',
+        };
+
+    test('envía servicio, nota y comentario sin espacios y con el token',
+        () async {
+      late http.Request sent;
+      final repository = _evaluations((request) async {
+        sent = request;
+        return _json(201, saved());
+      });
+
+      final evaluation = await repository.submit(NewServiceEvaluation(
+          serviceRequestId: 'req-1', rating: 4, comment: '  Puntual  '));
+
+      expect(sent.method, 'POST');
+      expect(sent.url.path, HttpServiceEvaluationRepository.path);
+      expect(sent.headers['Authorization'], 'Bearer token-1');
+      expect(sent.headers['Content-Type'], startsWith('application/json'));
+      expect(jsonDecode(sent.body),
+          {'serviceRequestId': 'req-1', 'rating': 4, 'comment': 'Puntual'});
+      expect(evaluation.rating, 4);
+      expect(evaluation.evaluatorId, 'cli-1');
+      expect(evaluation.direction, EvaluationDirection.clientToProvider);
+    });
+
+    test('sin comentario no lo envía; un reintento idéntico (200) sirve',
+        () async {
+      late http.Request sent;
+      final repository = _evaluations((request) async {
+        sent = request;
+        return _json(200, saved(rating: 5, comment: null));
+      });
+
+      final evaluation = await repository.submit(NewServiceEvaluation(
+          serviceRequestId: 'req-1', rating: 5, comment: '   '));
+
+      expect(jsonDecode(sent.body), {'serviceRequestId': 'req-1', 'rating': 5});
+      expect(evaluation.comment, isNull);
+    });
+
+    test('una confirmación que no coincide no se da por buena', () async {
+      for (final body in [
+        saved(rating: 3),
+        {...saved(), 'serviceRequestId': 'req-2'},
+        {'x': 1},
+      ]) {
+        final repository = _evaluations((_) async => _json(201, body));
+        await expectLater(
+            repository.submit(
+                NewServiceEvaluation(serviceRequestId: 'req-1', rating: 4)),
+            throwsA(_failure(
+                HttpServiceEvaluationRepository.unconfirmedSubmissionMessage)));
+      }
+    });
+
+    test('409: ya había calificado', () async {
+      final repository = _evaluations((_) async => _json(409, {
+            'reasons': ['EVALUATION_ALREADY_EXISTS']
+          }));
+
+      await expectLater(
+          repository.submit(
+              NewServiceEvaluation(serviceRequestId: 'req-1', rating: 4)),
+          throwsA(
+              _failure(HttpServiceEvaluationRepository.alreadyEvaluatedMessage)
+                  .having(
+                      (f) => f.alreadyEvaluated, 'alreadyEvaluated', isTrue)));
+    });
+
+    test('422: explica cada motivo del servidor y no deja reintentar',
+        () async {
+      for (final entry
+          in HttpServiceEvaluationRepository.rejectionMessages.entries) {
+        final repository = _evaluations((_) async => _json(422, {
+              'reasons': [entry.key]
+            }));
+        await expectLater(
+            repository.submit(
+                NewServiceEvaluation(serviceRequestId: 'req-1', rating: 4)),
+            throwsA(_failure(entry.value)
+                .having((f) => f.notAllowed, 'notAllowed', isTrue)));
+      }
+      final unknown = _evaluations((_) async => _json(422, {
+            'reasons': ['OTRO']
+          }));
+      await expectLater(
+          unknown.submit(
+              NewServiceEvaluation(serviceRequestId: 'req-1', rating: 4)),
+          throwsA(_failure(HttpServiceEvaluationRepository.notAllowedMessage)));
+    });
+
+    test('400, 403, 404, 503 y otros códigos con su mensaje', () async {
+      final cases = {
+        400: HttpServiceEvaluationRepository.invalidSubmissionMessage,
+        403: HttpServiceEvaluationRepository.forbiddenSubmissionMessage,
+        404: HttpServiceEvaluationRepository.notFoundSubmissionMessage,
+        503: HttpServiceEvaluationRepository.verificationUnavailableMessage,
+        500: HttpServiceEvaluationRepository.unconfirmedSubmissionMessage,
+      };
+      for (final entry in cases.entries) {
+        final repository =
+            _evaluations((_) async => _json(entry.key, {'detail': 'x'}));
+        await expectLater(
+            repository.submit(
+                NewServiceEvaluation(serviceRequestId: 'req-1', rating: 4)),
+            throwsA(_failure(entry.value)));
+      }
+    });
+
+    test('401 sin poder renovar: sesión vencida', () async {
+      final repository = _evaluations((_) async => _json(401, {}));
+
+      await expectLater(
+          repository.submit(
+              NewServiceEvaluation(serviceRequestId: 'req-1', rating: 4)),
+          throwsA(_failure(HttpServiceHistoryRepository.sessionExpiredMessage,
+              isSessionExpired: true)));
+    });
+  });
+
+  group('NewServiceEvaluation', () {
+    test('valida la nota y el largo del comentario', () {
+      expect(() => NewServiceEvaluation(serviceRequestId: 'r', rating: 0),
+          throwsArgumentError);
+      expect(() => NewServiceEvaluation(serviceRequestId: 'r', rating: 6),
+          throwsArgumentError);
+      expect(
+          () => NewServiceEvaluation(
+              serviceRequestId: 'r', rating: 5, comment: 'a' * 501),
+          throwsArgumentError);
+      expect(
+          NewServiceEvaluation(
+                  serviceRequestId: 'r', rating: 5, comment: 'a' * 500)
+              .comment,
+          hasLength(500));
     });
   });
 }

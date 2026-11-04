@@ -133,6 +133,13 @@ class HttpServiceHistoryRepository implements ServiceHistoryRepository {
 ///   rating, comment, createdAt}]}`; solo las de servicios en que quien
 ///   consulta evaluó o fue evaluado.
 /// - `400` sin ids, más de 50 o mal formados; `403` rol no permitido.
+///
+/// Registrar (GC-445, `docs/contracts/evaluaciones.md` §4.1 de ms-users):
+/// - `POST /api/users/evaluations {serviceRequestId, rating, comment}` →
+///   `201` creada o `200` si es un reintento idéntico, con la evaluación.
+/// - `400` datos inválidos; `403` rol no permitido; `404` el servicio no
+///   existe o quien llama no participó; `409` ya existe otra evaluación suya;
+///   `422 {reasons}` no evaluable; `503` no se pudo verificar el cierre.
 class HttpServiceEvaluationRepository implements ServiceEvaluationRepository {
   HttpServiceEvaluationRepository({
     required http.Client client,
@@ -146,6 +153,36 @@ class HttpServiceEvaluationRepository implements ServiceEvaluationRepository {
 
   static const unexpectedErrorMessage =
       'No pudimos cargar las evaluaciones. Inténtalo más tarde.';
+  static const invalidSubmissionMessage =
+      'Revisa la calificación: va de 1 a 5 estrellas y el comentario admite '
+      'hasta 500 caracteres.';
+  static const forbiddenSubmissionMessage =
+      'Solo clientes y técnicos pueden calificar servicios.';
+  static const notFoundSubmissionMessage =
+      'No encontramos este servicio entre los tuyos.';
+  static const alreadyEvaluatedMessage =
+      'Ya habías calificado este servicio. Te mostramos tu evaluación.';
+  static const notAllowedMessage = 'Este servicio no se puede calificar.';
+  static const verificationUnavailableMessage =
+      'No pudimos verificar el cierre del servicio en este momento. '
+      'Inténtalo de nuevo en unos minutos.';
+  static const unconfirmedSubmissionMessage =
+      'No pudimos confirmar tu calificación. Vuelve a consultar el servicio '
+      'antes de intentarlo otra vez.';
+
+  /// Motivos de `422` que define el contrato de ms-users.
+  static const rejectionMessages = {
+    'SERVICE_NOT_CLOSED':
+        'Solo se puede calificar cuando el cliente confirma el cierre del '
+            'servicio.',
+    'COMPANY_SERVICE_NOT_EVALUABLE':
+        'Los servicios prestados por una empresa no se califican.',
+    'EVALUATION_WINDOW_EXPIRED':
+        'Ya pasó el plazo para calificar este servicio.',
+    'EVALUATED_USER_NOT_FOUND':
+        'La cuenta de tu contraparte ya no existe, así que no se puede '
+            'calificar.',
+  };
 
   final http.Client _client;
   final Uri _endpoint;
@@ -171,6 +208,65 @@ class HttpServiceEvaluationRepository implements ServiceEvaluationRepository {
     }
     return List.unmodifiable(
         items.map(_parseEvaluation).whereType<ServiceEvaluation>());
+  }
+
+  @override
+  Future<ServiceEvaluation> submit(NewServiceEvaluation evaluation) async {
+    final body = jsonEncode({
+      'serviceRequestId': evaluation.serviceRequestId,
+      'rating': evaluation.rating,
+      if (evaluation.comment != null) 'comment': evaluation.comment,
+    });
+    final response = await _send(
+      _http,
+      (headers) => _client.post(
+        _endpoint,
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: body,
+      ),
+    );
+    final json = _decode(response);
+    switch (response.statusCode) {
+      case 200:
+      case 201:
+        final saved = _parseEvaluation(json);
+        // Solo se acepta la confirmación de lo que se envió.
+        if (saved == null ||
+            saved.serviceRequestId != evaluation.serviceRequestId ||
+            saved.rating != evaluation.rating) {
+          throw const ServiceHistoryFailure(unconfirmedSubmissionMessage);
+        }
+        return saved;
+      case 400:
+        throw const ServiceHistoryFailure(invalidSubmissionMessage);
+      case 403:
+        throw const ServiceHistoryFailure(forbiddenSubmissionMessage);
+      case 404:
+        throw const ServiceHistoryFailure(notFoundSubmissionMessage,
+            notAllowed: true);
+      case 409:
+        throw const ServiceHistoryFailure(alreadyEvaluatedMessage,
+            alreadyEvaluated: true);
+      case 422:
+        final reasons = json is Map ? json['reasons'] : null;
+        final known = reasons is List
+            ? reasons
+                .whereType<String>()
+                .map((r) => rejectionMessages[r])
+                .whereType<String>()
+                .toList()
+            : <String>[];
+        throw ServiceHistoryFailure(
+            known.isEmpty ? notAllowedMessage : known.join(' '),
+            notAllowed: true);
+      case 503:
+        throw const ServiceHistoryFailure(verificationUnavailableMessage);
+      default:
+        throw const ServiceHistoryFailure(unconfirmedSubmissionMessage);
+    }
   }
 
   ServiceEvaluation? _parseEvaluation(Object? item) {
