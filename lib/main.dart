@@ -1056,6 +1056,8 @@ class _FixiaAppState extends State<FixiaApp> {
                 context,
                 () =>
                     SelectProvider(backend.serviceRequests)(id, applicationId)),
+            cancel: (id) => _serviceCall(
+                context, () => CancelServiceRequest(backend.serviceRequests)(id)),
             extraSections: (context, request, reload) =>
                 _clientRequestSections(context, backend, request, reload),
             listCompatibleTechnicians: backend.compatibleTechnicians == null
