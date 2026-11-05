@@ -558,8 +558,6 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushNamed(AppRoutes.clientServiceRequest),
       onOpenProfile: () =>
           Navigator.of(context).pushNamed(AppRoutes.clientProfile),
-      onOpenChat: () =>
-          Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
     );
   }
@@ -859,8 +857,6 @@ class _FixiaAppState extends State<FixiaApp> {
           ? null
           : () =>
               _technicianMatchSetup(widget.backend!.technicianAvailability!),
-      onOpenChat: () =>
-          Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
       onSessionExpired: () {
         _sessionStore.clear();
@@ -1616,7 +1612,6 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     required this.onOpenSettings,
     required this.onOpenOpportunities,
     required this.onOpenSpecialties,
-    required this.onOpenChat,
     required this.onLogout,
     required this.onSessionExpired,
     this.onOpenJobs,
@@ -1642,7 +1637,6 @@ class _TechnicianDashboardLoader extends StatefulWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenOpportunities;
   final VoidCallback onOpenSpecialties;
-  final VoidCallback onOpenChat;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -1748,7 +1742,6 @@ class _TechnicianDashboardLoaderState
           onOpenAvailability: widget.onOpenAvailability,
           loadSetupComplete: widget.loadSetupComplete,
           loadMatchSetup: widget.loadMatchSetup,
-          onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
         );
       },
