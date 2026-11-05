@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/constants/colombian_cities.dart';
 import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/fixia_ui.dart';
@@ -52,7 +53,11 @@ class _Range {
 
 class _TechnicianAvailabilityPageState
     extends State<TechnicianAvailabilityPage> {
-  final _city = TextEditingController();
+  String? _city;
+
+  /// Ciudad guardada que no está en la lista (p. ej. escrita a mano antes):
+  /// se avisa para que elija una de la lista.
+  String? _unknownSavedCity;
   final Map<Weekday, List<_Range>> _days = {
     for (final d in Weekday.values) d: <_Range>[],
   };
@@ -78,7 +83,6 @@ class _TechnicianAvailabilityPageState
 
   @override
   void dispose() {
-    _city.dispose();
     super.dispose();
   }
 
@@ -103,7 +107,8 @@ class _TechnicianAvailabilityPageState
           ]..sort((a, b) => a.start.compareTo(b.start));
         }
         _savedZone = zone;
-        _city.text = zone?.city ?? '';
+        _city = ColombianCities.match(zone?.city);
+        _unknownSavedCity = zone != null && _city == null ? zone.city : null;
         _loading = false;
       });
     } on TechnicianAvailabilityFailure catch (failure) {
@@ -170,7 +175,7 @@ class _TechnicianAvailabilityPageState
   }
 
   Future<void> _save() async {
-    final city = _city.text.trim();
+    final city = _city ?? '';
     final zone = CoverageZoneUpdate(
       city: city,
       // Si ya tenía un radio guardado, se conserva.
@@ -178,7 +183,9 @@ class _TechnicianAvailabilityPageState
       longitude: _savedZone?.longitude,
       radiusKm: _savedZone?.radiusKm,
     );
-    final zoneErrors = AvailabilityRules.coverageZone(zone);
+    final zoneErrors = city.isEmpty
+        ? {'city': 'Elige la ciudad donde atiendes.'}
+        : AvailabilityRules.coverageZone(zone);
     final slotsError = AvailabilityRules.slots(_slots);
     setState(() {
       _cityError = zoneErrors['city'];
@@ -195,6 +202,7 @@ class _TechnicianAvailabilityPageState
       if (!mounted) return;
       setState(() {
         _savedZone = savedZone;
+        _unknownSavedCity = null;
         _saving = false;
         _justSaved = true;
       });
@@ -313,22 +321,39 @@ class _TechnicianAvailabilityPageState
             style: TextStyle(fontSize: 13, color: FixiaColors.textSecondary),
           ),
           const SizedBox(height: 14),
-          TextField(
+          DropdownButtonFormField<String>(
             key: const ValueKey('availability-city'),
-            controller: _city,
-            maxLength: AvailabilityRules.cityMaxLength,
-            textCapitalization: TextCapitalization.words,
+            // Flutter 3.22 necesita `value`.
+            // ignore: deprecated_member_use
+            value: _city,
+            isExpanded: true,
+            menuMaxHeight: 360,
             decoration: InputDecoration(
               labelText: 'Ciudad *',
               prefixIcon: const Icon(Icons.location_city_outlined),
               errorText: _cityError,
-              counterText: '',
             ),
-            onChanged: (_) => setState(() {
+            hint: const Text('Elige tu ciudad'),
+            items: [
+              for (final c in ColombianCities.all)
+                DropdownMenuItem(value: c, child: Text(c)),
+            ],
+            onChanged: (value) => setState(() {
+              _city = value;
               _cityError = null;
               _justSaved = false;
             }),
           ),
+          if (_unknownSavedCity != null) ...[
+            const SizedBox(height: 10),
+            NoticeBanner(
+              key: const ValueKey('availability-unknown-city'),
+              message:
+                  'Tenías guardada la ciudad «$_unknownSavedCity», que no coincide con las de las solicitudes. Elige una de la lista y guarda.',
+              tone: PillTone.warning,
+              icon: Icons.warning_amber_rounded,
+            ),
+          ],
           const SizedBox(height: 10),
           Wrap(
             spacing: 6,
@@ -339,7 +364,7 @@ class _TechnicianAvailabilityPageState
                   key: ValueKey('availability-city-$c'),
                   label: Text(c),
                   onPressed: () => setState(() {
-                    _city.text = c;
+                    _city = c;
                     _cityError = null;
                     _justSaved = false;
                   }),

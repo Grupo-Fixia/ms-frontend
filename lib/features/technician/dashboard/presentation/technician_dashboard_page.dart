@@ -7,6 +7,7 @@ import '../../../contracts/domain/service_contract.dart';
 import '../../../quotations/presentation/quotation_card.dart';
 import '../../applications/domain/service_application.dart';
 import '../../opportunities/domain/service_opportunity.dart';
+import '../../opportunities/presentation/match_setup_summary.dart';
 import '../../profile/domain/verification_status.dart';
 
 /// Trabajo real del técnico (GC-428, GC-429, GC-442): solicitudes donde lo
@@ -48,6 +49,7 @@ class TechnicianDashboardPage extends StatefulWidget {
     this.loadOpportunities,
     this.loadWork,
     this.loadSetupComplete,
+    this.loadMatchSetup,
   });
 
   final String? firstName;
@@ -71,6 +73,7 @@ class TechnicianDashboardPage extends StatefulWidget {
   /// Si el técnico ya tiene zona y horario. Sin ellos ms-users no le
   /// muestra ninguna solicitud, así que el inicio se lo advierte.
   final Future<bool> Function()? loadSetupComplete;
+  final Future<MatchSetup> Function()? loadMatchSetup;
 
   /// Abre la cotización de una solicitud donde lo seleccionaron.
   final Future<void> Function(ServiceApplication application)? onOpenQuotation;
@@ -299,6 +302,17 @@ class _TechnicianDashboardPageState extends State<TechnicianDashboardPage> {
               final items = snapshot.data!
                   .take(TechnicianDashboardPage.opportunitiesLimit)
                   .toList();
+              if (items.isEmpty && widget.loadMatchSetup != null) {
+                return MatchSetupSummary(
+                  message:
+                      'No hay solicitudes compatibles con tus especialidades y zona en este momento.',
+                  load: widget.loadMatchSetup!,
+                  onOpenAvailability: widget.onOpenAvailability == null
+                      ? null
+                      : _openAvailability,
+                  onOpenSpecialties: widget.onOpenSpecialties,
+                );
+              }
               if (items.isEmpty) {
                 return const EmptyState(
                   message:

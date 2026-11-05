@@ -90,11 +90,13 @@ import 'features/technician/opportunities/presentation/opportunity_view.dart';
 import 'features/technician/opportunities/presentation/technician_opportunities_page.dart';
 import 'features/technician/specialties/application/get_service_catalog.dart';
 import 'features/technician/specialties/application/get_technician_specialties.dart';
+import 'features/technician/specialties/domain/technician_specialties.dart';
 import 'features/technician/specialties/application/ports/technician_specialties_repository.dart';
 import 'features/technician/specialties/application/update_technician_specialties.dart';
 import 'features/technician/specialties/infrastructure/demo_technician_specialties_repository.dart';
 import 'features/technician/specialties/infrastructure/http_technician_specialties_repository.dart';
 import 'features/technician/specialties/presentation/technician_specialties_page.dart';
+import 'features/technician/opportunities/presentation/match_setup_summary.dart';
 import 'features/technician/profile/application/get_technician_profile.dart';
 import 'features/technician/profile/application/ports/technician_profile_repository.dart';
 import 'features/technician/profile/application/update_technician_profile.dart';
@@ -194,6 +196,7 @@ Future<void> main() async {
         client: httpClient,
         usersBaseUrl: usersApiBaseUrl,
         servicesBaseUrl: Uri.parse(ApiConfig.servicesBaseUrl),
+        paymentsBaseUrl: Uri.parse(ApiConfig.paymentsBaseUrl),
         authorizedHttp: AuthorizedHttp(
           accessToken: () => sessionStore.session?.accessToken,
           renewSession: RefreshSession(
@@ -755,6 +758,39 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
+  /// Ciudad, horario y especialidades del técnico para explicar por qué no
+  /// le llegan oportunidades. Lo que falle se muestra como "–".
+  Future<MatchSetup> _technicianMatchSetup(
+      TechnicianAvailabilityRepository repository) async {
+    Future<T?> safe<T>(Future<T> Function() load) async {
+      try {
+        return await load();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    var zoneLoaded = false;
+    final specialties = widget.technicianSpecialtiesRepository;
+    final results = await Future.wait<Object?>([
+      safe<Object?>(() async {
+        final zone = await repository.fetchCoverageZone();
+        zoneLoaded = true;
+        return zone;
+      }),
+      safe(repository.fetchAvailability),
+      specialties == null
+          ? Future<Object?>.value()
+          : safe(specialties.fetchSpecialties),
+    ]);
+    return MatchSetup(
+      zoneLoaded: zoneLoaded,
+      city: (results[0] as CoverageZone?)?.city,
+      slots: (results[1] as WeeklyAvailability?)?.slots,
+      categories: (results[2] as TechnicianSpecialties?)?.categories,
+    );
+  }
+
   Widget _walletPage(BuildContext context) {
     final payments = widget.backend?.payments;
     final profile = _sessionStore.profile;
@@ -818,6 +854,10 @@ class _FixiaAppState extends State<FixiaApp> {
           ? null
           : () =>
               _technicianSetupComplete(widget.backend!.technicianAvailability!),
+      loadMatchSetup: widget.backend?.technicianAvailability == null
+          ? null
+          : () =>
+              _technicianMatchSetup(widget.backend!.technicianAvailability!),
       onOpenChat: () =>
           Navigator.of(context).pushNamed(AppRoutes.chatPrototype),
       onLogout: () => _logoutAndGoToLogin(context),
@@ -852,6 +892,13 @@ class _FixiaAppState extends State<FixiaApp> {
           .pushReplacementNamed(AppRoutes.technicianSpecialties),
       onOpenProfile: () => Navigator.of(context)
           .pushReplacementNamed(AppRoutes.technicianProfile),
+      loadMatchSetup: backend?.technicianAvailability == null
+          ? null
+          : () => _technicianMatchSetup(backend!.technicianAvailability!),
+      onOpenAvailability: backend?.technicianAvailability == null
+          ? null
+          : () => Navigator.of(context)
+              .pushReplacementNamed(AppRoutes.technicianAvailability),
     );
   }
 
@@ -1038,16 +1085,12 @@ class _FixiaAppState extends State<FixiaApp> {
             reject: (id) => _serviceCall(context,
                 () => RejectQuotation(backend.quotations)(request.id, id)),
             onChanged: reload,
-            previewBuilder: backend.payments == null
+            loadCommission: backend.payments == null
                 ? null
-                : (current) => CommissionPreview(
-                      key: ValueKey('commission-${current.id}'),
-                      priceCents: current.amountInCents,
-                      quote: (cents) => _serviceCall(context,
-                          () => backend.payments!.commissionQuote(cents)),
-                      loadWallet: () => _serviceCall(
-                          context, () => backend.payments!.wallet()),
-                    ),
+                : (cents, currency) => _serviceCall(
+                    context,
+                    () => backend.payments!
+                        .commissionQuote(cents, currency: currency)),
           ),
         ];
       case ServiceRequestStatus.contracted ||
@@ -1056,6 +1099,7 @@ class _FixiaAppState extends State<FixiaApp> {
             ServiceRequestStatus.closed:
         return [
           ClientContractSection(
+            footerBuilder: _paymentFooter(context, backend),
             key: ValueKey('contract-${request.id}-${request.status.name}'),
             load: () => _serviceCall(context,
                 () => GetRequestContract(backend.contracts)(request.id)),
@@ -1079,19 +1123,6 @@ class _FixiaAppState extends State<FixiaApp> {
                   context, EvidenceTarget.forRequest(contract.serviceRequestId))
             ],
           ),
-          if (backend.payments != null)
-            ServicePaymentPanel(
-              key: ValueKey('payment-${request.id}-${request.status.name}'),
-              isClient: true,
-              load: () => _serviceCall(context,
-                  () => backend.payments!.paymentForRequest(request.id)),
-              retryHold: (id) =>
-                  _serviceCall(context, () => backend.payments!.retryHold(id)),
-              loadWallet: () =>
-                  _serviceCall(context, () => backend.payments!.wallet()),
-              topUp: (cents) =>
-                  _serviceCall(context, () => backend.payments!.topUp(cents)),
-            ),
         ];
       default:
         return const [];
@@ -1196,6 +1227,29 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
+  Widget Function(ServiceContract)? _paymentFooter(
+          BuildContext context, BackendIntegrations backend) =>
+      backend.payments == null
+          ? null
+          : (contract) => ServicePaymentPanel(
+                key: ValueKey(
+                    'payment-${contract.serviceRequestId}-${contract.serviceStatus?.name}'),
+                isClient: true,
+                serviceClosed:
+                    contract.serviceStatus == ServiceRequestStatus.closed,
+                load: () => _serviceCall(
+                    context,
+                    () => backend.payments!
+                        .paymentForRequest(contract.serviceRequestId)),
+                loadWallet: () =>
+                    _serviceCall(context, backend.payments!.wallet),
+                retryHold: (id) => _serviceCall(
+                    context, () => backend.payments!.retryHold(id)),
+                openTopUp: () async {
+                  await _navigatorKey.currentState!.pushNamed(AppRoutes.wallet);
+                },
+              );
+
   /// «Mis servicios» del cliente o del técnico (GC-449).
   Widget _serviceHistoryPage(BuildContext context) {
     final controller = _serviceHistory;
@@ -1253,6 +1307,8 @@ class _FixiaAppState extends State<FixiaApp> {
       );
     } else {
       contractSection = ClientContractSection(
+        footerBuilder: _paymentFooter(context, backend),
+        walletPayments: backend.payments != null,
         load: () => _serviceCall(
             context,
             () =>
@@ -1260,6 +1316,7 @@ class _FixiaAppState extends State<FixiaApp> {
         actionsBuilder: (context, contract, reload) => [
           ...clientServiceActions(
             contract: contract,
+            payWithWallet: backend.payments != null,
             confirmClosure: () => _serviceCall(
                 context,
                 () => ConfirmServiceClosure(backend.contracts)(
@@ -1286,6 +1343,13 @@ class _FixiaAppState extends State<FixiaApp> {
               context,
               () => GetServiceEvaluations(backend.evaluations!)(
                   [entry.serviceRequestId])),
+          submitEvaluation: (rating, comment) => _serviceCall(
+              context,
+              () => SubmitServiceEvaluation(backend.evaluations!)(
+                    serviceRequestId: entry.serviceRequestId,
+                    rating: rating,
+                    comment: comment,
+                  )),
         ),
       ),
     );
@@ -1551,10 +1615,12 @@ class _TechnicianDashboardLoader extends StatefulWidget {
     this.onOpenContract,
     this.onOpenAvailability,
     this.loadSetupComplete,
+    this.loadMatchSetup,
   });
 
   final Future<void> Function()? onOpenAvailability;
   final Future<bool> Function()? loadSetupComplete;
+  final Future<MatchSetup> Function()? loadMatchSetup;
   final VoidCallback? onOpenJobs;
   final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
   final Future<TechnicianWork> Function()? loadWork;
@@ -1670,6 +1736,7 @@ class _TechnicianDashboardLoaderState
           onOpenSpecialties: widget.onOpenSpecialties,
           onOpenAvailability: widget.onOpenAvailability,
           loadSetupComplete: widget.loadSetupComplete,
+          loadMatchSetup: widget.loadMatchSetup,
           onOpenChat: widget.onOpenChat,
           onLogout: widget.onLogout,
         );

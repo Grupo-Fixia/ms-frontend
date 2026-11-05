@@ -32,6 +32,9 @@ const _payment = {
     'commissionRate': 0.15,
     'total': 158700.0
   },
+  'status': 'Failed',
+  'method': 'Wallet',
+  'isWalletPayment': true,
   'holdStatus': 'Failed',
   'canRetryHold': true,
 };
@@ -100,12 +103,18 @@ void main() {
           'commission': 20700.0,
           'total': 158700.0,
           'currency': 'COP',
-          'rate': 0.15
+          'rate': 0.15,
+          'ruleId': 'rule-1',
+          'ruleValidFrom': '2026-01-01T00:00:00Z'
         });
       }
       if (r.url.path.endsWith('/process')) {
-        return _json(
-            200, {..._payment, 'holdStatus': 'Held', 'canRetryHold': false});
+        return _json(200, {
+          ..._payment,
+          'holdStatus': 'Held',
+          'status': 'Processing',
+          'canRetryHold': false
+        });
       }
       if (r.url.path.endsWith('/r404')) return _json(404, {});
       return _json(200, _payment);
@@ -156,7 +165,7 @@ void main() {
     expect(pesosToCents(158700.5), 15870050);
     expect(newIdempotencyKey(Random(1)),
         matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4')));
-    expect(HoldStatus.fromApi('Raro'), HoldStatus.notApplicable);
+    expect(HoldStatus.fromApi('Raro'), HoldStatus.unknown);
     expect(WalletEntryType.fromApi('Capture')!.sign, 0);
     expect(
         const CommissionQuote(

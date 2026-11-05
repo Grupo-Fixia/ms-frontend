@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/constants/colombian_cities.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/technician/availability/application/ports/technician_availability_repository.dart';
 import 'package:ms_frontend/features/technician/availability/domain/clock_time.dart';
@@ -82,7 +83,7 @@ void main() {
     expect(find.text('Horario y zona de atención'), findsOneWidget);
     expect(find.text('No atiendes'), findsNWidgets(7));
     await _tap(tester, 'availability-save');
-    expect(find.text('Ingresa la ciudad donde atiendes.'), findsOneWidget);
+    expect(find.text('Elige la ciudad donde atiendes.'), findsOneWidget);
     expect(find.text('Activa al menos un día con su horario.'), findsOneWidget);
     expect(repo.replaces, 0);
   });
@@ -175,7 +176,8 @@ void main() {
       theme: FixiaTheme.light,
       home: TechnicianAvailabilityPage(
           key: const ValueKey('otra'),
-          repository: expiredRepo, onSessionExpired: () => expired++),
+          repository: expiredRepo,
+          onSessionExpired: () => expired++),
     ));
     // La app navega al login; aquí la pantalla sigue cargando.
     await tester.pump();
@@ -189,5 +191,37 @@ void main() {
     await _tap(tester, 'availability-preset-all');
     expect(find.text('No atiendes'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ciudad guardada fuera de la lista avisa y obliga a elegir',
+      (tester) async {
+    final repo = _Repo(
+      zone: const CoverageZone(city: 'dsa'),
+      slots: const [
+        AvailabilitySlot(
+            day: Weekday.monday, start: ClockTime(8, 0), end: ClockTime(12, 0)),
+      ],
+    );
+    await _pump(tester, repo);
+
+    expect(_key('availability-unknown-city'), findsOneWidget);
+    expect(find.textContaining('«dsa»'), findsOneWidget);
+
+    await tester.ensureVisible(_key('availability-city'));
+    await tester.tap(_key('availability-city'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Barranquilla').last);
+    await tester.pumpAndSettle();
+    await _tap(tester, 'availability-save');
+    expect(repo.zone?.city, 'Barranquilla');
+    expect(_key('availability-unknown-city'), findsNothing);
+  });
+
+  test('ColombianCities.match ignora tildes, mayúsculas y espacios', () {
+    expect(ColombianCities.match('  bogota '), 'Bogotá');
+    expect(ColombianCities.match('MEDELLÍN'), 'Medellín');
+    expect(ColombianCities.match('dsa'), isNull);
+    expect(ColombianCities.match(null), isNull);
+    expect(ColombianCities.match(''), isNull);
   });
 }

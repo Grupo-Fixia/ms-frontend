@@ -9,9 +9,14 @@ abstract interface class ServiceHistoryRepository {
   Future<ServiceHistoryResult> listPage({String? cursor, int limit});
 }
 
-/// Puerto de salida: evaluaciones de varios servicios en las que quien
-/// consulta evaluó o fue evaluado (GC-449, API de GC-444 en ms-users).
+/// Puerto de salida: evaluaciones de servicios en las que quien consulta
+/// evaluó o fue evaluado (GC-449, GC-445; API de GC-444 en ms-users).
 abstract interface class ServiceEvaluationRepository {
   /// Evaluaciones de esos servicios; lista vacía si no hay ninguna.
   Future<List<ServiceEvaluation>> listFor(List<String> serviceRequestIds);
+
+  /// Registra la calificación de quien consulta a su contraparte (GC-445) y
+  /// devuelve la evaluación guardada. Un reintento idéntico devuelve la
+  /// misma evaluación sin duplicarla.
+  Future<ServiceEvaluation> submit(NewServiceEvaluation evaluation);
 }

@@ -1,262 +1,278 @@
 import 'package:flutter/material.dart';
-
-import '../../../core/theme/fixia_theme.dart';
 import '../../../core/widgets/fixia_ui.dart';
 import '../../quotations/presentation/quotation_card.dart';
 import '../domain/payments.dart';
 import 'wallet_page.dart';
+import '../../../core/theme/fixia_theme.dart';
 
-/// Pago de un servicio contratado (GC-491): cuánto se retuvo, en qué va y,
-/// si al cliente le faltó saldo, recargar y reintentar desde aquí.
 class ServicePaymentPanel extends StatefulWidget {
-  const ServicePaymentPanel({
-    super.key,
-    required this.load,
-    required this.isClient,
-    this.retryHold,
-    this.loadWallet,
-    this.topUp,
-    this.onError,
-  });
-
-  /// `null` si todavía no hay pago registrado (llega por eventos en unos
-  /// segundos).
+  const ServicePaymentPanel(
+      {super.key,
+      required this.load,
+      this.loadWallet,
+      this.retryHold,
+      this.serviceClosed = false,
+      required this.isClient,
+      this.topUp,
+      this.onError,
+      this.openTopUp});
   final Future<ServicePayment?> Function() load;
-  final bool isClient;
-  final Future<ServicePayment> Function(String paymentId)? retryHold;
   final Future<Wallet> Function()? loadWallet;
-  final Future<Wallet> Function(int amountCents)? topUp;
+  final bool isClient;
+  final Future<Wallet> Function(int)? topUp;
   final ValueChanged<Object>? onError;
-
+  final Future<ServicePayment> Function(String)? retryHold;
+  final bool serviceClosed;
+  final Future<void> Function()? openTopUp;
   @override
   State<ServicePaymentPanel> createState() => _ServicePaymentPanelState();
 }
 
 class _ServicePaymentPanelState extends State<ServicePaymentPanel> {
-  late Future<ServicePayment?> _payment = widget.load();
-  bool _busy = false;
-  String? _retryError;
+  ServicePayment? _payment;
+  Wallet? _wallet;
+  Object? _error, _walletError;
+  bool _refreshing = false;
+  bool _operating = false;
+  bool _openingTopUp = false;
+  int _loadVersion = 0;
+  bool get _busy => _refreshing || _operating;
+  bool _paymentFresh = false;
 
-  void _reload() => setState(() {
-        // El error lo muestra el FutureBuilder; se marca como atendido para
-        // que no se reporte antes de que lo escuche.
-        _payment = widget.load()..ignore();
-      });
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
 
-  Future<void> _retry(ServicePayment payment) async {
-    final retry = widget.retryHold;
-    if (retry == null || _busy) return;
-    setState(() {
-      _busy = true;
-      _retryError = null;
-    });
-    try {
-      final updated = await retry(payment.id);
-      if (!mounted) return;
-      setState(() => _payment = Future.value(updated));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(updated.holdStatus == HoldStatus.held
-            ? 'Listo: el pago quedó retenido.'
-            : updated.failureReason ?? 'Todavía no se pudo retener el pago.'),
-      ));
-    } catch (error) {
-      widget.onError?.call(error);
-      if (mounted) setState(() => _retryError = '$error');
-    } finally {
-      if (mounted) setState(() => _busy = false);
+  @override
+  void didUpdateWidget(covariant ServicePaymentPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.serviceClosed != widget.serviceClosed) {
+      _refresh(supersede: true);
     }
   }
 
-  Future<void> _topUpAndRetry(ServicePayment payment) async {
-    final topUp = widget.topUp;
+  Future<void> _refresh({bool supersede = false}) async {
+    if (_refreshing && !supersede) return;
+    final version = ++_loadVersion;
+    bool isCurrent() => mounted && version == _loadVersion;
+    final load = widget.load;
     final loadWallet = widget.loadWallet;
-    if (topUp == null || loadWallet == null) return;
-    Wallet wallet;
+    setState(() {
+      _refreshing = true;
+      _paymentFresh = false;
+      _error = null;
+      _wallet = null;
+      _walletError = null;
+    });
     try {
-      wallet = await loadWallet();
+      final payment = await load();
+      if (!isCurrent()) return;
+      setState(() {
+        _payment = payment;
+        _paymentFresh = true;
+      });
+      if (widget.isClient &&
+          payment?.isWalletPayment == true &&
+          loadWallet != null) {
+        try {
+          final wallet = await loadWallet();
+          if (isCurrent()) setState(() => _wallet = wallet);
+        } catch (error) {
+          if (isCurrent()) setState(() => _walletError = error);
+        }
+      }
+    } catch (error) {
+      if (isCurrent()) {
+        widget.onError?.call(error);
+        if (!isCurrent()) return;
+        setState(() {
+          _payment = null;
+          _error = error;
+        });
+      }
+    } finally {
+      if (isCurrent()) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _retry() async {
+    final payment = _payment;
+    if (_busy ||
+        !_paymentFresh ||
+        payment == null ||
+        !widget.isClient ||
+        widget.retryHold == null ||
+        !payment.canRetryHold ||
+        widget.serviceClosed) return;
+    setState(() {
+      _operating = true;
+      _paymentFresh = false;
+    });
+    Object? error;
+    try {
+      await widget.retryHold!(payment.id);
+    } catch (failure) {
+      error = failure;
+    }
+    if (!mounted) return;
+    await _refresh(supersede: true);
+    if (mounted) {
+      setState(() {
+        _operating = false;
+        if (error != null) _error = error;
+      });
+    }
+  }
+
+  Future<void> _topUp() async {
+    if (_busy || !widget.isClient || widget.serviceClosed) return;
+    setState(() {
+      _operating = true;
+      _openingTopUp = true;
+    });
+    try {
+      if (widget.openTopUp != null) {
+        await widget.openTopUp!();
+      } else if (widget.topUp != null && widget.loadWallet != null) {
+        final wallet = await widget.loadWallet!();
+        if (!mounted) return;
+        final missing = (_payment?.amountCents ?? 0) - wallet.availableCents;
+        await showDialog<bool>(
+            context: context,
+            builder: (_) => WalletAmountDialog(
+                topUp: true,
+                availableCents: wallet.availableCents,
+                currency: wallet.currency,
+                suggestedCents:
+                    wallet.currency == _payment?.currency && missing > 0
+                        ? missing
+                        : null,
+                submit: widget.topUp!,
+                onError: widget.onError));
+      }
     } catch (error) {
       widget.onError?.call(error);
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$error')));
       }
-      return;
     }
-    if (!mounted) return;
-    final missing = (payment.totalCents ?? 0) - wallet.availableCents;
-    final done = await showDialog<bool>(
-      context: context,
-      builder: (_) => WalletAmountDialog(
-        topUp: true,
-        availableCents: wallet.availableCents,
-        currency: wallet.currency,
-        suggestedCents: missing > 0 ? missing : null,
-        submit: topUp,
-        onError: widget.onError,
-      ),
-    );
-    if (done == true && mounted) await _retry(payment);
+    if (mounted) {
+      await _refresh(supersede: true);
+      if (mounted) {
+        setState(() {
+          _operating = false;
+          _openingTopUp = false;
+        });
+      }
+    }
   }
 
   @override
-  Widget build(BuildContext context) => FixiaPanel(
-        key: const ValueKey('service-payment'),
-        child: FutureBuilder<ServicePayment?>(
-          future: _payment,
-          builder: (context, snapshot) {
-            final header = Row(
-              children: [
-                const Icon(Icons.account_balance_wallet_outlined,
-                    color: FixiaColors.secondary),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Pago del servicio',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: FixiaColors.primary,
-                    ),
-                  ),
-                ),
-                if (snapshot.data case final p?)
-                  StatusPill(
-                    key: const ValueKey('service-payment-status'),
-                    label: p.holdStatus.label,
-                    tone: switch (p.holdStatus) {
-                      HoldStatus.held ||
-                      HoldStatus.captured =>
-                        PillTone.success,
-                      HoldStatus.failed => PillTone.warning,
-                      _ => PillTone.neutral,
-                    },
-                  ),
-              ],
-            );
-            if (snapshot.connectionState != ConnectionState.done) {
-              return Column(children: [header, const SectionLoading()]);
-            }
-            if (snapshot.hasError) {
-              widget.onError?.call(snapshot.error!);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  header,
-                  const SizedBox(height: 8),
-                  Text('${snapshot.error}',
-                      style: const TextStyle(color: FixiaColors.textSecondary)),
-                  TextButton(
-                    key: const ValueKey('service-payment-reload'),
-                    onPressed: _reload,
-                    child: const Text('Reintentar'),
-                  ),
-                ],
-              );
-            }
-            final payment = snapshot.data;
-            if (payment == null) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  header,
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Estamos registrando el pago de esta contratación; tarda unos segundos.',
-                    key: ValueKey('service-payment-missing'),
-                    style: TextStyle(color: FixiaColors.textSecondary),
-                  ),
-                  TextButton(
-                    key: const ValueKey('service-payment-reload'),
-                    onPressed: _reload,
-                    child: const Text('Actualizar'),
-                  ),
-                ],
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                header,
-                const SizedBox(height: 12),
+  Widget build(BuildContext context) {
+    final payment = _payment;
+    final wallet = _wallet;
+    final insufficient = payment?.isWalletPayment == true &&
+        payment?.status == PaymentStatus.failed &&
+        wallet != null &&
+        wallet.currency == payment!.currency &&
+        wallet.availableCents < payment.amountCents;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const SectionTitle(title: 'Pago del servicio'),
+      FixiaPanel(
+          key: const ValueKey('service-payment'),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (widget.serviceClosed) const Text('Servicio cerrado.'),
+            if (_busy && !_openingTopUp) const LinearProgressIndicator(),
+            if (_error != null) Text('$_error'),
+            if (!_busy && _paymentFresh && payment == null)
+              const Text(
+                  key: ValueKey('service-payment-missing'),
+                  'El pago aún no está disponible para consulta. Actualiza su estado.'),
+            if (payment != null) ...[
+              Text(payment.label,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(payment.confirmedHoldStatus.label),
+              if (payment.breakdown case final breakdown?)
                 PaymentBreakdown(
-                  priceCents: payment.priceCents,
-                  commissionCents: payment.commissionCents,
-                  totalCents: payment.totalCents,
-                  rate: payment.rate,
+                  priceCents: breakdown.priceCents,
+                  commissionCents: breakdown.commissionCents,
+                  totalCents: breakdown.totalCents,
+                  rate: breakdown.commissionRate,
                   currency: payment.currency,
-                  priceLabel:
-                      widget.isClient ? 'Precio del técnico' : 'Lo que recibes',
-                ),
-                const SizedBox(height: 12),
+                  priceLabel: 'Precio del prestador',
+                )
+              else ...[
                 Text(
-                  _message(payment),
-                  key: const ValueKey('service-payment-message'),
-                  style: const TextStyle(color: FixiaColors.textSecondary),
-                ),
-                if (_retryError != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _retryError!,
-                    key: const ValueKey('service-payment-retry-error'),
-                    style: const TextStyle(color: FixiaColors.error),
-                  ),
-                ],
-                if (widget.isClient &&
-                    payment.holdStatus == HoldStatus.failed &&
-                    payment.canRetryHold) ...[
-                  const SizedBox(height: 12),
-                  ActionBar(actions: [
-                    OutlinedButton(
-                      key: const ValueKey('service-payment-retry'),
-                      onPressed: _busy ? null : () => _retry(payment),
-                      child: const Text('Reintentar pago'),
-                    ),
-                    if (widget.topUp != null && widget.loadWallet != null)
-                      FilledButton(
-                        key: const ValueKey('service-payment-topup'),
-                        onPressed: _busy ? null : () => _topUpAndRetry(payment),
-                        child: const Text('Recargar y pagar'),
-                      ),
-                  ]),
-                ],
+                    'Total del pago: ${formatCents(payment.amountCents, payment.currency)}'),
+                if (payment.isWalletPayment)
+                  const Text('El desglose de este pago no está disponible.'),
               ],
-            );
-          },
-        ),
-      );
-
-  String _message(ServicePayment p) {
-    final total =
-        p.totalCents == null ? '' : formatCents(p.totalCents!, p.currency);
-    final price =
-        p.priceCents == null ? '' : formatCents(p.priceCents!, p.currency);
-    if (widget.isClient) {
-      return switch (p.holdStatus) {
-        HoldStatus.held =>
-          'Retuvimos $total de tu billetera. El técnico lo recibe cuando confirmes el cierre.',
-        HoldStatus.failed => p.failureReason ??
-            'No pudimos retener el pago. Recarga tu billetera y reintenta.',
-        HoldStatus.captured =>
-          'Pagado: el técnico recibió $price y Fixia su comisión.',
-        HoldStatus.released => 'Se liberó lo retenido y volvió a tu saldo.',
-        HoldStatus.reversed => 'Se revirtió el pago y volvió a tu saldo.',
-        HoldStatus.pending => 'Estamos reteniendo el pago en tu billetera.',
-        HoldStatus.notApplicable =>
-          'Este servicio no se paga con la billetera.',
-      };
-    }
-    return switch (p.holdStatus) {
-      HoldStatus.held =>
-        'El pago del cliente está retenido. Recibirás $price en tu billetera cuando confirme el cierre.',
-      HoldStatus.failed =>
-        'El cliente todavía no tiene saldo para retener el pago.',
-      HoldStatus.captured => 'Recibiste $price en tu billetera.',
-      HoldStatus.released ||
-      HoldStatus.reversed =>
-        'El pago de este servicio se devolvió al cliente.',
-      HoldStatus.pending => 'El pago del cliente se está procesando.',
-      HoldStatus.notApplicable => 'Este servicio no se paga con la billetera.',
-    };
+              if (widget.serviceClosed &&
+                  payment.status != PaymentStatus.completed &&
+                  payment.status != PaymentStatus.refunded)
+                const Text(
+                    'El cierre está confirmado, pero el pago no está completado. '
+                    'Actualiza para comprobar su estado.'),
+              if (payment.failureReason?.isNotEmpty == true)
+                Text(payment.failureReason!),
+            ],
+            if (wallet != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                  'Saldo disponible de tu billetera: ${formatCents(wallet.availableCents, wallet.currency)}'),
+              Text(
+                  'Saldo retenido global: ${formatCents(wallet.heldCents, wallet.currency)}'),
+              const Text('Estos saldos incluyen todos tus servicios.'),
+            ],
+            if (_walletError != null)
+              Text('No pudimos actualizar el saldo: $_walletError'),
+            if (insufficient)
+              const Text(
+                  'El saldo disponible es inferior al importe de este pago.'),
+            if (payment?.isWalletPayment == true &&
+                payment?.status == PaymentStatus.failed &&
+                !payment!.canRetryHold)
+              const Text(
+                  'El reintento de retención no está disponible para este pago.'),
+            if (payment?.isWalletPayment == true &&
+                payment?.status == PaymentStatus.failed &&
+                widget.isClient &&
+                widget.openTopUp == null &&
+                widget.topUp == null &&
+                !widget.serviceClosed)
+              const Text(
+                  'La recarga virtual todavía no está disponible desde esta pantalla.'),
+            Wrap(spacing: 12, runSpacing: 8, children: [
+              TextButton(
+                  key: const ValueKey('service-payment-reload'),
+                  onPressed: _busy ? null : _refresh,
+                  child: const Text('Actualizar pago')),
+              if (widget.isClient &&
+                  widget.retryHold != null &&
+                  payment?.canRetryHold == true &&
+                  !widget.serviceClosed)
+                OutlinedButton(
+                    key: const ValueKey('service-payment-retry'),
+                    onPressed: _busy || !_paymentFresh ? null : _retry,
+                    child: const Text('Reintentar retención')),
+              if (payment?.isWalletPayment == true &&
+                  payment?.status == PaymentStatus.failed &&
+                  widget.isClient &&
+                  (widget.openTopUp != null ||
+                      (widget.topUp != null && widget.loadWallet != null)) &&
+                  !widget.serviceClosed)
+                TextButton(
+                    key: const ValueKey('service-payment-topup'),
+                    onPressed: _busy ? null : _topUp,
+                    child: const Text('Recargar saldo')),
+            ]),
+          ])),
+      const SizedBox(height: 20),
+    ]);
   }
 }
 

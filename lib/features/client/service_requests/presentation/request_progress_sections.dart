@@ -1,3 +1,5 @@
+import '../../../payments/domain/payments.dart';
+import '../../../payments/presentation/commission_confirmation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
@@ -73,6 +75,7 @@ class ClientQuotationSection extends StatefulWidget {
     required this.reject,
     required this.onChanged,
     this.previewBuilder,
+    this.loadCommission,
   });
 
   final Future<List<Quotation>> Function() load;
@@ -80,6 +83,7 @@ class ClientQuotationSection extends StatefulWidget {
   /// Lo que se muestra antes de aceptar la versión vigente (p. ej. el
   /// desglose con la comisión, GC-491).
   final Widget Function(Quotation current)? previewBuilder;
+  final Future<CommissionQuote> Function(int, String)? loadCommission;
   final Future<Quotation> Function(String quotationId) accept;
   final Future<Quotation> Function(String quotationId) reject;
 
@@ -93,6 +97,7 @@ class ClientQuotationSection extends StatefulWidget {
 
 class _ClientQuotationSectionState extends State<ClientQuotationSection> {
   bool _busy = false;
+  bool _confirming = false;
 
   Future<void> _respond(
     Quotation quotation, {
@@ -100,32 +105,48 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
     required VoidCallback reload,
   }) async {
     if (_busy) return;
-    final amount = formatCents(quotation.amountInCents, quotation.currency);
+    _confirming = true;
+    setState(() => _busy = true);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(accept ? 'Aceptar cotización' : 'Rechazar cotización'),
-        content: Text(accept
-            ? 'Vas a contratar el servicio por $amount con las condiciones de la '
-                '${quotation.versionLabel.toLowerCase()}. Esta decisión queda registrada.'
-            : 'El prestador podrá enviarte una nueva versión.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Volver'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(accept ? 'Aceptar y contratar' : 'Rechazar'),
-          ),
-        ],
-      ),
+      builder: (context) => accept
+          ? CommissionConfirmation(
+              quotation: quotation, load: widget.loadCommission)
+          : AlertDialog(
+              title: const Text('Rechazar cotización'),
+              content:
+                  const Text('El prestador podrá enviarte una nueva versión.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Volver')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Rechazar')),
+              ],
+            ),
     );
-    if (confirmed != true || !mounted) return;
-    setState(() => _busy = true);
+    _confirming = false;
+    if (!mounted) return;
+    if (confirmed != true) {
+      setState(() => _busy = false);
+      return;
+    }
+    setState(() {});
     String message;
     try {
       if (accept) {
+        final latest = splitVersions(await widget.load()).main;
+        if (!mounted) return;
+        if (latest == null ||
+            !latest.isCurrent ||
+            latest.id != quotation.id ||
+            latest.amountInCents != quotation.amountInCents ||
+            latest.currency != quotation.currency ||
+            latest.revision != quotation.revision) {
+          throw const PaymentsFailure(
+              'La cotización cambió. Revisa la versión vigente y su desglose.');
+        }
         await widget.accept(quotation.id);
         message = 'Cotización aceptada. El servicio quedó contratado.';
       } else {
@@ -185,7 +206,7 @@ class _ClientQuotationSectionState extends State<ClientQuotationSection> {
                                 ? null
                                 : () => _respond(main,
                                     accept: true, reload: reload),
-                            child: _busy
+                            child: _busy && !_confirming
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
@@ -227,10 +248,12 @@ class ClientContractSection extends StatelessWidget {
     required this.load,
     this.actionsBuilder,
     this.walletPayments = false,
+    this.footerBuilder,
   });
 
   final Future<ServiceContract> Function() load;
   final bool walletPayments;
+  final Widget Function(ServiceContract)? footerBuilder;
 
   /// Acciones del cliente sobre el servicio (confirmar cierre u objetar).
   final List<Widget> Function(
@@ -241,10 +264,19 @@ class ClientContractSection extends StatelessWidget {
   Widget build(BuildContext context) => ServerSection<ServiceContract>(
         title: 'Tu contratación',
         load: load,
-        builder: (context, contract, reload) => ContractCard(
-          contract: contract,
-          walletPayments: walletPayments,
-          actions: actionsBuilder?.call(context, contract, reload) ?? const [],
+        builder: (context, contract, reload) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ContractCard(
+                contract: contract,
+                walletPayments: walletPayments,
+                actions: actionsBuilder?.call(context, contract, reload) ??
+                    const []),
+            if (footerBuilder != null) ...[
+              const SizedBox(height: 20),
+              footerBuilder!(contract)
+            ],
+          ],
         ),
       );
 }

@@ -156,12 +156,26 @@ void main() {
         ServicePayment(
           id: 'p1',
           serviceRequestId: 'r1',
+          isWalletPayment: true,
+          status: switch (status) {
+            HoldStatus.held => PaymentStatus.processing,
+            HoldStatus.captured => PaymentStatus.completed,
+            HoldStatus.failed => PaymentStatus.failed,
+            HoldStatus.pending => PaymentStatus.pending,
+            _ => PaymentStatus.refunded
+          },
           holdStatus: status,
           canRetryHold: retry,
           priceCents: 13800000,
           commissionCents: 2070000,
           totalCents: 15870000,
           rate: 0.15,
+          breakdown: const PaymentAmounts(
+            priceCents: 13800000,
+            commissionCents: 2070000,
+            commissionRate: 0.15,
+            totalCents: 15870000,
+          ),
           failureReason:
               status == HoldStatus.failed ? 'Saldo insuficiente' : null,
         );
@@ -173,22 +187,24 @@ void main() {
         (tester) async {
       final gateway = _Gateway()..available = 10000000;
       var retries = 0;
+      var current = payment(HoldStatus.failed, retry: true);
       await _pump(
         tester,
         host(ServicePaymentPanel(
           isClient: true,
-          load: () async => payment(HoldStatus.failed, retry: true),
+          load: () async => current,
           retryHold: (_) async {
             retries++;
-            return payment(HoldStatus.held);
+            return current = payment(HoldStatus.held);
           },
           loadWallet: gateway.wallet,
           topUp: gateway.topUp,
         )),
       );
-      expect(find.text('Falta saldo'), findsOneWidget);
+      expect(find.text('Retención fallida'), findsOneWidget);
       expect(find.text('Saldo insuficiente'), findsOneWidget);
-      expect(find.text('Comisión de Fixia (15 %)'), findsOneWidget);
+      expect(find.textContaining('Comisión de Fixia'), findsOneWidget);
+      expect(find.text('20.700 COP'), findsOneWidget);
 
       await tester.tap(_key('service-payment-topup'));
       await tester.pumpAndSettle();
@@ -197,10 +213,14 @@ void main() {
       await tester.tap(_key('wallet-amount-confirm'));
       await tester.pumpAndSettle();
       expect(gateway.ops, ['top 5870000']);
+      expect(retries, 0);
+      await tester.tap(_key('service-payment-retry'));
+      await tester.pumpAndSettle();
       expect(retries, 1);
-      expect(find.text('Dinero retenido'), findsOneWidget);
+      expect(find.text('Pago retenido'), findsOneWidget);
 
       await tester.pumpWidget(MaterialApp(
+          theme: FixiaTheme.light,
           home: host(ServicePaymentPanel(
               key: UniqueKey(),
               isClient: true,
@@ -216,9 +236,9 @@ void main() {
     testWidgets('mensajes por estado para el técnico y sin pago aún',
         (tester) async {
       for (final (status, text) in [
-        (HoldStatus.held, 'Recibirás 138.000 COP'),
-        (HoldStatus.captured, 'Recibiste 138.000 COP'),
-        (HoldStatus.failed, 'todavía no tiene saldo'),
+        (HoldStatus.held, 'Pago retenido'),
+        (HoldStatus.captured, 'Pago completado'),
+        (HoldStatus.failed, 'Retención fallida'),
       ]) {
         await _pump(
             tester,
@@ -249,10 +269,10 @@ void main() {
     testWidgets('cliente: textos de cobrado, liberado y retenido',
         (tester) async {
       for (final (status, text) in [
-        (HoldStatus.captured, 'Pagado: el técnico recibió'),
-        (HoldStatus.released, 'volvió a tu saldo'),
-        (HoldStatus.held, 'Retuvimos 158.700 COP'),
-        (HoldStatus.pending, 'Estamos reteniendo'),
+        (HoldStatus.captured, 'Pago completado'),
+        (HoldStatus.released, 'Retención liberada'),
+        (HoldStatus.held, 'Pago retenido'),
+        (HoldStatus.pending, 'Retención pendiente'),
       ]) {
         await _pump(
             tester,

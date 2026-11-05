@@ -38,6 +38,7 @@ class ServiceActionButton extends StatefulWidget {
 
 class _ServiceActionButtonState extends State<ServiceActionButton> {
   bool _busy = false;
+  bool _confirming = false;
 
   Future<String?> _confirm() => showDialog<String>(
         context: context,
@@ -51,9 +52,16 @@ class _ServiceActionButtonState extends State<ServiceActionButton> {
 
   Future<void> _press() async {
     if (_busy) return;
-    final answer = await _confirm();
-    if (answer == null || !mounted) return;
+    _confirming = true;
     setState(() => _busy = true);
+    final answer = await _confirm();
+    _confirming = false;
+    if (!mounted) return;
+    if (answer == null) {
+      setState(() => _busy = false);
+      return;
+    }
+    setState(() {});
     String message;
     try {
       await widget.run(widget.askReason ? answer : null);
@@ -70,7 +78,7 @@ class _ServiceActionButtonState extends State<ServiceActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    final child = _busy
+    final child = _busy && !_confirming
         ? const SizedBox(
             width: 18,
             height: 18,
@@ -103,6 +111,7 @@ class _ConfirmDialog extends StatefulWidget {
 class _ConfirmDialogState extends State<_ConfirmDialog> {
   final _reason = TextEditingController();
   String? _error;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -111,7 +120,9 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
   }
 
   void _accept() {
+    if (_submitted) return;
     if (!widget.askReason) {
+      _submitted = true;
       Navigator.pop(context, '');
       return;
     }
@@ -120,6 +131,7 @@ class _ConfirmDialogState extends State<_ConfirmDialog> {
       setState(() => _error = ObjectServiceClosure.missingReasonMessage);
       return;
     }
+    _submitted = true;
     Navigator.pop(context, text);
   }
 
@@ -238,10 +250,10 @@ List<Widget> clientServiceActions({
               ? 'Confirmar cierre y pagar'
               : 'Confirmar cierre del servicio',
           confirmText: payWithWallet
-              ? 'Confirmas que el trabajo quedó como se acordó. Con esto se le paga al técnico lo retenido en tu billetera y el servicio queda cerrado; no se puede reabrir.'
+              ? 'Confirmas que el trabajo quedó como se acordó. El servicio queda cerrado; no se puede reabrir. Consulta el pago para confirmar el cobro del saldo retenido.'
               : 'Confirmas que el trabajo quedó como se acordó. El servicio quedará cerrado y no se puede reabrir.',
           successMessage: payWithWallet
-              ? 'Servicio cerrado y pagado. ¡Gracias por usar Fixia!'
+              ? 'Cierre confirmado. Consulta el estado del pago.'
               : 'Servicio cerrado. ¡Gracias por usar Fixia!',
           run: (_) => confirmClosure(),
           onDone: onDone,
