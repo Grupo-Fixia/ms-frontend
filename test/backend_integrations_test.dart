@@ -74,6 +74,10 @@ class _Requests implements ServiceRequestRepository {
   @override
   Future<ServiceRequest> cancel(String requestId) =>
       throw UnimplementedError();
+  @override
+  Future<ServiceRequest> changeExactLocation(
+          String requestId, ExactLocation location) =>
+      throw UnimplementedError();
   NewServiceRequest? published;
   Object? failure;
 
