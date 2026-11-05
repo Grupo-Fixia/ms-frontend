@@ -25,7 +25,16 @@ class ServiceRequestDetailPage extends StatefulWidget {
     required this.selectProvider,
     this.extraSections,
     this.listCompatibleTechnicians,
+    this.cancel,
+    this.changeExactLocation,
   });
+
+  /// Cambia la dirección exacta (GC-514). Si es `null` no se ofrece.
+  final Future<ServiceRequest> Function(String requestId, String address)?
+      changeExactLocation;
+
+  /// Cancela la solicitud (GC-515). Si es `null` no se ofrece el botón.
+  final Future<ServiceRequest> Function(String requestId)? cancel;
 
   /// Técnicos compatibles con la solicitud (GC-474), por páginas. Solo se
   /// consultan mientras la solicitud está publicada.
@@ -59,6 +68,77 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
   Object? _applicantsError;
   bool _loading = true;
   String? _selecting;
+  bool _cancelling = false;
+
+  /// Solo antes de contratar se puede cancelar (GC-515).
+  static bool _isBeforeContract(ServiceRequest request) =>
+      request.status == ServiceRequestStatus.published ||
+      request.status == ServiceRequestStatus.providerSelected;
+
+  Future<void> _changeAddress() async {
+    final change = widget.changeExactLocation;
+    if (change == null || _cancelling) return;
+    final address = await showDialog<String>(
+      context: context,
+      builder: (context) => const _ExactAddressDialog(),
+    );
+    if (address == null || !mounted) return;
+    String message;
+    try {
+      await change(widget.requestId, address);
+      message = 'Actualizamos la dirección exacta. El prestador la verá '
+          'cuando contrates el servicio.';
+    } catch (error) {
+      message = '$error';
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+    await _reload();
+  }
+
+  Future<void> _cancel() async {
+    final cancel = widget.cancel;
+    if (cancel == null || _cancelling) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar solicitud'),
+        content: const Text(
+          'La solicitud dejará de recibir postulaciones y las que estén '
+          'pendientes quedarán como no seleccionadas. Si ya elegiste '
+          'prestador, su cotización ya no se podrá aceptar.\n\n'
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            key: const ValueKey('request-cancel-confirm'),
+            style: FilledButton.styleFrom(backgroundColor: FixiaColors.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancelar solicitud'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _cancelling = true);
+    String message;
+    try {
+      await cancel(widget.requestId);
+      message = 'Cancelaste la solicitud.';
+    } catch (error) {
+      message = '$error';
+    }
+    if (!mounted) return;
+    setState(() => _cancelling = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+    await _reload();
+  }
 
   @override
   void initState() {
@@ -174,6 +254,24 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text('Actualizar'),
               ),
+              if (widget.changeExactLocation != null &&
+                  _isBeforeContract(request))
+                OutlinedButton.icon(
+                  key: const ValueKey('request-change-address'),
+                  onPressed: _loading || _cancelling ? null : _changeAddress,
+                  icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+                  label: const Text('Cambiar dirección'),
+                ),
+              if (widget.cancel != null && _isBeforeContract(request))
+                TextButton.icon(
+                  key: const ValueKey('request-cancel'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: FixiaColors.error,
+                  ),
+                  onPressed: _loading || _cancelling ? null : _cancel,
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text('Cancelar solicitud'),
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -270,6 +368,78 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
       ],
     );
   }
+}
+
+/// Pide la nueva dirección exacta (GC-514). Devuelve el texto o `null` si el
+/// usuario vuelve atrás. La dirección actual no se muestra porque el servidor
+/// solo la entrega desde la contratación.
+class _ExactAddressDialog extends StatefulWidget {
+  const _ExactAddressDialog();
+
+  @override
+  State<_ExactAddressDialog> createState() => _ExactAddressDialogState();
+}
+
+class _ExactAddressDialogState extends State<_ExactAddressDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      setState(() => _error = 'Ingresa la dirección.');
+      return;
+    }
+    Navigator.pop(context, text);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Cambiar dirección exacta'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Escribe la dirección completa donde se hará el servicio. '
+                'Solo la verá el prestador cuando contrates.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('request-address-field'),
+                controller: _controller,
+                autofocus: true,
+                maxLength: 255,
+                decoration: InputDecoration(
+                  labelText: 'Dirección exacta',
+                  hintText: 'Calle 10 # 5-20, apto 301',
+                  errorText: _error,
+                ),
+                onSubmitted: (_) => _save(),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            key: const ValueKey('request-address-save'),
+            onPressed: _save,
+            child: const Text('Guardar'),
+          ),
+        ],
+      );
 }
 
 class _RequestSummary extends StatelessWidget {

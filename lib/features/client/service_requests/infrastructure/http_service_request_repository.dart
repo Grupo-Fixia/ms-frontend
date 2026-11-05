@@ -166,6 +166,42 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
     return _requireRequest(_decode(response));
   }
 
+  @override
+  Future<ServiceRequest> cancel(String requestId) async {
+    final response = await _send(
+      (headers) => _client.post(
+        _resource([requestId, 'cancellation']),
+        headers: headers,
+      ),
+    );
+    _throwOnError(response);
+    return _requireRequest(_decode(response));
+  }
+
+  @override
+  Future<ServiceRequest> changeExactLocation(
+    String requestId,
+    ExactLocation location,
+  ) async {
+    final body = jsonEncode({
+      'address': location.address,
+      if (location.latitude != null) 'latitude': location.latitude,
+      if (location.longitude != null) 'longitude': location.longitude,
+    });
+    final response = await _send(
+      (headers) => _client.patch(
+        _resource([requestId, 'exact-location']),
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: body,
+      ),
+    );
+    _throwOnError(response);
+    return _requireRequest(_decode(response));
+  }
+
   Uri _resource(List<String> segments) =>
       _endpoint.replace(pathSegments: [..._endpoint.pathSegments, ...segments]);
 
