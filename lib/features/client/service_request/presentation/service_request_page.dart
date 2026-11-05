@@ -44,6 +44,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
   final List<int> _photos = [];
   String _city = '';
   String _zone = '';
+  String _address = '';
   bool _submitting = false;
 
   bool get _publishes => widget.publish != null;
@@ -98,6 +99,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
       photoCount: _photos.length,
       city: _city,
       zone: _zone,
+      exactAddress: _address,
       budget: ServiceBudget.tryParse(_budgetController.text),
     );
     final publish = widget.publish;
@@ -282,6 +284,7 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
                 : _hasLocation
                     ? '$_zone, $_city'
                     : null,
+            hasExactAddress: _address.isNotEmpty,
             onChangeLocation:
                 _publishes ? _pickLocation : () => _showLocationDemo(context),
           ),
@@ -365,17 +368,20 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
     return '$date · $time';
   }
 
-  /// Ciudad y zona (barrio o localidad) que verán los técnicos. La
-  /// dirección exacta no se pide aquí: se comparte solo al contratar.
+  /// Ciudad y zona (barrio o localidad) que verán los técnicos, y la
+  /// dirección exacta opcional, que solo recibe el técnico contratado.
   Future<void> _pickLocation() async {
-    final picked = await showDialog<({String city, String zone})>(
+    final picked =
+        await showDialog<({String city, String zone, String address})>(
       context: context,
-      builder: (context) => _LocationDialog(city: _city, zone: _zone),
+      builder: (context) =>
+          _LocationDialog(city: _city, zone: _zone, address: _address),
     );
     if (picked != null && mounted) {
       setState(() {
         _city = picked.city;
         _zone = picked.zone;
+        _address = picked.address;
       });
     }
   }
@@ -391,13 +397,18 @@ class _ServiceRequestPageState extends State<ServiceRequestPage> {
   }
 }
 
-/// Pide ciudad y barrio. Los campos viven con el diálogo: así no se
-/// descartan mientras se anima su cierre.
+/// Pide ciudad, barrio y la dirección exacta opcional. Los campos viven con
+/// el diálogo: así no se descartan mientras se anima su cierre.
 class _LocationDialog extends StatefulWidget {
-  const _LocationDialog({required this.city, required this.zone});
+  const _LocationDialog({
+    required this.city,
+    required this.zone,
+    this.address = '',
+  });
 
   final String city;
   final String zone;
+  final String address;
 
   @override
   State<_LocationDialog> createState() => _LocationDialogState();
@@ -407,10 +418,12 @@ class _LocationDialogState extends State<_LocationDialog> {
   final _formKey = GlobalKey<FormState>();
   late String? _city = ColombianCities.match(widget.city);
   late final _zone = TextEditingController(text: widget.zone);
+  late final _address = TextEditingController(text: widget.address);
 
   @override
   void dispose() {
     _zone.dispose();
+    _address.dispose();
     super.dispose();
   }
 
@@ -421,7 +434,7 @@ class _LocationDialogState extends State<_LocationDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const ValueKey('client-request-location-dialog'),
-      title: const Text('Ubicación aproximada'),
+      title: const Text('Ubicación'),
       content: Form(
         key: _formKey,
         child: Column(
@@ -456,6 +469,19 @@ class _LocationDialogState extends State<_LocationDialog> {
               ),
               validator: (value) => _required(value, 'el barrio o localidad'),
             ),
+            const SizedBox(height: 4),
+            TextFormField(
+              key: const ValueKey('client-request-address'),
+              controller: _address,
+              maxLength: 255,
+              decoration: const InputDecoration(
+                labelText: 'Dirección exacta (opcional)',
+                hintText: 'Ej.: Calle 45 # 13-20, apto 301',
+                helperText:
+                    'Solo la verá el técnico que contrates. Sin ella, tendrás que dársela por otro medio.',
+                helperMaxLines: 3,
+              ),
+            ),
           ],
         ),
       ),
@@ -469,7 +495,11 @@ class _LocationDialogState extends State<_LocationDialog> {
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
             Navigator.of(context).pop(
-              (city: _city!, zone: _zone.text.trim()),
+              (
+                city: _city!,
+                zone: _zone.text.trim(),
+                address: _address.text.trim(),
+              ),
             );
           },
           child: const Text('Guardar'),
@@ -483,7 +513,10 @@ class _LocationPrivacyCard extends StatelessWidget {
   const _LocationPrivacyCard({
     required this.location,
     required this.onChangeLocation,
+    this.hasExactAddress = false,
   });
+
+  final bool hasExactAddress;
 
   /// `null` si todavía no se eligió.
   final String? location;
@@ -521,7 +554,9 @@ class _LocationPrivacyCard extends StatelessWidget {
                     Text(
                       location == null
                           ? 'Elige tu ciudad y barrio. Tu dirección exacta se protege.'
-                          : '$location · Tu dirección exacta se protege.',
+                          : !hasExactAddress
+                              ? '$location · Sin dirección exacta.'
+                              : '$location · Dirección exacta guardada: solo la verá el técnico que contrates.',
                       key: const ValueKey('client-request-location-label'),
                       style: const TextStyle(fontSize: 12),
                     ),

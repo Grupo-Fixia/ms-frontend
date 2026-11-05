@@ -230,6 +230,11 @@ void main() {
       expect(p.label == 'Pago retenido', isFalse);
     });
   }
+  test('con billetera, Processing + Held se muestra como pago retenido', () {
+    final p = ServicePayment.fromJson(walletPaymentJson(status: 'Processing'));
+    expect(p.confirmedHoldStatus, HoldStatus.held);
+    expect(p.label, 'Pago retenido');
+  });
   test('un procesamiento de otro método no se anuncia retenido', () {
     final p = ServicePayment.fromJson(
         paymentJson(status: 'Processing', method: 'CreditCard'));

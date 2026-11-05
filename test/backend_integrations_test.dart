@@ -336,7 +336,8 @@ void main() {
   });
 
   group('GC-335 publicar solicitud', () {
-    Future<void> fillForm(WidgetTester tester, {bool location = true}) async {
+    Future<void> fillForm(WidgetTester tester,
+        {bool location = true, String? address}) async {
       await tester.tap(key('client-request-category'));
       await tester.pumpAndSettle();
       await tester.tap(find.text(ServiceCategory.plumbing.label).last);
@@ -354,6 +355,9 @@ void main() {
         await tester.tap(find.text('Bogotá').last);
         await tester.pumpAndSettle();
         await tester.enterText(key('client-request-zone'), 'Chapinero');
+        if (address != null) {
+          await tester.enterText(key('client-request-address'), address);
+        }
         await tester.tap(key('client-request-location-save'));
         await tester.pumpAndSettle();
       }
@@ -409,6 +413,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('envía la dirección exacta si el cliente la da',
+        (tester) async {
+      await pump(tester, fixtureProfile, AppRoutes.clientServiceRequest);
+      await fillForm(tester, address: '  Calle 45 # 13-20, apto 301 ');
+      expect(find.textContaining('Dirección exacta guardada'), findsOneWidget);
+
+      await scrollTo(tester, key('client-request-submit'));
+      await tester.tap(key('client-request-submit'));
+      await tester.pumpAndSettle();
+
+      final sent = requests.published!;
+      expect(sent.exactLocation?.address, 'Calle 45 # 13-20, apto 301');
+      expect(sent.exactLocation?.latitude, isNull);
+    });
+
     testWidgets('publica en el servidor con la ubicación elegida',
         (tester) async {
       await pump(tester, fixtureProfile, AppRoutes.clientServiceRequest);
@@ -425,6 +444,7 @@ void main() {
       expect(sent.approximateLocation.city, 'Bogotá');
       expect(sent.approximateLocation.zone, 'Chapinero');
       expect(sent.photoKeys, isEmpty);
+      expect(sent.exactLocation, isNull, reason: 'la dirección es opcional');
       expect(sent.budget!.amount, '150000');
       expect(find.text('Solicitud publicada'), findsOneWidget);
       expect(find.textContaining('demostración'), findsNothing);

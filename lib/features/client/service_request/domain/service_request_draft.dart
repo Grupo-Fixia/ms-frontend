@@ -9,6 +9,7 @@ class ServiceRequestDraft {
     required this.photoCount,
     this.city = '',
     this.zone = '',
+    this.exactAddress = '',
     this.budget,
   });
 
@@ -21,4 +22,8 @@ class ServiceRequestDraft {
   /// Ubicación aproximada que se comparte con los técnicos (GC-335).
   final String city;
   final String zone;
+
+  /// Dirección exacta, opcional. ms-services la guarda protegida y solo se la
+  /// entrega al técnico cuando el servicio queda contratado. Vacía si no se dio.
+  final String exactAddress;
 }
