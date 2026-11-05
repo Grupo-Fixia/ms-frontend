@@ -633,6 +633,12 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
       onOpenProfile: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientProfile),
+      loadSavedLocation: backend == null
+          ? null
+          : () async {
+              final profile = await GetClientProfile(backend.clientProfile)();
+              return (city: profile.city, address: profile.address);
+            },
     );
   }
 
@@ -686,6 +692,8 @@ class _FixiaAppState extends State<FixiaApp> {
                 phone: saved.phone,
               ),
         backend,
+        address: saved?.address,
+        city: saved?.city,
       ),
     );
   }
@@ -693,9 +701,13 @@ class _FixiaAppState extends State<FixiaApp> {
   Widget _clientProfileView(
     BuildContext context,
     UserProfile profile,
-    BackendIntegrations? backend,
-  ) {
+    BackendIntegrations? backend, {
+    String? address,
+    String? city,
+  }) {
     return ClientProfilePage(
+      address: address,
+      city: city,
       loadStats: backend == null
           ? null
           : () async {
@@ -899,7 +911,8 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
-  /// GC-320: guarda nombre, apellido y teléfono del cliente en ms-users.
+  /// GC-320: guarda nombre, apellido, teléfono, dirección y ciudad del
+  /// cliente en ms-users.
   Future<void> _saveClientProfile(
     BuildContext context,
     BackendIntegrations backend,

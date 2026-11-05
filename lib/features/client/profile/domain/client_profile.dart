@@ -10,7 +10,14 @@ class ClientProfile {
     this.documentType,
     this.documentNumber,
     this.createdAt,
+    this.address,
+    this.city,
   });
+
+  /// Dirección y ciudad del cliente (GC-317); `null` si no las ha dado.
+  /// Se usan para llenar la ubicación al publicar una solicitud.
+  final String? address;
+  final String? city;
 
   final String id;
   final String email;

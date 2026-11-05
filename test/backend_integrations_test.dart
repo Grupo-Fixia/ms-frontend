@@ -72,8 +72,7 @@ class _Profiles implements ClientProfileRepository {
 
 class _Requests implements ServiceRequestRepository {
   @override
-  Future<ServiceRequest> cancel(String requestId) =>
-      throw UnimplementedError();
+  Future<ServiceRequest> cancel(String requestId) => throw UnimplementedError();
   @override
   Future<ServiceRequest> changeExactLocation(
           String requestId, ExactLocation location) =>
@@ -273,6 +272,33 @@ void main() {
           reason: 'ya no es un guardado de prueba');
     });
 
+    testWidgets('guarda la dirección y la ciudad en el servidor (GC-317)',
+        (tester) async {
+      profiles.stored = const ClientProfile(
+        id: 'cli',
+        email: 'ana@fixia.com',
+        firstName: 'Ana',
+        lastName: 'Pérez',
+        phone: '3001234567',
+        address: 'Calle 45 # 13-20',
+        city: 'Bogotá',
+      );
+      await pump(tester, fixtureProfile, AppRoutes.clientProfile);
+      expect(find.text('Calle 45 # 13-20, Bogotá'), findsOneWidget);
+
+      await tester.tap(key('client-profile-edit').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          key('client-profile-address'), 'Carrera 7 # 72-10');
+      await tester.ensureVisible(key('client-profile-save'));
+      await tester.tap(key('client-profile-save'));
+      await tester.pumpAndSettle();
+
+      expect(profiles.saved?.address, 'Carrera 7 # 72-10');
+      expect(profiles.saved?.city, 'Bogotá',
+          reason: 'la ciudad que no se tocó se conserva');
+    });
+
     testWidgets('si el servidor rechaza, avisa y no cambia la sesión',
         (tester) async {
       profiles.failure = const ClientProfileFailure(
@@ -433,6 +459,46 @@ void main() {
       final sent = requests.published!;
       expect(sent.exactLocation?.address, 'Calle 45 # 13-20, apto 301');
       expect(sent.exactLocation?.latitude, isNull);
+    });
+
+    testWidgets('llena ciudad y dirección con las del perfil (GC-317)',
+        (tester) async {
+      profiles.stored = const ClientProfile(
+        id: 'cli',
+        email: 'ana@fixia.com',
+        firstName: 'Ana',
+        lastName: 'Pérez',
+        phone: '+573001234567',
+        address: 'Carrera 7 # 72-10',
+        city: 'cali',
+      );
+      await pump(tester, fixtureProfile, AppRoutes.clientServiceRequest);
+      expect(key('client-request-from-profile'), findsOneWidget);
+
+      await fillForm(tester, location: false);
+      await scrollTo(tester, key('client-request-change-location'));
+      await tester.tap(key('client-request-change-location'));
+      await tester.pumpAndSettle();
+      expect(find.text('Cali'), findsWidgets);
+      expect(find.text('Carrera 7 # 72-10'), findsOneWidget);
+      await tester.enterText(key('client-request-zone'), 'San Fernando');
+      await tester.tap(key('client-request-location-save'));
+      await tester.pumpAndSettle();
+
+      await scrollTo(tester, key('client-request-submit'));
+      await tester.tap(key('client-request-submit'));
+      await tester.pumpAndSettle();
+
+      final sent = requests.published!;
+      expect(sent.approximateLocation.city, 'Cali');
+      expect(sent.exactLocation?.address, 'Carrera 7 # 72-10');
+    });
+
+    testWidgets('sin perfil disponible no llena nada', (tester) async {
+      profiles.fetchFailure = Exception('sin conexión');
+      await pump(tester, fixtureProfile, AppRoutes.clientServiceRequest);
+      expect(key('client-request-from-profile'), findsNothing);
+      expect(find.textContaining('Elige tu ciudad'), findsOneWidget);
     });
 
     testWidgets('publica en el servidor con la ubicación elegida',
