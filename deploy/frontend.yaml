@@ -49,6 +49,8 @@ kind: Ingress
 metadata:
   name: frontend
   namespace: apps
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "1"
 spec:
   ingressClassName: traefik
   rules:
