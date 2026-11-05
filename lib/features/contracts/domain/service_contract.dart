@@ -8,7 +8,8 @@ export '../../../core/constants/service_request_status.dart';
 /// solicitud. Como la solicitud ya está contratada, el resumen trae la
 /// dirección exacta si el cliente la dio: es lo que recibe el prestador.
 ///
-/// El estado del pago se consulta por separado en ms-payments.
+/// El detalle del pago (importes, desglose) se consulta en ms-payments; el
+/// contrato solo trae [paymentStatus] (GC-490).
 class ServiceContract {
   const ServiceContract({
     required this.id,
@@ -25,6 +26,7 @@ class ServiceContract {
     required this.request,
     this.serviceStatus,
     this.timeline = const [],
+    this.paymentStatus,
   });
 
   final String id;
@@ -51,6 +53,38 @@ class ServiceContract {
   /// Historial de cambios de estado, del más antiguo al más reciente. Vacío
   /// en los listados.
   final List<ContractTransition> timeline;
+
+  /// Lo que ms-payments confirmó del pago (GC-490). `null` si el backend no
+  /// lo envía (versiones anteriores) o es un valor desconocido.
+  final ContractPaymentStatus? paymentStatus;
+
+  /// Solo un pago retenido autoriza iniciar el servicio. Sin dato del
+  /// backend no se bloquea: ms-services sigue validando y responde 409.
+  bool get paymentAllowsStart =>
+      paymentStatus == null || paymentStatus == ContractPaymentStatus.held;
+}
+
+/// Estado del pago virtual de una contratación según ms-payments (GC-490).
+enum ContractPaymentStatus {
+  /// Aún no hay confirmación de ms-payments.
+  pending('PENDING'),
+
+  /// El total quedó retenido en la billetera del cliente.
+  held('HELD'),
+
+  /// No se pudo retener, p. ej. por saldo insuficiente.
+  failed('FAILED');
+
+  const ContractPaymentStatus(this.apiValue);
+
+  final String apiValue;
+
+  static ContractPaymentStatus? fromApi(String? value) {
+    for (final status in values) {
+      if (status.apiValue == value) return status;
+    }
+    return null;
+  }
 }
 
 /// Quién hizo un cambio de estado del servicio.

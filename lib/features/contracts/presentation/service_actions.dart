@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/fixia_theme.dart';
+import '../../../core/widgets/fixia_ui.dart';
 import '../application/contract_use_cases.dart';
 import '../domain/service_contract.dart';
 
@@ -19,6 +20,7 @@ class ServiceActionButton extends StatefulWidget {
     required this.onDone,
     this.primary = true,
     this.askReason = false,
+    this.enabled = true,
   });
 
   final String label;
@@ -31,6 +33,9 @@ class ServiceActionButton extends StatefulWidget {
   final VoidCallback onDone;
   final bool primary;
   final bool askReason;
+
+  /// Falso para mostrar la acción sin permitirla (p. ej. pago sin retener).
+  final bool enabled;
 
   @override
   State<ServiceActionButton> createState() => _ServiceActionButtonState();
@@ -85,9 +90,10 @@ class _ServiceActionButtonState extends State<ServiceActionButton> {
             child: CircularProgressIndicator(strokeWidth: 2),
           )
         : Text(widget.label);
+    final onPressed = _busy || !widget.enabled ? null : _press;
     return widget.primary
-        ? FilledButton(onPressed: _busy ? null : _press, child: child)
-        : OutlinedButton(onPressed: _busy ? null : _press, child: child);
+        ? FilledButton(onPressed: onPressed, child: child)
+        : OutlinedButton(onPressed: onPressed, child: child);
   }
 }
 
@@ -191,8 +197,19 @@ List<Widget> technicianServiceActions({
   switch (contract.serviceStatus) {
     case ServiceRequestStatus.contracted:
       if (start == null) return const [];
+      final waitingPayment = !contract.paymentAllowsStart;
       return [
+        if (waitingPayment)
+          NoticeBanner(
+            key: const ValueKey('service-start-payment-notice'),
+            message: contract.paymentStatus == ContractPaymentStatus.failed
+                ? 'No se pudo retener el pago del cliente (por ejemplo, por saldo insuficiente). Podrás iniciar cuando el cliente recargue y el pago quede retenido.'
+                : 'Esperando que se retenga el pago del cliente. Podrás iniciar el servicio cuando quede retenido.',
+            icon: Icons.account_balance_wallet_outlined,
+          ),
         ServiceActionButton(
+          key: const ValueKey('service-start'),
+          enabled: !waitingPayment,
           label: 'Iniciar servicio',
           confirmTitle: 'Iniciar servicio',
           confirmText:

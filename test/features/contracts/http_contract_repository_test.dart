@@ -141,6 +141,26 @@ void main() {
     });
   });
 
+  test('lee el estado del pago del contrato (GC-490)', () async {
+    Future<ServiceContract> load(Object? status) =>
+        _repository((_) async => _json(200, {
+              ..._contractJson(),
+              if (status != null) 'paymentStatus': status,
+            })).getForRequest('req-1');
+
+    expect((await load('HELD')).paymentStatus, ContractPaymentStatus.held);
+    expect((await load('HELD')).paymentAllowsStart, isTrue);
+    expect(
+        (await load('PENDING')).paymentStatus, ContractPaymentStatus.pending);
+    expect((await load('PENDING')).paymentAllowsStart, isFalse);
+    expect((await load('FAILED')).paymentAllowsStart, isFalse);
+    // Sin el dato (backend anterior) o con uno desconocido no se bloquea:
+    // ms-services sigue validando.
+    expect((await load(null)).paymentStatus, isNull);
+    expect((await load(null)).paymentAllowsStart, isTrue);
+    expect((await load('OTRO')).paymentStatus, isNull);
+  });
+
   test('trae el estado del servicio y su historial (GC-437, GC-441)', () async {
     final contract = await _repository((_) async => _json(200, {
           ..._contractJson(),
