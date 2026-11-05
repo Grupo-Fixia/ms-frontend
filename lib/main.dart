@@ -939,6 +939,9 @@ class _FixiaAppState extends State<FixiaApp> {
           ),
           expectedAt: draft.expectedAt,
           budget: draft.budget,
+          exactLocation: draft.exactAddress.trim().isEmpty
+              ? null
+              : ExactLocation(address: draft.exactAddress.trim()),
         ),
       );
     } on ServiceRequestFailure catch (failure) {
