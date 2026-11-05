@@ -34,9 +34,8 @@ HttpCompanyRepository _repository(
     );
 
 Matcher _failure(String message, {bool isSessionExpired = false}) =>
-    isA<CompanyFailure>()
-        .having((f) => f.message, 'message', message)
-        .having((f) => f.isSessionExpired, 'isSessionExpired', isSessionExpired);
+    isA<CompanyFailure>().having((f) => f.message, 'message', message).having(
+        (f) => f.isSessionExpired, 'isSessionExpired', isSessionExpired);
 
 void main() {
   group('getMine', () {
@@ -102,6 +101,7 @@ void main() {
               'professionalDescription': 'Instalaciones y reparaciones',
               'yearsOfExperience': 6,
               'city': 'Bogotá',
+              'reputation': {'average': 4.4, 'count': 8},
             },
             {
               'userId': '7ec00000-0000-4000-8000-000000000002',
@@ -129,11 +129,14 @@ void main() {
           [ServiceCategory.plumbing, ServiceCategory.electrical]);
       expect(first.yearsOfExperience, 6);
       expect(first.city, 'Bogotá');
+      expect(first.reputation!.averageLabel, '4,4');
+      expect(first.reputation!.count, 8);
       final second = technicians.last;
       expect(second.displayName, isNull);
       expect(second.name, 'Técnico sin nombre público');
       expect(second.verificationStatus, isNull);
       expect(second.categories, isEmpty);
+      expect(second.reputation, isNull);
     });
 
     test('una empresa sin técnicos recibe la lista vacía', () async {
@@ -205,16 +208,15 @@ void main() {
     });
 
     test('sin red: problema de conexión, sin cerrar la sesión', () async {
-      final repository = _repository(
-          (_) async => throw http.ClientException('sin red'));
+      final repository =
+          _repository((_) async => throw http.ClientException('sin red'));
 
       await expectLater(repository.listTechnicians(),
           throwsA(_failure(HttpCompanyRepository.connectionErrorMessage)));
     });
 
     test('un cuerpo que no es JSON es un error', () async {
-      final repository =
-          _repository((_) async => http.Response('<html>', 200));
+      final repository = _repository((_) async => http.Response('<html>', 200));
 
       await expectLater(repository.listTechnicians(),
           throwsA(_failure(HttpCompanyRepository.unexpectedErrorMessage)));

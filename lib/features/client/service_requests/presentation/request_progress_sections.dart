@@ -2,6 +2,8 @@ import '../../../payments/domain/payments.dart';
 import '../../../payments/presentation/commission_confirmation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../chat_prototype/domain/service_chat.dart';
+
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../../../contracts/domain/service_contract.dart';
@@ -270,6 +272,7 @@ class ClientContractSection extends StatelessWidget {
             ContractCard(
                 contract: contract,
                 walletPayments: walletPayments,
+                chatAs: ChatParticipant.client,
                 actions: actionsBuilder?.call(context, contract, reload) ??
                     const []),
             if (footerBuilder != null) ...[

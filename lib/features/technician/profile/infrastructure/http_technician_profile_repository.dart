@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
+import '../../../../core/domain/reputation.dart';
 import '../application/ports/technician_profile_repository.dart';
 import '../domain/professional_profile_update.dart';
 import '../domain/technician_profile.dart';
@@ -78,7 +79,10 @@ class HttpTechnicianProfileRepository implements TechnicianProfileRepository {
     final response = await _authorized(
       (headers) => _client.put(
         _endpoint,
-        headers: {...headers, 'Content-Type': 'application/json; charset=utf-8'},
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json; charset=utf-8'
+        },
         body: body,
       ),
     );
@@ -188,6 +192,7 @@ class HttpTechnicianProfileRepository implements TechnicianProfileRepository {
               .toSet()
           : const {},
       updatedAt: updatedAt is String ? DateTime.tryParse(updatedAt) : null,
+      reputation: Reputation.fromJson(json['reputation']),
     );
   }
 

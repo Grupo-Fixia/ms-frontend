@@ -1,3 +1,4 @@
+import 'package:ms_frontend/core/domain/reputation.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/features/technician/profile/domain/technician_profile.dart';
 import 'package:ms_frontend/features/technician/profile/domain/verification_status.dart';
@@ -11,6 +12,7 @@ const emptyProfile = TechnicianProfile(
 TechnicianProfile completeProfile({
   VerificationStatus status = VerificationStatus.pending,
   int years = 8,
+  Reputation? reputation,
   Set<ServiceCategory> categories = const {
     ServiceCategory.plumbing,
     ServiceCategory.electrical,
@@ -24,5 +26,6 @@ TechnicianProfile completeProfile({
     yearsOfExperience: years,
     categories: categories,
     updatedAt: DateTime(2026, 10, 8, 10),
+    reputation: reputation,
   );
 }
