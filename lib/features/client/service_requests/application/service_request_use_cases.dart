@@ -75,6 +75,19 @@ class ListApplicants {
       _repository.listApplicants(requestId);
 }
 
+/// Caso de uso: cancelar una solicitud propia antes de contratar (GC-515).
+///
+/// Desde la contratación ya no se puede: el backend responde 409 y el mensaje
+/// del servidor se muestra tal cual.
+class CancelServiceRequest {
+  const CancelServiceRequest(this._repository);
+
+  final ServiceRequestRepository _repository;
+
+  Future<ServiceRequest> call(String requestId) =>
+      _repository.cancel(requestId.trim());
+}
+
 /// Caso de uso: seleccionar al prestador entre los postulantes (GC-299).
 ///
 /// Solo se puede elegir uno: el backend rechaza a los demás. Repetir la
