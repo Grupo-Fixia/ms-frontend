@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../core/widgets/reputation_badge.dart';
 import '../../../../../core/theme/fixia_theme.dart';
 import '../../domain/associated_technician.dart';
 
@@ -61,6 +62,12 @@ class AssociatedTechnicianTile extends StatelessWidget {
                     Text(technician.name, style: theme.textTheme.titleMedium),
                     const SizedBox(height: 4),
                     _VerificationLabel(status: technician.verificationStatus),
+                    const SizedBox(height: 4),
+                    ReputationBadge(
+                      key: ValueKey(
+                          'associated-technician-reputation-${technician.userId}'),
+                      reputation: technician.reputation,
+                    ),
                     if (details.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(details.join(' · '),

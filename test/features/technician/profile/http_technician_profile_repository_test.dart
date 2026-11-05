@@ -26,8 +26,10 @@ Map<String, Object?> _profileJson({
   String? description,
   int? years,
   List<String> categories = const [],
+  Object? reputation,
 }) =>
     {
+      'reputation': reputation,
       'technicianId': 'tec-1',
       'verificationStatus': status,
       'professionalDescription': description,
@@ -112,6 +114,7 @@ void main() {
       expect(profile.verificationStatus, VerificationStatus.pending);
       expect(profile.isComplete, isFalse);
       expect(profile.categories, isEmpty);
+      expect(profile.reputation, isNull, reason: 'sin evaluaciones');
     });
 
     test('convierte un perfil completo, con tildes en UTF-8', () async {
@@ -122,6 +125,7 @@ void main() {
             status: 'VALID',
             description: 'Electricista con certificación',
             years: 12,
+            reputation: {'average': 4.8, 'count': 3},
             categories: ['ELECTRICAL', 'MAINTENANCE', 'DESCONOCIDA'],
           ),
         ),
@@ -134,6 +138,8 @@ void main() {
       expect(profile.verificationStatus, VerificationStatus.valid);
       expect(profile.professionalDescription, 'Electricista con certificación');
       expect(profile.yearsOfExperience, 12);
+      expect(profile.reputation!.averageLabel, '4,8');
+      expect(profile.reputation!.countLabel, '3 calificaciones');
       // Las categorías que el frontend no conoce se ignoran.
       expect(profile.categories, {
         ServiceCategory.electrical,

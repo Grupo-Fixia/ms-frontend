@@ -36,6 +36,7 @@ import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
+import 'features/chat_prototype/domain/service_chat.dart';
 import 'features/chat_prototype/presentation/chat_prototype_page.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/application/client_profile_use_cases.dart';
@@ -1056,11 +1057,12 @@ class _FixiaAppState extends State<FixiaApp> {
                 context,
                 () =>
                     SelectProvider(backend.serviceRequests)(id, applicationId)),
-            cancel: (id) => _serviceCall(
-                context, () => CancelServiceRequest(backend.serviceRequests)(id)),
+            cancel: (id) => _serviceCall(context,
+                () => CancelServiceRequest(backend.serviceRequests)(id)),
             changeExactLocation: (id, address) => _serviceCall(
                 context,
-                () => ChangeExactLocation(backend.serviceRequests)(id, address)),
+                () =>
+                    ChangeExactLocation(backend.serviceRequests)(id, address)),
             extraSections: (context, request, reload) =>
                 _clientRequestSections(context, backend, request, reload),
             listCompatibleTechnicians: backend.compatibleTechnicians == null
@@ -1299,6 +1301,7 @@ class _FixiaAppState extends State<FixiaApp> {
             context, () => GetMyContract(backend.contracts)(entry.contractId)),
         builder: (context, contract, reload) => ContractCard(
           contract: contract,
+          chatAs: ChatParticipant.technician,
           actions: [
             ...technicianServiceActions(
               contract: contract,

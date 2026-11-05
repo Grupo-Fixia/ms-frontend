@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/widgets/reputation_badge.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/technician_steps.dart';
@@ -610,6 +611,26 @@ class _ProfileSummary extends StatelessWidget {
                     labelStyle: theme.textTheme.bodyMedium
                         ?.copyWith(color: FixiaColors.primary),
                   ),
+            ],
+          ),
+        ),
+        _Section(
+          title: 'Tu calificación',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ReputationBadge(
+                key: const ValueKey('profile-summary-reputation'),
+                reputation: profile.reputation,
+                large: true,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                profile.reputation == null
+                    ? 'Aparecerá cuando tus clientes califiquen los servicios que cierres.'
+                    : 'Promedio de lo que te calificaron tus clientes. Los clientes la ven al comparar postulantes.',
+                style: theme.textTheme.bodySmall,
+              ),
             ],
           ),
         ),
