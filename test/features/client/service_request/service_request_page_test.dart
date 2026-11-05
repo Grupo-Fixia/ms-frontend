@@ -71,7 +71,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Ubicación aproximada'), findsOneWidget);
-    expect(find.textContaining('dirección exacta se protege'), findsOneWidget);
+    expect(find.textContaining('Sin dirección exacta'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Fotografías (opcional)'),
       240,

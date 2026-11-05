@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/domain/reputation.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/technician/profile/application/get_technician_profile.dart';
@@ -146,8 +147,7 @@ void main() {
       );
     });
 
-    testWidgets('quitar una categoría elegida la deselecciona',
-        (tester) async {
+    testWidgets('quitar una categoría elegida la deselecciona', (tester) async {
       final repository = FakeTechnicianProfileRepository(profile: emptyProfile);
       await _pump(tester, repository);
 
@@ -222,6 +222,20 @@ void main() {
         findsOneWidget,
       );
       expect(_key('profile-saved'), findsNothing);
+      expect(find.text('Sin calificaciones aún'), findsOneWidget);
+    });
+
+    testWidgets('muestra su calificación real (GC-447)', (tester) async {
+      await _pump(
+        tester,
+        FakeTechnicianProfileRepository(
+          profile: completeProfile(
+              reputation: const Reputation(average: 4.8, count: 3)),
+        ),
+      );
+      expect(_key('profile-summary-reputation'), findsOneWidget);
+      expect(find.text('4,8'), findsOneWidget);
+      expect(find.text('(3 calificaciones)'), findsOneWidget);
     });
 
     testWidgets('con 1 año lo dice en singular y sin nombre usa un título',

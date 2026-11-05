@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../chat_prototype/domain/service_chat.dart';
+
 import '../../../../core/layout/app_shell.dart';
 import '../../../../core/widgets/fixia_ui.dart';
 import '../../../client/service_requests/presentation/request_progress_sections.dart';
@@ -51,6 +53,7 @@ class TechnicianContractPage extends StatelessWidget {
                   builder: (context, contract, reload) => ContractCard(
                     contract: contract,
                     walletPayments: walletPayments,
+                    chatAs: ChatParticipant.technician,
                     actions: actionsBuilder?.call(context, contract, reload) ??
                         const [],
                   ),

@@ -239,6 +239,8 @@ class HttpContractRepository implements ContractRepository {
       serviceStatus: ServiceRequestStatus.fromApi(
           _string(json['serviceStatus']) ?? _string(request['status'])),
       timeline: _timeline(json['timeline']),
+      paymentStatus:
+          ContractPaymentStatus.fromApi(_string(json['paymentStatus'])),
     );
   }
 

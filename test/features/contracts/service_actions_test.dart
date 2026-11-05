@@ -8,9 +8,12 @@ import 'package:ms_frontend/features/technician/jobs/presentation/technician_con
 
 import '../service_flow_fakes.dart';
 
-FakeContracts _contracts(ServiceRequestStatus status) {
+FakeContracts _contracts(ServiceRequestStatus status,
+    {ContractPaymentStatus? payment}) {
   final quotations = FakeQuotations()..add('req-1', 13800000);
-  return FakeContracts()..contractFrom(quotations.items.single, status: status);
+  return FakeContracts()
+    ..contractFrom(quotations.items.single,
+        status: status, paymentStatus: payment);
 }
 
 Future<void> _pump(WidgetTester tester, Widget page) async {
@@ -88,6 +91,43 @@ void main() {
               withStart: false));
       expect(find.text('Iniciar servicio'), findsNothing);
       expect(find.text('Declarar trabajo terminado'), findsNothing);
+    });
+
+    for (final entry in {
+      ContractPaymentStatus.pending: 'Esperando que se retenga el pago',
+      ContractPaymentStatus.failed: 'No se pudo retener el pago',
+    }.entries) {
+      testWidgets('pago ${entry.key.apiValue}: no deja iniciar y lo explica',
+          (tester) async {
+        final contracts =
+            _contracts(ServiceRequestStatus.contracted, payment: entry.key);
+        await _pump(tester, _technician(contracts));
+
+        final notice =
+            find.byKey(const ValueKey('service-start-payment-notice'));
+        expect(notice, findsOneWidget);
+        expect(
+            find.descendant(
+                of: notice, matching: find.textContaining(entry.value)),
+            findsOneWidget);
+        final button = tester.widget<FilledButton>(find.descendant(
+            of: find.byKey(const ValueKey('service-start')),
+            matching: find.byType(FilledButton)));
+        expect(button.onPressed, isNull);
+        await tester.tap(find.text('Iniciar servicio'), warnIfMissed: false);
+        await tester.pumpAndSettle();
+        expect(contracts.actions, isEmpty);
+      });
+    }
+
+    testWidgets('con el pago retenido sí deja iniciar', (tester) async {
+      final contracts = _contracts(ServiceRequestStatus.contracted,
+          payment: ContractPaymentStatus.held);
+      await _pump(tester, _technician(contracts));
+      expect(find.byKey(const ValueKey('service-start-payment-notice')),
+          findsNothing);
+      await _confirm(tester, 'Iniciar servicio', 'Iniciar servicio');
+      expect(contracts.actions, ['start']);
     });
 
     testWidgets('un 409 no simula el cambio', (tester) async {

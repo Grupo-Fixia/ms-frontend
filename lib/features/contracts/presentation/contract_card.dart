@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/fixia_theme.dart';
 import '../../../core/widgets/fixia_ui.dart';
+import '../../chat_prototype/domain/service_chat.dart';
+import '../../chat_prototype/presentation/service_chat_page.dart';
 import '../../quotations/presentation/quotation_card.dart';
 import '../domain/service_contract.dart';
 
@@ -15,7 +17,12 @@ class ContractCard extends StatelessWidget {
     required this.contract,
     this.actions = const [],
     this.walletPayments = false,
+    this.chatAs,
   });
+
+  /// Rol de quien ve la contratación. Si se da, se ofrece el chat (simulado)
+  /// con la otra parte del servicio.
+  final ChatParticipant? chatAs;
 
   /// El pago se hace con la billetera de Fixia (ms-payments).
   final bool walletPayments;
@@ -102,10 +109,64 @@ class ContractCard extends StatelessWidget {
                 last: i == contract.timeline.length - 1,
               ),
           ],
+          if (chatAs != null) ...[
+            const SizedBox(height: 16),
+            _ChatEntry(contract: contract, participant: chatAs!),
+          ],
           if (actions.isNotEmpty) ...[
             const SizedBox(height: 16),
             ActionBar(actions: actions),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Acceso al chat del servicio desde la contratación.
+class _ChatEntry extends StatelessWidget {
+  const _ChatEntry({required this.contract, required this.participant});
+
+  final ServiceContract contract;
+  final ChatParticipant participant;
+
+  @override
+  Widget build(BuildContext context) {
+    final open = ServiceChatPage.isOpenFor(contract);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: FixiaColors.supportBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.forum_outlined, color: FixiaColors.secondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              open
+                  ? 'Escríbele ${participant.toCounterpart} para coordinar el servicio.'
+                  : 'Revisa la conversación con ${participant.counterpartLabel}.',
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.tonalIcon(
+            key: const ValueKey('contract-open-chat'),
+            // El tema hace los botones de ancho completo; aquí va en fila.
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 40)),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ServiceChatPage(
+                  contract: contract,
+                  participant: participant,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+            label: Text(open ? 'Abrir chat' : 'Ver chat'),
+          ),
         ],
       ),
     );

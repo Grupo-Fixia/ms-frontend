@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/domain/reputation.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
 import '../application/ports/company_repository.dart';
@@ -107,6 +108,7 @@ class HttpCompanyRepository implements CompanyRepository {
       professionalDescription: _text(item['professionalDescription']),
       yearsOfExperience: years is int ? years : null,
       city: _text(item['city']),
+      reputation: Reputation.fromJson(item['reputation']),
     );
   }
 
