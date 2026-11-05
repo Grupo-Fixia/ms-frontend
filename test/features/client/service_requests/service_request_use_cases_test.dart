@@ -20,6 +20,9 @@ ServiceRequest _published(NewServiceRequest request) => ServiceRequest(
     );
 
 class _FakeRepository implements ServiceRequestRepository {
+  @override
+  Future<ServiceRequest> cancel(String requestId) =>
+      throw UnimplementedError();
   NewServiceRequest? published;
   String? requestedId;
   (String, String)? selection;

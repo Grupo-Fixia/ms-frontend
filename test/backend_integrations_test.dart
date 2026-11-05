@@ -71,6 +71,9 @@ class _Profiles implements ClientProfileRepository {
 }
 
 class _Requests implements ServiceRequestRepository {
+  @override
+  Future<ServiceRequest> cancel(String requestId) =>
+      throw UnimplementedError();
   NewServiceRequest? published;
   Object? failure;
 

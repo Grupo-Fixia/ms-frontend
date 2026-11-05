@@ -22,4 +22,8 @@ abstract interface class ServiceRequestRepository {
   /// la solicitud en `providerSelected`; las demás postulaciones quedan
   /// rechazadas.
   Future<ServiceRequest> selectProvider(String requestId, String applicationId);
+
+  /// Cancela la solicitud (GC-515). Solo antes de contratar: publicada o con
+  /// prestador elegido. Repetirla devuelve la solicitud ya cancelada.
+  Future<ServiceRequest> cancel(String requestId);
 }

@@ -25,7 +25,11 @@ class ServiceRequestDetailPage extends StatefulWidget {
     required this.selectProvider,
     this.extraSections,
     this.listCompatibleTechnicians,
+    this.cancel,
   });
+
+  /// Cancela la solicitud (GC-515). Si es `null` no se ofrece el botón.
+  final Future<ServiceRequest> Function(String requestId)? cancel;
 
   /// Técnicos compatibles con la solicitud (GC-474), por páginas. Solo se
   /// consultan mientras la solicitud está publicada.
@@ -59,6 +63,55 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
   Object? _applicantsError;
   bool _loading = true;
   String? _selecting;
+  bool _cancelling = false;
+
+  /// Solo antes de contratar se puede cancelar (GC-515).
+  static bool _isBeforeContract(ServiceRequest request) =>
+      request.status == ServiceRequestStatus.published ||
+      request.status == ServiceRequestStatus.providerSelected;
+
+  Future<void> _cancel() async {
+    final cancel = widget.cancel;
+    if (cancel == null || _cancelling) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancelar solicitud'),
+        content: const Text(
+          'La solicitud dejará de recibir postulaciones y las que estén '
+          'pendientes quedarán como no seleccionadas. Si ya elegiste '
+          'prestador, su cotización ya no se podrá aceptar.\n\n'
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            key: const ValueKey('request-cancel-confirm'),
+            style: FilledButton.styleFrom(backgroundColor: FixiaColors.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancelar solicitud'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _cancelling = true);
+    String message;
+    try {
+      await cancel(widget.requestId);
+      message = 'Cancelaste la solicitud.';
+    } catch (error) {
+      message = '$error';
+    }
+    if (!mounted) return;
+    setState(() => _cancelling = false);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+    await _reload();
+  }
 
   @override
   void initState() {
@@ -174,6 +227,16 @@ class _ServiceRequestDetailPageState extends State<ServiceRequestDetailPage> {
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: const Text('Actualizar'),
               ),
+              if (widget.cancel != null && _isBeforeContract(request))
+                TextButton.icon(
+                  key: const ValueKey('request-cancel'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: FixiaColors.error,
+                  ),
+                  onPressed: _loading || _cancelling ? null : _cancel,
+                  icon: const Icon(Icons.cancel_outlined, size: 18),
+                  label: const Text('Cancelar solicitud'),
+                ),
             ],
           ),
           const SizedBox(height: 8),
