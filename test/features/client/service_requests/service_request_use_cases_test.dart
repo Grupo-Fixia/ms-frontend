@@ -23,6 +23,10 @@ class _FakeRepository implements ServiceRequestRepository {
   @override
   Future<ServiceRequest> cancel(String requestId) =>
       throw UnimplementedError();
+  @override
+  Future<ServiceRequest> changeExactLocation(
+          String requestId, ExactLocation location) =>
+      throw UnimplementedError();
   NewServiceRequest? published;
   String? requestedId;
   (String, String)? selection;
