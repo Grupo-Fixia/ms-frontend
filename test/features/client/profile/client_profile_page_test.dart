@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ms_frontend/core/theme/fixia_theme.dart';
 import 'package:ms_frontend/features/auth/login/domain/user_profile.dart';
+import 'package:ms_frontend/features/client/profile/domain/client_profile_rules.dart';
 import 'package:ms_frontend/features/client/profile/domain/client_profile_update.dart';
 import 'package:ms_frontend/features/client/profile/presentation/client_profile_page.dart';
 
@@ -18,6 +19,8 @@ Future<void> _pump(
   UserProfile profile = _profile,
   ValueChanged<ClientProfileUpdate>? onSaved,
   Size size = const Size(390, 844),
+  String? address,
+  String? city,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -30,6 +33,8 @@ Future<void> _pump(
         lastName: profile.lastName,
         email: profile.email,
         phone: profile.phone,
+        address: address,
+        city: city,
         onSaved: onSaved,
       ),
     ),
@@ -205,5 +210,60 @@ void main() {
     await _pump(tester, size: const Size(320, 812));
     await _tap(tester, find.byKey(const ValueKey('client-profile-edit')));
     expect(tester.takeException(), isNull);
+  });
+
+  group('dirección y ciudad (GC-317)', () {
+    testWidgets('sin dirección lo dice', (tester) async {
+      await _pump(tester);
+      expect(
+          find.descendant(
+              of: find.byKey(const ValueKey('client-profile-address-row')),
+              matching: find.text('No registrada')),
+          findsOneWidget);
+    });
+
+    testWidgets('muestra la guardada y permite cambiarla', (tester) async {
+      ClientProfileUpdate? saved;
+      await _pump(
+        tester,
+        address: 'Calle 45 # 13-20',
+        city: 'Bogotá',
+        onSaved: (update) => saved = update,
+        size: const Size(1280, 1100),
+      );
+      expect(find.text('Calle 45 # 13-20, Bogotá'), findsOneWidget);
+
+      await _openEdit(tester);
+      expect(find.text('Bogotá'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('client-profile-phone')),
+        '+573001112233',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('client-profile-address')),
+        '  Carrera 7 # 72-10  ',
+      );
+      await _tap(tester, find.byKey(const ValueKey('client-profile-city')));
+      await tester.tap(find.text('Cali').last);
+      await tester.pumpAndSettle();
+      await _tap(tester, find.byKey(const ValueKey('client-profile-save')));
+
+      expect(saved?.address, 'Carrera 7 # 72-10');
+      expect(saved?.city, 'Cali');
+      expect(find.text('Carrera 7 # 72-10, Cali'), findsOneWidget);
+    });
+
+    testWidgets('una ciudad fuera de la lista avisa', (tester) async {
+      await _pump(tester, city: 'dsa', size: const Size(1280, 1100));
+      await _openEdit(tester);
+      expect(find.byKey(const ValueKey('client-profile-city-unknown')),
+          findsOneWidget);
+    });
+
+    test('la dirección no supera 255 caracteres', () {
+      expect(ClientProfileRules.address('a' * 255), isNull);
+      expect(ClientProfileRules.address('a' * 256), isNotNull);
+      expect(ClientProfileRules.address(null), isNull);
+    });
   });
 }
