@@ -1,3 +1,4 @@
+import 'features/admin/presentation/admin_page.dart';
 import 'features/payments/domain/payments.dart';
 import 'features/payments/presentation/service_payment_panel.dart';
 import 'features/payments/presentation/wallet_page.dart';
@@ -9,6 +10,7 @@ import 'features/service_evidence/application/evidence_feature.dart';
 import 'features/service_evidence/presentation/service_evidence_flow.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -147,6 +149,9 @@ abstract final class AppRoutes {
 
   /// Billetera simulada (GC-489) de cualquier rol.
   static const wallet = '/billetera';
+
+  /// Panel web del ADMIN de Fixia (GC-536).
+  static const admin = '/admin';
 }
 
 Future<void> main() async {
@@ -463,6 +468,7 @@ class _FixiaAppState extends State<FixiaApp> {
         UserRole.client => AppRoutes.clientDashboard,
         UserRole.professional => AppRoutes.technicianDashboard,
         UserRole.company => AppRoutes.companyDashboard,
+        UserRole.admin => AppRoutes.admin,
         _ => AppRoutes.session,
       };
 
@@ -526,6 +532,9 @@ class _FixiaAppState extends State<FixiaApp> {
     }
     if (profile.role == UserRole.company) {
       return _companyDashboardPage(context);
+    }
+    if (profile.role == UserRole.admin) {
+      return _adminPage(context);
     }
 
     return SessionPage(
@@ -799,6 +808,27 @@ class _FixiaAppState extends State<FixiaApp> {
       city: (results[0] as CoverageZone?)?.city,
       slots: (results[1] as WeeklyAvailability?)?.slots,
       categories: (results[2] as TechnicianSpecialties?)?.categories,
+    );
+  }
+
+  /// Panel del ADMIN (GC-536). Es solo web: la app Android no lo incluye
+  /// (contrato GC-534 §6). Sin backend, o fuera de la web, se muestra la
+  /// cuenta con su botón de cerrar sesión.
+  Widget _adminPage(BuildContext context) {
+    final admin = widget.backend?.admin;
+    final profile = _sessionStore.profile;
+    if (admin == null || profile == null || !kIsWeb) {
+      return SessionPage(
+        store: _sessionStore,
+        logoutUser: _logoutUser,
+        onLoggedOut: () => _goToLogin(context),
+      );
+    }
+    return AdminPage(
+      gateway: admin,
+      adminName: profile.fullName.isEmpty ? profile.email : profile.fullName,
+      onLogout: () => _logoutAndGoToLogin(context),
+      onSessionExpired: () => _endExpiredSession(context),
     );
   }
 
@@ -1565,6 +1595,7 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.technicianAvailability:
             _guard(RouteAccess.professional, _technicianAvailabilityPage),
         AppRoutes.wallet: _guard(RouteAccess.authenticated, _walletPage),
+        AppRoutes.admin: _guard(RouteAccess.admin, _adminPage),
         AppRoutes.companyDashboard:
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
