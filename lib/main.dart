@@ -38,7 +38,8 @@ import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
-import 'features/chat_prototype/domain/service_chat.dart';
+import 'features/chat/domain/service_chat.dart';
+import 'features/chat/presentation/service_chat_page.dart';
 import 'features/chat_prototype/presentation/chat_prototype_page.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/application/client_profile_use_cases.dart';
@@ -1518,7 +1519,14 @@ class _FixiaAppState extends State<FixiaApp> {
             onLogout: _logoutFromShell,
             onPrimaryAction: () => _navigatorKey.currentState
                 ?.pushNamed(AppRoutes.clientServiceRequest),
-            child: child ?? const SizedBox.shrink(),
+            child: ServiceChatScope(
+              gateway: widget.backend?.chat,
+              onSessionExpired: () {
+                final navigator = _navigatorKey.currentContext;
+                if (navigator != null) _endExpiredSession(navigator);
+              },
+              child: child ?? const SizedBox.shrink(),
+            ),
           );
         },
       ),

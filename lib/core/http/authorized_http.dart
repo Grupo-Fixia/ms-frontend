@@ -47,11 +47,15 @@ class AuthorizedHttp {
   /// [BackendUnreachableException]; las demás respuestas (incluidos 4xx/5xx,
   /// y un 401 que se repite con el token recién renovado) se devuelven tal
   /// cual.
+  ///
+  /// [timeout] reemplaza el plazo general solo en esta llamada; lo usa el
+  /// long polling del chat, que espera hasta 25 s una respuesta (GC-528).
   Future<http.Response> send(
-    Future<http.Response> Function(Map<String, String> headers) request,
-  ) async {
+    Future<http.Response> Function(Map<String, String> headers) request, {
+    Duration? timeout,
+  }) async {
     final token = _currentToken();
-    final response = await _send(request, token);
+    final response = await _send(request, token, timeout);
     if (response.statusCode != 401) return response;
 
     final latest = _accessToken();
@@ -64,7 +68,7 @@ class AuthorizedHttp {
     // 401, la sesión no venció: ese servicio no acepta el token (por ejemplo,
     // una llave pública mal configurada). Se devuelve la respuesta para que el
     // repositorio muestre un error, sin sacar al usuario de su sesión.
-    return _send(request, _currentToken());
+    return _send(request, _currentToken(), timeout);
   }
 
   /// Una sola renovación a la vez: las demás esperan la que está en curso.
@@ -97,12 +101,13 @@ class AuthorizedHttp {
   Future<http.Response> _send(
     Future<http.Response> Function(Map<String, String> headers) request,
     String token,
+    Duration? timeout,
   ) async {
     try {
       return await request({
         'Accept': 'application/json, application/problem+json',
         'Authorization': 'Bearer $token',
-      }).timeout(timeout);
+      }).timeout(timeout ?? this.timeout);
     } on TimeoutException {
       throw const BackendUnreachableException();
     } on http.ClientException {
