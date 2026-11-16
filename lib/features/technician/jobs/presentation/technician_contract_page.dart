@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../chat_prototype/domain/service_chat.dart';
+import '../../../chat/domain/service_chat.dart';
 
 import '../../../../core/layout/app_shell.dart';
 import '../../../../core/widgets/fixia_ui.dart';

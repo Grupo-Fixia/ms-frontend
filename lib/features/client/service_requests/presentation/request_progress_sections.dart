@@ -2,7 +2,7 @@ import '../../../payments/domain/payments.dart';
 import '../../../payments/presentation/commission_confirmation.dart';
 import 'package:flutter/material.dart';
 
-import '../../../chat_prototype/domain/service_chat.dart';
+import '../../../chat/domain/service_chat.dart';
 
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/widgets/fixia_ui.dart';
