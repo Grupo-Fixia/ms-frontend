@@ -2,6 +2,9 @@ import 'package:web/web.dart' as web;
 
 import 'key_value_store.dart';
 
+/// En la web los almacenes del navegador ya están listos.
+Future<void> initPersistentStorage() async {}
+
 /// `window.sessionStorage`: dura lo que dura la pestaña.
 KeyValueStore tabKeyValueStore() =>
     _WebStorage(() => web.window.sessionStorage);

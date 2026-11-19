@@ -18,6 +18,10 @@ La misma app compila para Android (`android/`, paquete `co.fixia.app`).
 - **HTTP:** QA no tiene HTTPS (GC-499), así que la app permite tráfico sin
   cifrar (`android/app/src/main/res/values/config.xml`). Con HTTPS, ponerlo en
   `false`.
-- **Limitaciones actuales en Android:** la sesión vive en memoria (al cerrar
-  la app hay que volver a entrar) y subir o descargar evidencias solo funciona
-  en la web.
+- **Sesión en Android:** con «Mantener sesión iniciada» la sesión se guarda
+  en el dispositivo y sobrevive a cerrar la app; sin esa opción, cerrar la app
+  cierra la sesión (como cerrar el navegador).
+- **Evidencias en Android:** se suben con el selector de archivos del sistema
+  (JPG, PNG, WEBP o PDF). Descargarlas sigue siendo solo en la web.
+- **Landing:** el `Dockerfile` compila la web con `ANDROID_APK_URL` apuntando
+  al último Release, así aparece el botón «Descargar para Android».
