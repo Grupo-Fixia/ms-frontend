@@ -14,6 +14,7 @@ class HomePage extends StatefulWidget {
     required this.onRegisterClient,
     required this.onLogin,
     this.onRegisterTechnician,
+    this.onDownloadApk,
   });
 
   /// Lleva al registro de cliente.
@@ -25,6 +26,10 @@ class HomePage extends StatefulWidget {
   /// Lleva al registro de técnico. Mientras sea `null` la tarjeta del técnico
   /// se muestra como "Próximamente".
   final VoidCallback? onRegisterTechnician;
+
+  /// Descarga el APK de Android (GC-550). Mientras sea `null` (APK sin
+  /// publicar, o dentro de la propia app Android) la sección no aparece.
+  final VoidCallback? onDownloadApk;
 
   /// Ancho desde el que el contenido se reparte en columnas.
   static const wideBreakpoint = 880.0;
@@ -97,6 +102,16 @@ class _HomePageState extends State<HomePage> {
                       onRegisterTechnician: widget.onRegisterTechnician,
                     ),
                   ),
+                  if (widget.onDownloadApk != null)
+                    _Band(
+                      isWide: isWide,
+                      color: FixiaColors.white,
+                      top: 0,
+                      child: _AppDownload(
+                        isWide: isWide,
+                        onDownload: widget.onDownloadApk!,
+                      ),
+                    ),
                   _Band(
                     isWide: isWide,
                     color: FixiaColors.primary,
@@ -829,6 +844,66 @@ class _RoleCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Fixia en tu celular": descarga del APK de Android.
+class _AppDownload extends StatelessWidget {
+  const _AppDownload({required this.isWide, required this.onDownload});
+
+  final bool isWide;
+  final VoidCallback onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Fixia en tu celular',
+          style: TextStyle(
+            color: FixiaColors.white,
+            fontSize: isWide ? 28 : 24,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Instala la app para Android y sigue tus servicios desde cualquier '
+          'lugar.',
+          style: TextStyle(color: Color(0xFFC7D6EE), fontSize: 15, height: 1.5),
+        ),
+      ],
+    );
+    final button = FilledButton.icon(
+      key: const ValueKey('home-download-apk'),
+      style: FilledButton.styleFrom(
+        backgroundColor: FixiaColors.secondary,
+        foregroundColor: FixiaColors.white,
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+      ),
+      onPressed: onDownload,
+      icon: const Icon(Icons.android_rounded),
+      label: const Text('Descargar para Android'),
+    );
+    return Container(
+      padding: EdgeInsets.all(isWide ? 40 : 24),
+      decoration: BoxDecoration(
+        color: FixiaColors.primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: isWide
+          ? Row(children: [
+              Expanded(child: text),
+              const SizedBox(width: 24),
+              button,
+            ])
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [text, const SizedBox(height: 20), button],
+            ),
     );
   }
 }

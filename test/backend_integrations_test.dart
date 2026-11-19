@@ -232,6 +232,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Con sesión la raíz abre el panel del rol (GC-538), que también consulta
+    // el backend; solo se cuenta lo que hace la ruta pedida.
+    opportunities.calls = 0;
     tester.state<NavigatorState>(find.byType(Navigator)).pushNamed(route);
     await tester.pumpAndSettle();
     return store;

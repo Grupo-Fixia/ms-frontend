@@ -10,6 +10,8 @@ dependencies:
   http_parser: ^4.0.2
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   http: ^1.6.0
   web: ^1.1.0
 
