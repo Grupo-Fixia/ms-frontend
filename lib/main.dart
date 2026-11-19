@@ -171,6 +171,8 @@ Future<void> main() async {
   // URLs sin # (/landingpage, /login): nginx ya devuelve el index.html de
   // Flutter para cualquier ruta (GC-538).
   usePathUrlStrategy();
+  // En Android, la sesión recordada vive en el dispositivo (GC-550).
+  await initPersistentStorage();
 
   final httpClient = http.Client();
   final usersApiBaseUrl = Uri.parse(ApiConfig.usersBaseUrl);

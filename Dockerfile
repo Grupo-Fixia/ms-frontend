@@ -12,7 +12,11 @@ ARG USERS_API_BASE_URL=http://localhost
 # Sin service worker (--pwa-strategy=none): si no, el navegador guarda una
 # copia de la app y sigue mostrando la versión anterior después de cada
 # despliegue hasta que se borre el caché a mano.
-RUN flutter build web --release --pwa-strategy=none --dart-define=USERS_API_BASE_URL=${USERS_API_BASE_URL}
+# APK de Android que ofrece la landing (GC-550); vacío, no se muestra el botón.
+ARG ANDROID_APK_URL=https://github.com/Grupo-Fixia/ms-frontend/releases/latest/download/fixia.apk
+RUN flutter build web --release --pwa-strategy=none \
+    --dart-define=USERS_API_BASE_URL=${USERS_API_BASE_URL} \
+    --dart-define=ANDROID_APK_URL=${ANDROID_APK_URL}
 
 # Etapa Nginx
 FROM nginx:alpine
