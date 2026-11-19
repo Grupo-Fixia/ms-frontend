@@ -310,7 +310,7 @@ void main() {
 
     tester
         .state<NavigatorState>(find.byType(Navigator))
-        .pushNamed(AppRoutes.home);
+        .pushNamed(AppRoutes.landing);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('home-title')), findsOneWidget);
 

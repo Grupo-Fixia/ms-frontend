@@ -12,11 +12,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
 import 'core/http/authorized_http.dart';
 import 'core/theme/fixia_theme.dart';
+import 'core/web/open_url.dart';
 import 'features/auth/login/application/login_user.dart';
 import 'features/auth/login/application/logout_user.dart';
 import 'features/auth/login/application/ports/auth_repository.dart';
@@ -110,9 +112,18 @@ import 'features/technician/profile/infrastructure/http_technician_profile_repos
 import 'features/technician/profile/presentation/technician_profile_page.dart';
 import 'features/technician/profile/domain/verification_status.dart';
 
+/// APK de Android publicado (`--dart-define=ANDROID_APK_URL=...`, GC-550).
+/// Vacío: la landing no ofrece la descarga.
+const androidApkUrl = String.fromEnvironment('ANDROID_APK_URL');
+
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
+  /// Raíz de la app: con sesión, el inicio de la cuenta; sin sesión, la
+  /// landing (GC-538).
   static const home = '/';
+
+  /// Landing pública: bienvenida, registro, inicio de sesión y APK.
+  static const landing = '/landingpage';
   static const login = '/login';
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
@@ -157,6 +168,9 @@ abstract final class AppRoutes {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // URLs sin # (/landingpage, /login): nginx ya devuelve el index.html de
+  // Flutter para cualquier ruta (GC-538).
+  usePathUrlStrategy();
 
   final httpClient = http.Client();
   final usersApiBaseUrl = Uri.parse(ApiConfig.usersBaseUrl);
@@ -280,12 +294,16 @@ class FixiaApp extends StatefulWidget {
     this.companyRepository,
     this.sessionStore,
     this.sessionChangesFromOtherTabs,
+    this.apkUrl = androidApkUrl,
   });
 
   /// Conexión de perfil del cliente, solicitudes, oportunidades y
   /// postulaciones con el backend. Si es `null`, esas pantallas usan datos de
   /// demostración.
   final BackendIntegrations? backend;
+
+  /// APK de Android que ofrece la landing; vacío, no se ofrece.
+  final String apkUrl;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -1535,7 +1553,10 @@ class _FixiaAppState extends State<FixiaApp> {
         // La bienvenida se ve siempre, también con sesión iniciada (por
         // ejemplo, al abrir otra pestaña). Con sesión, «Iniciar sesión» lleva
         // directo al inicio de la cuenta en vez de pedir las credenciales.
-        AppRoutes.home: (context) => HomePage(
+        // La raíz no tiene pantalla propia: lleva a la cuenta o a la landing.
+        AppRoutes.home: (context) => _RedirectTo(
+            _sessionStore.isAuthenticated ? _accountHome : AppRoutes.landing),
+        AppRoutes.landing: (context) => HomePage(
               onRegisterClient: () =>
                   Navigator.of(context).pushNamed(AppRoutes.clientRegistration),
               onRegisterTechnician: () => Navigator.of(context)
@@ -1543,6 +1564,10 @@ class _FixiaAppState extends State<FixiaApp> {
               onLogin: () => _sessionStore.isAuthenticated
                   ? Navigator.of(context).pushNamed(_accountHome)
                   : Navigator.of(context).pushNamed(AppRoutes.login),
+              // Solo en la web: dentro de la app Android no tiene sentido.
+              onDownloadApk: kIsWeb && widget.apkUrl.isNotEmpty
+                  ? () => openUrl(widget.apkUrl)
+                  : null,
             ),
         AppRoutes.login: _guard(RouteAccess.guestOnly, _loginPage),
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
