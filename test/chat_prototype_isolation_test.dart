@@ -59,10 +59,10 @@ void main() {
     ];
     final storageClears = storage.clearCalls;
 
-    final open = find.byKey(const ValueKey('technician-open-chat-prototype'));
-    await tester.ensureVisible(open);
-    await tester.pumpAndSettle();
-    await tester.tap(open);
+    // El inicio ya no lo ofrece: se abre la ruta de la simulación.
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.chatPrototype);
     await tester.pumpAndSettle();
 
     for (final text in ['uno', 'dos', 'tres']) {

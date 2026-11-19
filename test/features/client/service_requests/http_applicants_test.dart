@@ -60,6 +60,7 @@ void main() {
                 'professionalDescription': 'Plomero',
                 'yearsOfExperience': 8,
                 'city': 'Bogotá',
+                'reputation': {'average': 4.5, 'count': 12},
               },
             },
           ])).listApplicants('req-1');
@@ -73,6 +74,9 @@ void main() {
       expect(profile.categories.map((c) => c.apiValue), ['PLUMBING']);
       expect(profile.yearsOfExperience, 8);
       expect(profile.city, 'Bogotá');
+      // GC-446/447: la reputación real que calcula ms-users.
+      expect(profile.reputation!.average, 4.5);
+      expect(profile.reputation!.count, 12);
     });
 
     test('sin perfil, sin precio o con perfil vacío no inventa datos',
@@ -109,6 +113,7 @@ void main() {
       expect(applicants.last.proposedPrice, isNull);
       expect(applicants.last.provider!.professionalDescription, isNull);
       expect(applicants.last.provider!.categories, isEmpty);
+      expect(applicants.last.provider!.reputation, isNull);
       expect(applicants.last.displayName, 'Prestador no disponible');
     });
 

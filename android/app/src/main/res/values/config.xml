@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- QA expone la API por HTTP (sin TLS hasta GC-499). Cuando haya HTTPS,
+         poner false: Android bloquea el tráfico sin cifrar por defecto. -->
+    <bool name="uses_cleartext_traffic">true</bool>
+</resources>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/constants/colombian_cities.dart';
 import '../../../../core/theme/fixia_theme.dart';
 import '../../../../core/layout/app_shell.dart';
 import '../../../../core/widgets/fixia_ui.dart';
@@ -14,6 +15,8 @@ class ClientProfilePage extends StatefulWidget {
     required this.lastName,
     required this.email,
     this.phone,
+    this.address,
+    this.city,
     this.onSaved,
     this.onBack,
     this.onOpenHome,
@@ -26,6 +29,10 @@ class ClientProfilePage extends StatefulWidget {
   final String lastName;
   final String email;
   final String? phone;
+
+  /// Dirección y ciudad guardadas en ms-users (opcionales).
+  final String? address;
+  final String? city;
   final ValueChanged<ClientProfileUpdate>? onSaved;
   final VoidCallback? onBack;
   final VoidCallback? onOpenHome;
@@ -53,6 +60,11 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
   late String _firstName = widget.firstName;
   late String _lastName = widget.lastName;
   late String? _phone = widget.phone;
+  late final _addressController =
+      TextEditingController(text: widget.address ?? '');
+  late String _address = widget.address ?? '';
+  late String _city = widget.city ?? '';
+  String? _cityChoice;
   bool _isEditing = false;
   bool _justSavedLocally = false;
   bool _saving = false;
@@ -62,6 +74,7 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -70,6 +83,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
       _firstNameController.text = _firstName;
       _lastNameController.text = _lastName;
       _phoneController.text = _phone ?? '';
+      _addressController.text = _address;
+      _cityChoice = ColombianCities.match(_city);
       _isEditing = true;
       _justSavedLocally = false;
     });
@@ -93,6 +108,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
       phone: _phoneController.text.trim(),
+      address: _addressController.text.trim(),
+      city: _cityChoice ?? '',
     );
     final saveProfile = widget.saveProfile;
     if (saveProfile != null) {
@@ -118,6 +135,8 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
       _firstName = update.firstName;
       _lastName = update.lastName;
       _phone = update.phone;
+      _address = update.address;
+      _city = update.city;
       _isEditing = false;
       _justSavedLocally = saveProfile == null;
     });
@@ -256,9 +275,12 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
               const _ProfileDivider(),
               _PersonalInfoRow(label: 'Email', value: widget.email),
               const _ProfileDivider(),
-              const _PersonalInfoRow(
+              _PersonalInfoRow(
+                key: const ValueKey('client-profile-address-row'),
                 label: 'Dirección',
-                value: 'No registrada',
+                value: _address.isEmpty && _city.isEmpty
+                    ? 'No registrada'
+                    : [_address, _city].where((v) => v.isNotEmpty).join(', '),
               ),
             ],
           ),
@@ -337,6 +359,50 @@ class _ClientProfilePageState extends State<ClientProfilePage> {
                   : null,
             ),
             validator: ClientProfileRules.phone,
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            key: const ValueKey('client-profile-city'),
+            // Flutter 3.22 necesita `value`.
+            // ignore: deprecated_member_use
+            value: _cityChoice,
+            isExpanded: true,
+            menuMaxHeight: 360,
+            decoration: const InputDecoration(
+              labelText: 'Ciudad',
+              prefixIcon: Icon(Icons.location_city_outlined),
+            ),
+            hint: const Text('Sin ciudad'),
+            items: [
+              const DropdownMenuItem<String>(child: Text('Sin ciudad')),
+              for (final c in ColombianCities.all)
+                DropdownMenuItem(value: c, child: Text(c)),
+            ],
+            onChanged: (value) => setState(() => _cityChoice = value),
+          ),
+          if (_city.isNotEmpty && ColombianCities.match(_city) == null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Tenías guardada «$_city», que no está en la lista. Elige una.',
+              key: const ValueKey('client-profile-city-unknown'),
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: 10),
+          TextFormField(
+            key: const ValueKey('client-profile-address'),
+            controller: _addressController,
+            maxLength: ClientProfileRules.addressMaxLength,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Dirección',
+              hintText: 'Ej.: Calle 45 # 13-20, apto 301',
+              helperText:
+                  'Opcional. Se usará para llenar la ubicación al publicar; solo la ve el técnico que contrates.',
+              helperMaxLines: 2,
+              prefixIcon: Icon(Icons.home_outlined),
+            ),
+            validator: ClientProfileRules.address,
           ),
           const SizedBox(height: 8),
           FilledButton(
@@ -522,7 +588,7 @@ class _StatDivider extends StatelessWidget {
 }
 
 class _PersonalInfoRow extends StatelessWidget {
-  const _PersonalInfoRow({required this.label, required this.value});
+  const _PersonalInfoRow({super.key, required this.label, required this.value});
 
   final String label;
   final String value;

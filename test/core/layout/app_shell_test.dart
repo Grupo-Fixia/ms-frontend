@@ -245,4 +245,73 @@ void main() {
     expect(visited, [ShellDestination.technicianProfile]);
     expect(tester.takeException(), isNull);
   });
+
+  group('la foto abre el perfil', () {
+    const avatar = ValueKey('shell-avatar-profile');
+    for (final (label, size) in const [
+      ('escritorio', Size(1440, 900)),
+      ('tablet', Size(800, 1000)),
+      ('celular', Size(390, 844)),
+    ]) {
+      testWidgets('$label: cliente va a Mi perfil', (tester) async {
+        final visited = <ShellDestination>[];
+        await pumpShell(tester, size: size, onNavigate: visited.add);
+        await tester.tap(find.byKey(avatar));
+        expect(visited, [ShellDestination.clientProfile]);
+      });
+    }
+
+    testWidgets('técnico va a su perfil profesional', (tester) async {
+      final visited = <ShellDestination>[];
+      await pumpShell(
+        tester,
+        size: const Size(1440, 900),
+        destination: ShellDestination.technicianHome,
+        onNavigate: visited.add,
+      );
+      await tester.tap(find.byKey(avatar));
+      expect(visited, [ShellDestination.technicianProfile]);
+    });
+
+    testWidgets('también funciona con el FixiaShellScope', (tester) async {
+      final visited = <ShellDestination>[];
+      await pumpShell(
+        tester,
+        size: const Size(390, 844),
+        viaScope: true,
+        onNavigate: visited.add,
+      );
+      await tester.tap(find.byKey(avatar));
+      expect(visited, [ShellDestination.clientProfile]);
+    });
+
+    testWidgets('estando en el perfil no vuelve a navegar', (tester) async {
+      final visited = <ShellDestination>[];
+      await pumpShell(
+        tester,
+        size: const Size(1440, 900),
+        destination: ShellDestination.clientProfile,
+        onNavigate: visited.add,
+      );
+      await tester.tap(find.byKey(avatar));
+      expect(visited, isEmpty);
+    });
+
+    testWidgets('la empresa no tiene perfil: la foto no es botón',
+        (tester) async {
+      await pumpShell(
+        tester,
+        size: const Size(1440, 900),
+        destination: ShellDestination.companyHome,
+        onNavigate: (_) {},
+      );
+      expect(find.byKey(avatar), findsNothing);
+      expect(find.text('AM'), findsOneWidget);
+    });
+
+    testWidgets('sin navegación la foto no es botón', (tester) async {
+      await pumpShell(tester, size: const Size(1440, 900));
+      expect(find.byKey(avatar), findsNothing);
+    });
+  });
 }

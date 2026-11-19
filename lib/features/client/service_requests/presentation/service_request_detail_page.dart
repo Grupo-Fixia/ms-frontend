@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/reputation_badge.dart';
 import '../../../../core/domain/service_budget.dart';
 import '../../../../core/layout/app_shell.dart';
 import '../../../../core/theme/fixia_theme.dart';
@@ -575,6 +576,13 @@ class _ApplicantCard extends StatelessWidget {
                 StatusChip(label: worker!.verificationStatus!.label),
             ],
           ),
+          if (worker != null) ...[
+            const SizedBox(height: 8),
+            ReputationBadge(
+              key: ValueKey('applicant-reputation-${applicant.id}'),
+              reputation: worker.reputation,
+            ),
+          ],
           if (applicant.isCompany) ...[
             const SizedBox(height: 8),
             Text(

@@ -1,5 +1,6 @@
 import '../../../../core/constants/application_status.dart';
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/domain/reputation.dart';
 import '../../../../core/domain/service_budget.dart';
 import '../../../technician/profile/domain/verification_status.dart';
 
@@ -36,7 +37,12 @@ class ProviderPublicProfile {
     this.professionalDescription,
     this.yearsOfExperience,
     this.city,
+    this.reputation,
   });
+
+  /// Promedio y número de calificaciones de sus clientes (GC-446); `null` si
+  /// aún no tiene. Las empresas no tienen reputación propia.
+  final Reputation? reputation;
 
   final String? displayName;
   final VerificationStatus? verificationStatus;

@@ -22,6 +22,10 @@ import 'features/technician/applications/infrastructure/http_application_reposit
 import 'features/technician/opportunities/application/ports/opportunity_repository.dart';
 import 'features/technician/opportunities/infrastructure/http_opportunity_repository.dart';
 import 'features/technician/availability/application/ports/technician_availability_repository.dart';
+import 'features/admin/domain/admin.dart';
+import 'features/chat/domain/service_chat.dart';
+import 'features/chat/infrastructure/http_service_chat_repository.dart';
+import 'features/admin/infrastructure/http_admin_repository.dart';
 import 'features/payments/infrastructure/http_payments_repository.dart';
 import 'features/technician/availability/infrastructure/http_technician_availability_repository.dart';
 
@@ -44,6 +48,8 @@ class BackendIntegrations {
     this.payments,
     this.serviceHistory,
     this.evaluations,
+    this.admin,
+    this.chat,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -126,6 +132,17 @@ class BackendIntegrations {
         baseUrl: usersBaseUrl,
         authorizedHttp: authorizedHttp,
       ),
+      chat: HttpServiceChatRepository(
+        client: client,
+        baseUrl: servicesBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
+      admin: HttpAdminRepository(
+        client: client,
+        usersBaseUrl: usersBaseUrl,
+        paymentsBaseUrl: paymentsBaseUrl ?? usersBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
     );
   }
 
@@ -154,4 +171,10 @@ class BackendIntegrations {
   /// pide conexión en vez de mostrar datos de ejemplo.
   final ServiceHistoryRepository? serviceHistory;
   final ServiceEvaluationRepository? evaluations;
+
+  /// Panel del ADMIN de Fixia (GC-536): usuarios, pagos y reembolso.
+  final AdminGateway? admin;
+
+  /// Chat real entre cliente y técnico de un servicio contratado (GC-528).
+  final ChatGateway? chat;
 }

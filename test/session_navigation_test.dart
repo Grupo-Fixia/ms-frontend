@@ -179,9 +179,8 @@ void main() {
   group('rol que el frontend no conoce', () {
     testWidgets('el inicio muestra la cuenta y no un panel de rol',
         (tester) async {
+      // Con sesión, la raíz lleva directo a la cuenta (GC-538).
       await _pump(tester, profile: _unknownRole);
-      await tester.tap(_key('home-login'));
-      await tester.pumpAndSettle();
 
       expect(_key('client-dashboard-greeting'), findsNothing);
       expect(_key('technician-dashboard-greeting'), findsNothing);

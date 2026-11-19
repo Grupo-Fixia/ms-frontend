@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/domain/reputation.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
 import '../../../../core/domain/service_budget.dart';
@@ -317,6 +318,7 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       professionalDescription: _text(json['professionalDescription']),
       yearsOfExperience: years is int ? years : null,
       city: _text(json['city']),
+      reputation: Reputation.fromJson(json['reputation']),
     );
   }
 
