@@ -52,7 +52,13 @@ void main() {
       ShellDestination.clientProfile,
     ]);
     expect(ShellDestination.of(ShellRole.technician), hasLength(6));
-    expect(ShellDestination.of(ShellRole.company), hasLength(4));
+    expect(ShellDestination.of(ShellRole.company), [
+      ShellDestination.companyHome,
+      ShellDestination.companyTechnicians,
+      ShellDestination.companyInvitations,
+      ShellDestination.companyOpportunities,
+      ShellDestination.companyWallet,
+    ]);
   });
 
   test('initialsOf no inventa nombres', () {
