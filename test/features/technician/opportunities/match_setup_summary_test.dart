@@ -6,6 +6,7 @@ import 'package:ms_frontend/features/technician/availability/domain/clock_time.d
 import 'package:ms_frontend/features/technician/availability/domain/weekday.dart';
 import 'package:ms_frontend/features/technician/availability/domain/weekly_availability.dart';
 import 'package:ms_frontend/features/technician/dashboard/presentation/technician_dashboard_page.dart';
+import 'package:ms_frontend/features/technician/opportunities/domain/service_opportunity.dart';
 import 'package:ms_frontend/features/technician/opportunities/presentation/match_setup_summary.dart';
 import 'package:ms_frontend/features/technician/opportunities/presentation/technician_opportunities_page.dart';
 
@@ -54,7 +55,8 @@ void main() {
     await _pump(
       tester,
       TechnicianOpportunitiesPage(
-        loadOpportunities: () async => [],
+        loadOpportunitiesPage: (_) async =>
+            const ServiceOpportunityPage(items: []),
         loadMatchSetup: () async => MatchSetup(
           zoneLoaded: true,
           city: 'Bogotá',
@@ -84,7 +86,8 @@ void main() {
     await _pump(
       tester,
       TechnicianOpportunitiesPage(
-        loadOpportunities: () async => [],
+        loadOpportunitiesPage: (_) async =>
+            const ServiceOpportunityPage(items: []),
         loadMatchSetup: () async => const MatchSetup(
           zoneLoaded: true,
           city: 'dsa',
@@ -111,7 +114,8 @@ void main() {
     await _pump(
       tester,
       TechnicianOpportunitiesPage(
-        loadOpportunities: () async => [],
+        loadOpportunitiesPage: (_) async =>
+            const ServiceOpportunityPage(items: []),
         loadMatchSetup: () async => const MatchSetup(zoneLoaded: true),
       ),
     );
@@ -124,7 +128,8 @@ void main() {
     await _pump(
       tester,
       TechnicianOpportunitiesPage(
-        loadOpportunities: () async => [],
+        loadOpportunitiesPage: (_) async =>
+            const ServiceOpportunityPage(items: []),
         loadMatchSetup: () async => throw Exception('caído'),
       ),
     );
