@@ -1,4 +1,5 @@
 import 'features/admin/presentation/admin_page.dart';
+import 'features/company/invitations/presentation/company_invitations_page.dart';
 import 'features/payments/domain/payments.dart';
 import 'features/payments/presentation/service_payment_panel.dart';
 import 'features/payments/presentation/wallet_page.dart';
@@ -150,6 +151,9 @@ abstract final class AppRoutes {
   /// Cuenta de empresa prestadora (GC-467).
   static const companyDashboard = '/empresa/inicio';
   static const companyTechnicians = '/empresa/tecnicos';
+
+  /// Invitaciones de la empresa a técnicos (GC-525).
+  static const companyInvitations = '/empresa/invitaciones';
   static const companyOpportunities = '/empresa/oportunidades';
 
   /// Historial propio de servicios (GC-449), uno por rol.
@@ -631,6 +635,18 @@ class _FixiaAppState extends State<FixiaApp> {
   }
 
   static const _needsConnection = 'La consulta requiere conexión con Fixia.';
+
+  /// GC-525: la empresa invita a técnicos independientes.
+  Widget _companyInvitationsPage(BuildContext context) {
+    final gateway = widget.backend?.companyInvitations;
+    if (gateway == null) {
+      return const Scaffold(body: Center(child: Text(_needsConnection)));
+    }
+    return CompanyInvitationsPage(
+      gateway: gateway,
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
 
   Widget _companyOpportunitiesPage(BuildContext context) {
     final controller = _companyTechnicians;
@@ -1503,6 +1519,7 @@ class _FixiaAppState extends State<FixiaApp> {
       ShellDestination.technicianProfile => AppRoutes.technicianProfile,
       ShellDestination.companyHome => AppRoutes.companyDashboard,
       ShellDestination.companyTechnicians => AppRoutes.companyTechnicians,
+      ShellDestination.companyInvitations => AppRoutes.companyInvitations,
       ShellDestination.companyOpportunities => AppRoutes.companyOpportunities,
       ShellDestination.clientWallet ||
       ShellDestination.technicianWallet ||
@@ -1635,6 +1652,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
             _guard(RouteAccess.company, _companyTechniciansPage),
+        AppRoutes.companyInvitations:
+            _guard(RouteAccess.company, _companyInvitationsPage),
         AppRoutes.companyOpportunities:
             _guard(RouteAccess.company, _companyOpportunitiesPage),
         AppRoutes.chatPrototype: _guard(

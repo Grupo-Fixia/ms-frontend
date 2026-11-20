@@ -34,6 +34,8 @@ enum ShellDestination {
       ShellRole.company, 'Inicio', Icons.home_outlined, 'company-nav-inicio'),
   companyTechnicians(ShellRole.company, 'Mis técnicos', Icons.groups_outlined,
       'company-nav-tecnicos'),
+  companyInvitations(ShellRole.company, 'Invitaciones',
+      Icons.mail_outline_rounded, 'company-nav-invitaciones'),
   companyOpportunities(ShellRole.company, 'Oportunidades', Icons.search_rounded,
       'company-nav-oportunidades'),
   companyWallet(ShellRole.company, 'Billetera',
