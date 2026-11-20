@@ -63,4 +63,18 @@ void main() {
       expect(_decide(RouteAccess.authenticated, role), RouteDecision.allow);
     }
   });
+
+  test('solo el ADMIN de Fixia entra al panel de administración', () {
+    expect(_decide(RouteAccess.admin, UserRole.admin), RouteDecision.allow);
+    for (final role in [
+      UserRole.client,
+      UserRole.professional,
+      UserRole.company,
+      null,
+    ]) {
+      expect(_decide(RouteAccess.admin, role), RouteDecision.toHome);
+    }
+    expect(_decide(RouteAccess.admin, null, authenticated: false),
+        RouteDecision.toLogin);
+  });
 }

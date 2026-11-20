@@ -1,3 +1,5 @@
+import 'features/admin/presentation/admin_page.dart';
+import 'features/company/invitations/presentation/company_invitations_page.dart';
 import 'features/payments/domain/payments.dart';
 import 'features/payments/presentation/service_payment_panel.dart';
 import 'features/payments/presentation/wallet_page.dart';
@@ -9,12 +11,15 @@ import 'features/service_evidence/application/evidence_feature.dart';
 import 'features/service_evidence/presentation/service_evidence_flow.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/api_config.dart';
 import 'core/http/authorized_http.dart';
 import 'core/theme/fixia_theme.dart';
+import 'core/web/open_url.dart';
 import 'features/auth/login/application/login_user.dart';
 import 'features/auth/login/application/logout_user.dart';
 import 'features/auth/login/application/ports/auth_repository.dart';
@@ -36,7 +41,8 @@ import 'features/auth/registration/domain/account_role.dart';
 import 'features/auth/registration/infrastructure/http_account_registration_repository.dart';
 import 'features/auth/registration/presentation/registration_page.dart';
 import 'features/auth/login/domain/user_profile.dart';
-import 'features/chat_prototype/domain/service_chat.dart';
+import 'features/chat/domain/service_chat.dart';
+import 'features/chat/presentation/service_chat_page.dart';
 import 'features/chat_prototype/presentation/chat_prototype_page.dart';
 import 'features/client/dashboard/presentation/client_dashboard_page.dart';
 import 'features/client/profile/application/client_profile_use_cases.dart';
@@ -107,9 +113,18 @@ import 'features/technician/profile/infrastructure/http_technician_profile_repos
 import 'features/technician/profile/presentation/technician_profile_page.dart';
 import 'features/technician/profile/domain/verification_status.dart';
 
+/// APK de Android publicado (`--dart-define=ANDROID_APK_URL=...`, GC-550).
+/// Vacío: la landing no ofrece la descarga.
+const androidApkUrl = String.fromEnvironment('ANDROID_APK_URL');
+
 /// Rutas de la aplicación.
 abstract final class AppRoutes {
+  /// Raíz de la app: con sesión, el inicio de la cuenta; sin sesión, la
+  /// landing (GC-538).
   static const home = '/';
+
+  /// Landing pública: bienvenida, registro, inicio de sesión y APK.
+  static const landing = '/landingpage';
   static const login = '/login';
   static const session = '/sesion';
   static const clientRegistration = '/registro-cliente';
@@ -136,6 +151,9 @@ abstract final class AppRoutes {
   /// Cuenta de empresa prestadora (GC-467).
   static const companyDashboard = '/empresa/inicio';
   static const companyTechnicians = '/empresa/tecnicos';
+
+  /// Invitaciones de la empresa a técnicos (GC-525).
+  static const companyInvitations = '/empresa/invitaciones';
   static const companyOpportunities = '/empresa/oportunidades';
 
   /// Historial propio de servicios (GC-449), uno por rol.
@@ -147,10 +165,18 @@ abstract final class AppRoutes {
 
   /// Billetera simulada (GC-489) de cualquier rol.
   static const wallet = '/billetera';
+
+  /// Panel web del ADMIN de Fixia (GC-536).
+  static const admin = '/admin';
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // URLs sin # (/landingpage, /login): nginx ya devuelve el index.html de
+  // Flutter para cualquier ruta (GC-538).
+  usePathUrlStrategy();
+  // En Android, la sesión recordada vive en el dispositivo (GC-550).
+  await initPersistentStorage();
 
   final httpClient = http.Client();
   final usersApiBaseUrl = Uri.parse(ApiConfig.usersBaseUrl);
@@ -274,12 +300,16 @@ class FixiaApp extends StatefulWidget {
     this.companyRepository,
     this.sessionStore,
     this.sessionChangesFromOtherTabs,
+    this.apkUrl = androidApkUrl,
   });
 
   /// Conexión de perfil del cliente, solicitudes, oportunidades y
   /// postulaciones con el backend. Si es `null`, esas pantallas usan datos de
   /// demostración.
   final BackendIntegrations? backend;
+
+  /// APK de Android que ofrece la landing; vacío, no se ofrece.
+  final String apkUrl;
 
   final AccountRegistrationRepository clientRegistrationRepository;
   final AccountRegistrationRepository technicianRegistrationRepository;
@@ -463,6 +493,7 @@ class _FixiaAppState extends State<FixiaApp> {
         UserRole.client => AppRoutes.clientDashboard,
         UserRole.professional => AppRoutes.technicianDashboard,
         UserRole.company => AppRoutes.companyDashboard,
+        UserRole.admin => AppRoutes.admin,
         _ => AppRoutes.session,
       };
 
@@ -526,6 +557,9 @@ class _FixiaAppState extends State<FixiaApp> {
     }
     if (profile.role == UserRole.company) {
       return _companyDashboardPage(context);
+    }
+    if (profile.role == UserRole.admin) {
+      return _adminPage(context);
     }
 
     return SessionPage(
@@ -602,6 +636,18 @@ class _FixiaAppState extends State<FixiaApp> {
 
   static const _needsConnection = 'La consulta requiere conexión con Fixia.';
 
+  /// GC-525: la empresa invita a técnicos independientes.
+  Widget _companyInvitationsPage(BuildContext context) {
+    final gateway = widget.backend?.companyInvitations;
+    if (gateway == null) {
+      return const Scaffold(body: Center(child: Text(_needsConnection)));
+    }
+    return CompanyInvitationsPage(
+      gateway: gateway,
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
+
   Widget _companyOpportunitiesPage(BuildContext context) {
     final controller = _companyTechnicians;
     final applications = widget.backend?.companyApplications;
@@ -633,6 +679,12 @@ class _FixiaAppState extends State<FixiaApp> {
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientDashboard),
       onOpenProfile: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.clientProfile),
+      loadSavedLocation: backend == null
+          ? null
+          : () async {
+              final profile = await GetClientProfile(backend.clientProfile)();
+              return (city: profile.city, address: profile.address);
+            },
     );
   }
 
@@ -686,6 +738,8 @@ class _FixiaAppState extends State<FixiaApp> {
                 phone: saved.phone,
               ),
         backend,
+        address: saved?.address,
+        city: saved?.city,
       ),
     );
   }
@@ -693,9 +747,13 @@ class _FixiaAppState extends State<FixiaApp> {
   Widget _clientProfileView(
     BuildContext context,
     UserProfile profile,
-    BackendIntegrations? backend,
-  ) {
+    BackendIntegrations? backend, {
+    String? address,
+    String? city,
+  }) {
     return ClientProfilePage(
+      address: address,
+      city: city,
       loadStats: backend == null
           ? null
           : () async {
@@ -787,6 +845,27 @@ class _FixiaAppState extends State<FixiaApp> {
       city: (results[0] as CoverageZone?)?.city,
       slots: (results[1] as WeeklyAvailability?)?.slots,
       categories: (results[2] as TechnicianSpecialties?)?.categories,
+    );
+  }
+
+  /// Panel del ADMIN (GC-536). Es solo web: la app Android no lo incluye
+  /// (contrato GC-534 §6). Sin backend, o fuera de la web, se muestra la
+  /// cuenta con su botón de cerrar sesión.
+  Widget _adminPage(BuildContext context) {
+    final admin = widget.backend?.admin;
+    final profile = _sessionStore.profile;
+    if (admin == null || profile == null || !kIsWeb) {
+      return SessionPage(
+        store: _sessionStore,
+        logoutUser: _logoutUser,
+        onLoggedOut: () => _goToLogin(context),
+      );
+    }
+    return AdminPage(
+      gateway: admin,
+      adminName: profile.fullName.isEmpty ? profile.email : profile.fullName,
+      onLogout: () => _logoutAndGoToLogin(context),
+      onSessionExpired: () => _endExpiredSession(context),
     );
   }
 
@@ -899,7 +978,8 @@ class _FixiaAppState extends State<FixiaApp> {
     );
   }
 
-  /// GC-320: guarda nombre, apellido y teléfono del cliente en ms-users.
+  /// GC-320: guarda nombre, apellido, teléfono, dirección y ciudad del
+  /// cliente en ms-users.
   Future<void> _saveClientProfile(
     BuildContext context,
     BackendIntegrations backend,
@@ -1439,6 +1519,7 @@ class _FixiaAppState extends State<FixiaApp> {
       ShellDestination.technicianProfile => AppRoutes.technicianProfile,
       ShellDestination.companyHome => AppRoutes.companyDashboard,
       ShellDestination.companyTechnicians => AppRoutes.companyTechnicians,
+      ShellDestination.companyInvitations => AppRoutes.companyInvitations,
       ShellDestination.companyOpportunities => AppRoutes.companyOpportunities,
       ShellDestination.clientWallet ||
       ShellDestination.technicianWallet ||
@@ -1475,7 +1556,14 @@ class _FixiaAppState extends State<FixiaApp> {
             onLogout: _logoutFromShell,
             onPrimaryAction: () => _navigatorKey.currentState
                 ?.pushNamed(AppRoutes.clientServiceRequest),
-            child: child ?? const SizedBox.shrink(),
+            child: ServiceChatScope(
+              gateway: widget.backend?.chat,
+              onSessionExpired: () {
+                final navigator = _navigatorKey.currentContext;
+                if (navigator != null) _endExpiredSession(navigator);
+              },
+              child: child ?? const SizedBox.shrink(),
+            ),
           );
         },
       ),
@@ -1484,7 +1572,10 @@ class _FixiaAppState extends State<FixiaApp> {
         // La bienvenida se ve siempre, también con sesión iniciada (por
         // ejemplo, al abrir otra pestaña). Con sesión, «Iniciar sesión» lleva
         // directo al inicio de la cuenta en vez de pedir las credenciales.
-        AppRoutes.home: (context) => HomePage(
+        // La raíz no tiene pantalla propia: lleva a la cuenta o a la landing.
+        AppRoutes.home: (context) => _RedirectTo(
+            _sessionStore.isAuthenticated ? _accountHome : AppRoutes.landing),
+        AppRoutes.landing: (context) => HomePage(
               onRegisterClient: () =>
                   Navigator.of(context).pushNamed(AppRoutes.clientRegistration),
               onRegisterTechnician: () => Navigator.of(context)
@@ -1492,6 +1583,10 @@ class _FixiaAppState extends State<FixiaApp> {
               onLogin: () => _sessionStore.isAuthenticated
                   ? Navigator.of(context).pushNamed(_accountHome)
                   : Navigator.of(context).pushNamed(AppRoutes.login),
+              // Solo en la web: dentro de la app Android no tiene sentido.
+              onDownloadApk: kIsWeb && widget.apkUrl.isNotEmpty
+                  ? () => openUrl(widget.apkUrl)
+                  : null,
             ),
         AppRoutes.login: _guard(RouteAccess.guestOnly, _loginPage),
         // Sin sesión no se muestra la cuenta: la ruta cae en el login.
@@ -1552,10 +1647,13 @@ class _FixiaAppState extends State<FixiaApp> {
         AppRoutes.technicianAvailability:
             _guard(RouteAccess.professional, _technicianAvailabilityPage),
         AppRoutes.wallet: _guard(RouteAccess.authenticated, _walletPage),
+        AppRoutes.admin: _guard(RouteAccess.admin, _adminPage),
         AppRoutes.companyDashboard:
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
             _guard(RouteAccess.company, _companyTechniciansPage),
+        AppRoutes.companyInvitations:
+            _guard(RouteAccess.company, _companyInvitationsPage),
         AppRoutes.companyOpportunities:
             _guard(RouteAccess.company, _companyOpportunitiesPage),
         AppRoutes.chatPrototype: _guard(

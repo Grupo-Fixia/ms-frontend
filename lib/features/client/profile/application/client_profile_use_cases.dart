@@ -34,6 +34,8 @@ class UpdateClientProfile {
         'lastName': error,
       if (ClientProfileRules.phone(update.phone) case final error?)
         'phone': error,
+      if (ClientProfileRules.address(update.address) case final error?)
+        'address': error,
     };
     if (errors.isNotEmpty) {
       throw ClientProfileFailure(invalidDataMessage, fieldErrors: errors);
@@ -43,6 +45,8 @@ class UpdateClientProfile {
         firstName: update.firstName.trim(),
         lastName: update.lastName.trim(),
         phone: update.phone.trim(),
+        address: update.address.trim(),
+        city: update.city.trim(),
       ),
     );
   }

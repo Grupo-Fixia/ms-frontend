@@ -135,10 +135,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    if (account) {
-      await tester.tap(key('home-login'));
-      await tester.pumpAndSettle();
-    }
+    // Con sesión la raíz ya abre la cuenta (GC-538); [account] solo deja
+    // claro qué espera cada prueba.
+    if (account) expect(key('home-title'), findsNothing);
   }
 
   /// Otra pestaña cambia la sesión y el navegador avisa a esta.
@@ -164,13 +163,19 @@ void main() {
       );
 
   testWidgets(
-      'una pestaña nueva muestra la bienvenida y «Iniciar sesión» entra a la '
-      'cuenta ya iniciada', (tester) async {
+      'una pestaña nueva con la sesión iniciada entra directo a la cuenta; '
+      'en la landing «Iniciar sesión» también', (tester) async {
     await tester.runAsync(() => signIn(newTab()));
 
     await openApp(tester, newTab());
+    expect(key('client-dashboard-greeting'), findsOneWidget);
+    expect(key('home-title'), findsNothing);
+
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .pushNamed(AppRoutes.landing);
+    await tester.pumpAndSettle();
     expect(key('home-title'), findsOneWidget);
-    expect(key('client-dashboard-greeting'), findsNothing);
 
     await tester.tap(key('home-login'));
     await tester.pumpAndSettle();

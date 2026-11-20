@@ -13,7 +13,7 @@ import '../domain/client_profile_update.dart';
 /// Contrato (`docs/openapi.yaml` de ms-users):
 /// - `GET /api/users/clients/me/profile` → `200` con el perfil. El cliente
 ///   sale del token.
-/// - `PUT` del mismo recurso con `{firstName, lastName, phone}` → `200` con
+/// - `PUT` del mismo recurso con `{firstName, lastName, phone, address, city}` → `200` con
 ///   el perfil guardado; `400` con `errors[{field, message}]`. El correo y el
 ///   documento no se editan.
 /// - `403` el rol no es cliente.
@@ -64,6 +64,8 @@ class HttpClientProfileRepository implements ClientProfileRepository {
           'firstName': update.firstName,
           'lastName': update.lastName,
           'phone': update.phone,
+          'address': update.address,
+          'city': update.city,
         }),
       ),
     );
@@ -128,6 +130,8 @@ class HttpClientProfileRepository implements ClientProfileRepository {
       documentType: _string(json['documentType']),
       documentNumber: _string(json['documentNumber']),
       createdAt: createdAt is String ? DateTime.tryParse(createdAt) : null,
+      address: _optional(json['address']),
+      city: _optional(json['city']),
     );
   }
 
@@ -150,6 +154,10 @@ class HttpClientProfileRepository implements ClientProfileRepository {
   }
 
   String? _string(Object? value) => value is String ? value : null;
+
+  /// Texto opcional: en blanco cuenta como no dado.
+  String? _optional(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
 
   /// Siempre UTF-8, para que las tildes no lleguen dañadas (TD V1, DEF-02).
   Object? _decode(http.Response response) {

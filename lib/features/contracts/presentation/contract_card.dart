@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/fixia_theme.dart';
 import '../../../core/widgets/fixia_ui.dart';
-import '../../chat_prototype/domain/service_chat.dart';
-import '../../chat_prototype/presentation/service_chat_page.dart';
+import '../../chat/domain/service_chat.dart';
+import '../../chat/presentation/service_chat_page.dart';
 import '../../quotations/presentation/quotation_card.dart';
 import '../domain/service_contract.dart';
 

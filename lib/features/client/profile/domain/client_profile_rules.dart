@@ -10,6 +10,16 @@ abstract final class ClientProfileRules {
     return null;
   }
 
+  static const addressMaxLength = 255;
+
+  static String? address(String? value) {
+    final address = value?.trim() ?? '';
+    if (address.length > addressMaxLength) {
+      return 'La dirección no puede superar $addressMaxLength caracteres.';
+    }
+    return null;
+  }
+
   static String? phone(String? value) {
     final phone = value?.trim() ?? '';
     if (phone.isEmpty) return 'El teléfono es obligatorio.';
