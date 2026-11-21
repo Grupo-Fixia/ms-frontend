@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../../core/domain/reputation.dart';
 import '../../../../core/constants/service_category.dart';
 import '../../../../core/http/authorized_http.dart';
 import '../../../../core/domain/service_budget.dart';
@@ -166,6 +167,42 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
     return _requireRequest(_decode(response));
   }
 
+  @override
+  Future<ServiceRequest> cancel(String requestId) async {
+    final response = await _send(
+      (headers) => _client.post(
+        _resource([requestId, 'cancellation']),
+        headers: headers,
+      ),
+    );
+    _throwOnError(response);
+    return _requireRequest(_decode(response));
+  }
+
+  @override
+  Future<ServiceRequest> changeExactLocation(
+    String requestId,
+    ExactLocation location,
+  ) async {
+    final body = jsonEncode({
+      'address': location.address,
+      if (location.latitude != null) 'latitude': location.latitude,
+      if (location.longitude != null) 'longitude': location.longitude,
+    });
+    final response = await _send(
+      (headers) => _client.patch(
+        _resource([requestId, 'exact-location']),
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: body,
+      ),
+    );
+    _throwOnError(response);
+    return _requireRequest(_decode(response));
+  }
+
   Uri _resource(List<String> segments) =>
       _endpoint.replace(pathSegments: [..._endpoint.pathSegments, ...segments]);
 
@@ -281,6 +318,7 @@ class HttpServiceRequestRepository implements ServiceRequestRepository {
       professionalDescription: _text(json['professionalDescription']),
       yearsOfExperience: years is int ? years : null,
       city: _text(json['city']),
+      reputation: Reputation.fromJson(json['reputation']),
     );
   }
 

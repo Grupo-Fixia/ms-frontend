@@ -123,8 +123,12 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(find.text('Confirmar y pagar'), findsNothing);
-      expect(find.text('Pago en procesamiento'), findsOneWidget);
+      // Con el saldo retenido el título dice "Pago retenido", no "en
+      // procesamiento" (estado interno de ms-payments).
+      expect(find.text('Pago en procesamiento'), findsNothing);
       expect(find.text('Pago retenido'), findsOneWidget);
+      expect(find.text('Se cobra cuando se confirme el cierre del servicio.'),
+          findsOneWidget);
       expect(
           find.textContaining(
               'El cierre está confirmado, pero el pago no está completado.'),

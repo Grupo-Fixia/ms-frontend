@@ -1,4 +1,5 @@
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/domain/reputation.dart';
 import '../../../technician/profile/domain/verification_status.dart';
 
 export '../../../technician/profile/domain/verification_status.dart';
@@ -21,7 +22,11 @@ class AssociatedTechnician {
     this.professionalDescription,
     this.yearsOfExperience,
     this.city,
+    this.reputation,
   });
+
+  /// Calificación de sus clientes (GC-446); `null` si aún no tiene.
+  final Reputation? reputation;
 
   final String userId;
   final String? displayName;
@@ -35,7 +40,9 @@ class AssociatedTechnician {
   /// neutro en vez de inventar uno.
   String get name {
     final value = displayName?.trim();
-    return value == null || value.isEmpty ? 'Técnico sin nombre público' : value;
+    return value == null || value.isEmpty
+        ? 'Técnico sin nombre público'
+        : value;
   }
 
   bool get isVerified => verificationStatus == VerificationStatus.valid;

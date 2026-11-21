@@ -195,7 +195,9 @@ class _ServicePaymentPanelState extends State<ServicePaymentPanel> {
             if (payment != null) ...[
               Text(payment.label,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(payment.confirmedHoldStatus.label),
+              Text(payment.label == payment.confirmedHoldStatus.label
+                  ? 'Se cobra cuando se confirme el cierre del servicio.'
+                  : payment.confirmedHoldStatus.label),
               if (payment.breakdown case final breakdown?)
                 PaymentBreakdown(
                   priceCents: breakdown.priceCents,

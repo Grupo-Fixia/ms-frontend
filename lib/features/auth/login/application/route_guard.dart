@@ -19,6 +19,9 @@ enum RouteAccess {
 
   /// Solo administradores de empresa prestadora (GC-467).
   company,
+
+  /// Solo el ADMIN de Fixia (GC-536). No es la cuenta de empresa.
+  admin,
 }
 
 /// Qué hacer al intentar abrir una ruta.
@@ -59,6 +62,8 @@ abstract final class RouteGuard {
         return _forRole(UserRole.professional, isAuthenticated, role);
       case RouteAccess.company:
         return _forRole(UserRole.company, isAuthenticated, role);
+      case RouteAccess.admin:
+        return _forRole(UserRole.admin, isAuthenticated, role);
     }
   }
 

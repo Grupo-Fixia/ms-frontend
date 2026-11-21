@@ -328,8 +328,13 @@ class ServicePayment {
       _canRetryHold &&
       isWalletPayment &&
       confirmedHoldStatus == HoldStatus.failed;
+
+  /// ms-payments deja el pago en `Processing` mientras el saldo está
+  /// retenido; para el usuario eso es "retenido", no "en procesamiento".
   String get label => switch (status) {
         PaymentStatus.pending => 'Pago pendiente',
+        PaymentStatus.processing when confirmedHoldStatus == HoldStatus.held =>
+          'Pago retenido',
         PaymentStatus.processing => 'Pago en procesamiento',
         PaymentStatus.completed => 'Pago completado',
         PaymentStatus.failed => 'Pago fallido',

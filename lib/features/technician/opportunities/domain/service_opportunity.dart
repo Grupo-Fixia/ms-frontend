@@ -21,3 +21,13 @@ class ServiceOpportunity {
   final String description;
   final String expectedMoment;
 }
+
+/// Una página de oportunidades tal como la muestra la pantalla (GC-532).
+/// [nextCursor] es `null` cuando no queda nada por revisar; una página puede
+/// venir corta, o vacía, con cursor no nulo: hay que seguir pidiendo.
+class ServiceOpportunityPage {
+  const ServiceOpportunityPage({required this.items, this.nextCursor});
+
+  final List<ServiceOpportunity> items;
+  final String? nextCursor;
+}

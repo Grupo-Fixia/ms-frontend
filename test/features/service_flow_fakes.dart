@@ -116,7 +116,8 @@ class FakeQuotations implements QuotationRepository {
 class FakeContracts implements ContractRepository {
   final items = <ServiceContract>[];
 
-  void contractFrom(Quotation q, {ServiceRequestStatus? status}) {
+  void contractFrom(Quotation q,
+      {ServiceRequestStatus? status, ContractPaymentStatus? paymentStatus}) {
     items.add(ServiceContract(
       id: 'c${items.length + 1}',
       serviceRequestId: q.serviceRequestId,
@@ -137,6 +138,7 @@ class FakeContracts implements ContractRepository {
         exactAddress: 'Calle 45 # 13-20',
       ),
       serviceStatus: status ?? ServiceRequestStatus.contracted,
+      paymentStatus: paymentStatus,
       timeline: [
         ContractTransition(
           fromStatus: ServiceRequestStatus.providerSelected,

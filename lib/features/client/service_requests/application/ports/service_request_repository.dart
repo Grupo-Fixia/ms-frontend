@@ -22,4 +22,15 @@ abstract interface class ServiceRequestRepository {
   /// la solicitud en `providerSelected`; las demás postulaciones quedan
   /// rechazadas.
   Future<ServiceRequest> selectProvider(String requestId, String applicationId);
+
+  /// Cancela la solicitud (GC-515). Solo antes de contratar: publicada o con
+  /// prestador elegido. Repetirla devuelve la solicitud ya cancelada.
+  Future<ServiceRequest> cancel(String requestId);
+
+  /// Reemplaza la dirección exacta (GC-514). Solo antes de contratar. La
+  /// respuesta sigue sin traer la dirección: se entrega desde la contratación.
+  Future<ServiceRequest> changeExactLocation(
+    String requestId,
+    ExactLocation location,
+  );
 }

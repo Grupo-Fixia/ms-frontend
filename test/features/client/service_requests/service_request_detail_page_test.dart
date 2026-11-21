@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ms_frontend/core/domain/reputation.dart';
 import 'package:ms_frontend/core/constants/service_category.dart';
 import 'package:ms_frontend/core/domain/service_budget.dart';
 import 'package:ms_frontend/features/client/service_requests/domain/applicant.dart';
@@ -53,6 +54,7 @@ class _FakeBackend {
         professionalDescription: 'Plomero con experiencia',
         yearsOfExperience: 8,
         city: 'Bogotá',
+        reputation: Reputation(average: 4.5, count: 12),
       ),
     ),
     _applicant(
@@ -60,7 +62,10 @@ class _FakeBackend {
       price: '180000',
       type: ProviderType.company,
       provider: const ProviderPublicProfile(displayName: 'Arreglos SAS'),
-      executor: const ProviderPublicProfile(displayName: 'Laura M.'),
+      executor: const ProviderPublicProfile(
+        displayName: 'Laura M.',
+        reputation: Reputation(average: 3.9, count: 1),
+      ),
     ),
     _applicant('a3'),
   ];
@@ -131,6 +136,12 @@ void main() {
     expect(find.text('Pendiente de verificación'), findsOneWidget);
     expect(find.text('Arreglos SAS'), findsOneWidget);
     expect(find.text('Técnico propuesto: Laura M.'), findsOneWidget);
+    // GC-447: la calificación real de quien haría el trabajo.
+    expect(find.text('4,5'), findsOneWidget);
+    expect(find.text('(12 calificaciones)'), findsOneWidget);
+    expect(find.text('3,9'), findsOneWidget,
+        reason: 'de una empresa se muestra la del técnico propuesto');
+    expect(find.text('(1 calificación)'), findsOneWidget);
     // Sin perfil ni precio: no se inventan datos.
     expect(find.text('Prestador no disponible'), findsOneWidget);
     expect(find.text('Este prestador ya no está activo en Fixia.'),

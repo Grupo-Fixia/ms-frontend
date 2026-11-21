@@ -34,6 +34,8 @@ enum ShellDestination {
       ShellRole.company, 'Inicio', Icons.home_outlined, 'company-nav-inicio'),
   companyTechnicians(ShellRole.company, 'Mis técnicos', Icons.groups_outlined,
       'company-nav-tecnicos'),
+  companyInvitations(ShellRole.company, 'Invitaciones',
+      Icons.mail_outline_rounded, 'company-nav-invitaciones'),
   companyOpportunities(ShellRole.company, 'Oportunidades', Icons.search_rounded,
       'company-nav-oportunidades'),
   companyWallet(ShellRole.company, 'Billetera',
@@ -250,6 +252,20 @@ class _ShellConfig {
   void go(ShellDestination d) {
     if (d == current && !subpage) return;
     onNavigate?.call(d);
+  }
+
+  /// Perfil del rol, al que lleva tocar la foto. La empresa no tiene.
+  ShellDestination? get profileDestination => switch (role) {
+        ShellRole.client => ShellDestination.clientProfile,
+        ShellRole.technician => ShellDestination.technicianProfile,
+        ShellRole.company => null,
+      };
+
+  /// Abre el perfil desde el avatar; `null` si no hay a dónde ir.
+  VoidCallback? get openProfile {
+    final target = profileDestination;
+    if (target == null || onNavigate == null) return null;
+    return () => go(target);
   }
 }
 
@@ -504,7 +520,11 @@ class _UserCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _Avatar(name: config.userName, dark: dark),
+          _Avatar(
+            name: config.userName,
+            dark: dark,
+            onTap: config.openProfile,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -553,14 +573,46 @@ class _UserCard extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name, required this.dark, this.size = 38});
+  const _Avatar({
+    required this.name,
+    required this.dark,
+    this.size = 38,
+    this.onTap,
+  });
 
   final String name;
   final bool dark;
   final double size;
 
+  /// Si no es `null`, la foto es un botón que abre el perfil.
+  final VoidCallback? onTap;
+
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final avatar = _circle();
+    if (onTap == null) return avatar;
+    return Semantics(
+      button: true,
+      label: 'Ver mi perfil',
+      excludeSemantics: true,
+      child: Tooltip(
+        message: 'Ver mi perfil',
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('shell-avatar-profile'),
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: avatar,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _circle() => Container(
         width: size,
         height: size,
         alignment: Alignment.center,
@@ -643,7 +695,12 @@ class _Rail extends StatelessWidget {
               ),
             ),
           const Spacer(),
-          _Avatar(name: config.userName, dark: dark, size: 40),
+          _Avatar(
+            name: config.userName,
+            dark: dark,
+            size: 40,
+            onTap: config.openProfile,
+          ),
           if (config.onLogout != null)
             IconButton(
               key: ValueKey(_logoutKey(config.role)),
@@ -713,7 +770,12 @@ class _MobileTopBar extends StatelessWidget {
                     color: dark ? FixiaColors.white : FixiaColors.textSecondary,
                   ),
                 ),
-              _Avatar(name: config.userName, dark: dark, size: 34),
+              _Avatar(
+                name: config.userName,
+                dark: dark,
+                size: 34,
+                onTap: config.openProfile,
+              ),
             ],
           ),
         ),

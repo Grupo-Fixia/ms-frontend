@@ -10,8 +10,8 @@ import 'features/auth/registration/fake_repository.dart';
 import 'features/technician/profile/fake_repository.dart';
 import 'features/technician/profile/fixtures.dart';
 
-/// Acceso al chat prototipo (GC-431): solo con sesión y desde el inicio de
-/// cliente y técnico. Complementa `navigation_by_role_test.dart`.
+/// Acceso al chat prototipo (GC-431): solo con sesión. Ya no se ofrece desde
+/// el inicio; el chat vive en cada servicio contratado. Complementa `navigation_by_role_test.dart`.
 
 const _client = UserProfile(
   id: 'usr-cli',
@@ -64,32 +64,24 @@ void main() {
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
-  testWidgets('el cliente abre el chat desde «Abrir chat»', (tester) async {
+  // El chat ahora se abre desde cada servicio contratado
+  // (service_chat_test.dart); el inicio ya no muestra el de demostración.
+  testWidgets('el inicio del cliente ya no ofrece el chat de demostración',
+      (tester) async {
     await _pump(tester, profile: _client);
     await _open(tester, AppRoutes.clientDashboard);
 
-    final button = find.byTooltip('Abrir chat');
-    await tester.ensureVisible(button);
-    await tester.pumpAndSettle();
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ChatPrototypePage), findsOneWidget);
-    expect(find.textContaining('SIMULACIÓN'), findsOneWidget);
+    expect(find.byTooltip('Abrir chat'), findsNothing);
+    expect(find.text('Chat de demostración'), findsNothing);
   });
 
-  testWidgets('el técnico abre el chat desde su inicio', (tester) async {
+  testWidgets('el inicio del técnico ya no ofrece el chat de demostración',
+      (tester) async {
     await _pump(tester, profile: _technician);
     await _open(tester, AppRoutes.technicianDashboard);
 
-    final button = find.byKey(const ValueKey('technician-open-chat-prototype'));
-    await tester.ensureVisible(button);
-    await tester.pumpAndSettle();
-    await tester.tap(button);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ChatPrototypePage), findsOneWidget);
-    expect(find.textContaining('SIMULACIÓN'), findsOneWidget);
+    expect(find.byKey(const ValueKey('technician-open-chat-prototype')),
+        findsNothing);
   });
 
   testWidgets('con sesión, la ruta /demo/chat abre la simulación',

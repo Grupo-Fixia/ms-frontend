@@ -67,7 +67,7 @@ void main() {
     expect(profile.createdAt, DateTime.utc(2026, 10, 1, 12));
   });
 
-  test('actualiza solo nombre, apellido y teléfono', () async {
+  test('actualiza nombre, apellido, teléfono, dirección y ciudad', () async {
     late http.Request sent;
     final saved = await _repository((request) async {
       sent = request;
@@ -81,8 +81,33 @@ void main() {
       'firstName': 'Ana María',
       'lastName': 'Pérez',
       'phone': '+573001234567',
+      'address': '',
+      'city': '',
     });
     expect(saved.email, 'ana@fixia.com');
+  });
+
+  test('envía y lee la dirección y la ciudad (GC-317)', () async {
+    late http.Request sent;
+    final saved = await _repository((request) async {
+      sent = request;
+      return _json(200, {
+        ..._profileJson,
+        'address': 'Calle 45 # 13-20',
+        'city': 'Bogotá',
+      });
+    }).updateProfile(const ClientProfileUpdate(
+      firstName: 'Ana María',
+      lastName: 'Pérez',
+      phone: '+573001234567',
+      address: 'Calle 45 # 13-20',
+      city: 'Bogotá',
+    ));
+    final body = jsonDecode(sent.body) as Map;
+    expect(body['address'], 'Calle 45 # 13-20');
+    expect(body['city'], 'Bogotá');
+    expect(saved.address, 'Calle 45 # 13-20');
+    expect(saved.city, 'Bogotá');
   });
 
   test('campos opcionales ausentes no rompen', () async {
@@ -99,6 +124,18 @@ void main() {
     expect(profile.phone, '');
     expect(profile.documentType, isNull);
     expect(profile.createdAt, isNull);
+    expect(profile.address, isNull);
+    expect(profile.city, isNull);
+  });
+
+  test('dirección o ciudad en blanco cuentan como no dadas', () async {
+    final profile = await _repository((_) async => _json(200, {
+          ..._profileJson,
+          'address': '   ',
+          'city': '',
+        })).fetchProfile();
+    expect(profile.address, isNull);
+    expect(profile.city, isNull);
   });
 
   for (final body in [

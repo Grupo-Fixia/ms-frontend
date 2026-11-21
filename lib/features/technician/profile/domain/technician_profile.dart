@@ -1,4 +1,5 @@
 import '../../../../core/constants/service_category.dart';
+import '../../../../core/domain/reputation.dart';
 import 'verification_status.dart';
 
 /// Perfil profesional del técnico autenticado (GC-237, RF-009), como lo
@@ -13,7 +14,12 @@ class TechnicianProfile {
     this.yearsOfExperience,
     this.categories = const {},
     this.updatedAt,
+    this.reputation,
   });
+
+  /// Calificación que le dieron sus clientes (GC-446); `null` si aún no
+  /// tiene ninguna.
+  final Reputation? reputation;
 
   final String technicianId;
   final VerificationStatus? verificationStatus;

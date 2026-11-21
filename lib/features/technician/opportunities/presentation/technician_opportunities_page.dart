@@ -19,7 +19,7 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
     this.onOpenSpecialties,
     this.onOpenProfile,
     this.onOpenWallet,
-    this.loadOpportunities,
+    this.loadOpportunitiesPage,
     this.applyTo,
     this.onOpenMyApplications,
     this.loadMatchSetup,
@@ -34,9 +34,11 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenWallet;
 
-  /// Consulta las solicitudes compatibles en el servidor (GC-340). Si es
-  /// `null`, se muestran solicitudes de ejemplo.
-  final Future<List<ServiceOpportunity>> Function()? loadOpportunities;
+  /// Consulta una página de solicitudes compatibles en el servidor (GC-340,
+  /// GC-532): recibe el `nextCursor` de la página anterior, o `null` para la
+  /// primera. Si es `null`, se muestran solicitudes de ejemplo.
+  final Future<ServiceOpportunityPage> Function(String? cursor)?
+      loadOpportunitiesPage;
 
   /// Configuración del técnico que se muestra cuando no hay oportunidades,
   /// para que vea por qué no le llega nada.
@@ -48,6 +50,10 @@ class TechnicianOpportunitiesPage extends StatefulWidget {
   /// para el usuario.
   final Future<ProposedPrice> Function(
       String opportunityId, ProposedPrice price)? applyTo;
+
+  /// Se muestra si, al pedir más, la lista cambió entre páginas (GC-532).
+  static const listChangedMessage =
+      'La lista de oportunidades cambió. Actualízala.';
 
   @override
   State<TechnicianOpportunitiesPage> createState() =>
@@ -61,7 +67,21 @@ class _TechnicianOpportunitiesPageState
   List<ServiceOpportunity>? _loaded;
   Object? _loadError;
 
-  bool get _live => widget.loadOpportunities != null;
+  /// `nextCursor` de la última página: si no es `null`, quedan solicitudes
+  /// por revisar aunque la lista se vea corta o vacía (GC-532).
+  String? _cursor;
+  final Set<String> _seenCursors = {};
+  bool _loadingMore = false;
+  String? _moreError;
+
+  /// El error de "ver más" es que la lista cambió: reintentar no sirve, hay
+  /// que volver a cargarla desde el principio.
+  bool _listChanged = false;
+
+  /// Descarta las respuestas de una carga anterior si se recargó entretanto.
+  int _revision = 0;
+
+  bool get _live => widget.loadOpportunitiesPage != null;
 
   bool get _loading => _live && _loaded == null && _loadError == null;
 
@@ -72,15 +92,68 @@ class _TechnicianOpportunitiesPageState
   }
 
   Future<void> _load() async {
+    final revision = ++_revision;
     setState(() {
       _loaded = null;
       _loadError = null;
+      _cursor = null;
+      _seenCursors.clear();
+      _loadingMore = false;
+      _moreError = null;
+      _listChanged = false;
     });
     try {
-      final items = await widget.loadOpportunities!();
-      if (mounted) setState(() => _loaded = items);
+      final page = await widget.loadOpportunitiesPage!(null);
+      if (!mounted || revision != _revision) return;
+      setState(() {
+        _loaded = List.of(page.items);
+        _cursor = page.nextCursor;
+      });
     } catch (error) {
-      if (mounted) setState(() => _loadError = error);
+      if (mounted && revision == _revision) setState(() => _loadError = error);
+    }
+  }
+
+  /// Pide la siguiente página con el cursor recibido y la agrega a la lista.
+  Future<void> _more() async {
+    final cursor = _cursor;
+    final loaded = _loaded;
+    if (cursor == null || loaded == null || _loadingMore) return;
+    final revision = _revision;
+    setState(() {
+      _loadingMore = true;
+      _moreError = null;
+      _listChanged = false;
+    });
+    try {
+      final page = await widget.loadOpportunitiesPage!(cursor);
+      if (!mounted || revision != _revision) return;
+      final next = page.nextCursor;
+      final known = {for (final item in loaded) item.id};
+      // Un cursor repetido o solicitudes ya vistas: la lista cambió entre
+      // páginas. Se corta en vez de pedir páginas sin fin.
+      if ((next != null && (next == cursor || _seenCursors.contains(next))) ||
+          page.items.any((item) => known.contains(item.id))) {
+        setState(() {
+          _loadingMore = false;
+          _moreError = TechnicianOpportunitiesPage.listChangedMessage;
+          _listChanged = true;
+        });
+        return;
+      }
+      setState(() {
+        _seenCursors.add(cursor);
+        _loaded = [...loaded, ...page.items];
+        _cursor = next;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (mounted && revision == _revision) {
+        setState(() {
+          _loadingMore = false;
+          _moreError = '$error';
+        });
+      }
     }
   }
 
@@ -113,6 +186,7 @@ class _TechnicianOpportunitiesPageState
   @override
   Widget build(BuildContext context) {
     final visible = _visibleOpportunities;
+    final hasMore = _live && _cursor != null;
     Widget body;
     if (_loading) {
       body = const Padding(
@@ -144,6 +218,7 @@ class _TechnicianOpportunitiesPageState
       );
     } else if (visible.isEmpty &&
         _live &&
+        !hasMore &&
         _selectedCategory == null &&
         widget.loadMatchSetup != null) {
       body = MatchSetupSummary(
@@ -153,11 +228,16 @@ class _TechnicianOpportunitiesPageState
         onOpenSpecialties: widget.onOpenSpecialties,
       );
     } else if (visible.isEmpty) {
+      // Con cursor no es un vacío: faltan páginas por revisar (GC-532).
       body = EmptyState(
         icon: Icons.search_off_rounded,
         message: _live && _selectedCategory == null
-            ? 'Por ahora no hay solicitudes compatibles contigo.'
-            : 'No hay solicitudes en esta categoría.',
+            ? (hasMore
+                ? 'Todavía no encontramos solicitudes compatibles. Sigue buscando.'
+                : 'Por ahora no hay solicitudes compatibles contigo.')
+            : (hasMore
+                ? 'No hay solicitudes de esta categoría entre las cargadas.'
+                : 'No hay solicitudes en esta categoría.'),
       );
     } else {
       body = ResponsiveGrid(
@@ -222,12 +302,48 @@ class _TechnicianOpportunitiesPageState
           ),
           const SizedBox(height: 12),
           Text(
-            '${visible.length} solicitudes',
+            '${visible.length}${hasMore ? '+' : ''} solicitudes',
             key: const ValueKey('technician-opportunities-count'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
           body,
+          if (hasMore) _buildMore(),
+        ],
+      ),
+    );
+  }
+
+  /// «Ver más solicitudes»: pide la página siguiente mientras haya cursor.
+  Widget _buildMore() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        children: [
+          if (_moreError != null) ...[
+            Text(
+              _moreError!,
+              key: const ValueKey('technician-opportunities-more-error'),
+              textAlign: TextAlign.center,
+            ),
+            TextButton(
+              key: const ValueKey('technician-opportunities-more-retry'),
+              onPressed: _listChanged ? _load : _more,
+              child: Text(_listChanged ? 'Actualizar' : 'Reintentar'),
+            ),
+          ] else if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: CircularProgressIndicator(
+                key: ValueKey('technician-opportunities-more-loading'),
+              ),
+            )
+          else
+            OutlinedButton(
+              key: const ValueKey('technician-opportunities-more'),
+              onPressed: _more,
+              child: const Text('Ver más solicitudes'),
+            ),
         ],
       ),
     );

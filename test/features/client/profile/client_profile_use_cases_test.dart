@@ -47,10 +47,15 @@ void main() {
         firstName: '  Ana María ',
         lastName: ' Pérez ',
         phone: ' +573001234567 ',
+        address: '  Calle 45 # 13-20 ',
+        city: ' Bogotá ',
       ),
     );
 
     expect(repository.updated!.firstName, 'Ana María');
+    // GC-317: la dirección y la ciudad llegan al repositorio.
+    expect(repository.updated!.address, 'Calle 45 # 13-20');
+    expect(repository.updated!.city, 'Bogotá');
     expect(repository.updated!.lastName, 'Pérez');
     expect(repository.updated!.phone, '+573001234567');
     expect(saved.firstName, 'Ana María');
@@ -61,13 +66,17 @@ void main() {
 
     await expectLater(
       UpdateClientProfile(repository)(
-        ClientProfileUpdate(firstName: ' ', lastName: 'a' * 101, phone: '12'),
+        ClientProfileUpdate(
+            firstName: ' ',
+            lastName: 'a' * 101,
+            phone: '12',
+            address: 'a' * 256),
       ),
       throwsA(isA<ClientProfileFailure>()
           .having((f) => f.message, 'message',
               UpdateClientProfile.invalidDataMessage)
           .having((f) => f.fieldErrors.keys, 'fieldErrors',
-              ['firstName', 'lastName', 'phone'])),
+              ['firstName', 'lastName', 'phone', 'address'])),
     );
     expect(repository.updated, isNull);
   });

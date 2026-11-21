@@ -33,6 +33,34 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    // La app se compila sin service worker (--pwa-strategy=none). Quien abrió
+    // una versión anterior puede tener registrado el viejo
+    // flutter_service_worker.js, que sigue sirviendo archivos de su caché:
+    // se da de baja, se borran sus cachés y se recarga una sola vez.
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        if (regs.length === 0) return;
+        var clears = window.caches
+          ? caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+            })
+          : Promise.resolve();
+        return Promise.all(regs.map(function (r) { return r.unregister(); }))
+          .then(function () { return clears; })
+          .then(function () {
+            try {
+              if (navigator.serviceWorker.controller &&
+                  !sessionStorage.getItem('fixia-sw-cleared')) {
+                sessionStorage.setItem('fixia-sw-cleared', '1');
+                location.reload();
+              }
+            } catch (e) {}
+          });
+      }).catch(function () {});
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
