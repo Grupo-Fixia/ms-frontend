@@ -947,8 +947,9 @@ class _FixiaAppState extends State<FixiaApp> {
   Widget _technicianOpportunitiesPage(BuildContext context) {
     final backend = widget.backend;
     return TechnicianOpportunitiesPage(
-      loadOpportunities:
-          backend == null ? null : () => _loadOpportunities(context, backend),
+      loadOpportunitiesPage: backend == null
+          ? null
+          : (cursor) => _loadOpportunitiesPage(context, backend, cursor),
       applyTo: backend == null
           ? null
           : (id, price) => _applyToOpportunity(context, backend, id, price),
@@ -1033,14 +1034,28 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
-  /// GC-340: solicitudes compatibles con el técnico, desde ms-services.
+  /// GC-340: primera página de solicitudes compatibles (el inicio solo muestra
+  /// las primeras), desde ms-services.
   Future<List<ServiceOpportunity>> _loadOpportunities(
     BuildContext context,
     BackendIntegrations backend,
+  ) async =>
+      (await _loadOpportunitiesPage(context, backend, null)).items;
+
+  /// GC-532: una página de solicitudes compatibles; [cursor] es el
+  /// `nextCursor` de la anterior, o `null` para la primera.
+  Future<ServiceOpportunityPage> _loadOpportunitiesPage(
+    BuildContext context,
+    BackendIntegrations backend,
+    String? cursor,
   ) async {
     try {
-      final page = await ListCompatibleOpportunities(backend.opportunities)();
-      return [for (final item in page.items) opportunityView(item)];
+      final page = await ListCompatibleOpportunities(backend.opportunities)(
+          cursor: cursor);
+      return ServiceOpportunityPage(
+        items: [for (final item in page.items) opportunityView(item)],
+        nextCursor: page.nextCursor,
+      );
     } on OpportunityFailure catch (failure) {
       if (failure.isSessionExpired && context.mounted) {
         _endExpiredSession(context);
