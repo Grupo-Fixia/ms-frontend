@@ -32,4 +32,4 @@ jobs:
           echo "Desplegando: $IMAGE"
           envsubst '${IMAGE}' < deploy/frontend.yaml | kubectl apply -f -
       - name: Wait for rollout
-        run: kubectl -n apps rollout status deployment/frontend --timeout=240s
+        run: kubectl -n apps rollout status deployment/frontend --timeout=420s
