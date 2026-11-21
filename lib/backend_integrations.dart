@@ -24,6 +24,8 @@ import 'features/technician/opportunities/infrastructure/http_opportunity_reposi
 import 'features/technician/availability/application/ports/technician_availability_repository.dart';
 import 'features/admin/domain/admin.dart';
 import 'features/chat/domain/service_chat.dart';
+import 'features/company/invitations/domain/company_invitation.dart';
+import 'features/company/invitations/infrastructure/http_company_invitations_repository.dart';
 import 'features/chat/infrastructure/http_service_chat_repository.dart';
 import 'features/admin/infrastructure/http_admin_repository.dart';
 import 'features/payments/infrastructure/http_payments_repository.dart';
@@ -50,6 +52,7 @@ class BackendIntegrations {
     this.evaluations,
     this.admin,
     this.chat,
+    this.companyInvitations,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -132,6 +135,11 @@ class BackendIntegrations {
         baseUrl: usersBaseUrl,
         authorizedHttp: authorizedHttp,
       ),
+      companyInvitations: HttpCompanyInvitationsRepository(
+        client: client,
+        baseUrl: usersBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
       chat: HttpServiceChatRepository(
         client: client,
         baseUrl: servicesBaseUrl,
@@ -177,4 +185,7 @@ class BackendIntegrations {
 
   /// Chat real entre cliente y técnico de un servicio contratado (GC-528).
   final ChatGateway? chat;
+
+  /// Invitaciones de la empresa a técnicos independientes (GC-525).
+  final CompanyInvitationsGateway? companyInvitations;
 }

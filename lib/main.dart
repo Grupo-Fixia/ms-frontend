@@ -1,4 +1,5 @@
 import 'features/admin/presentation/admin_page.dart';
+import 'features/company/invitations/presentation/company_invitations_page.dart';
 import 'features/payments/domain/payments.dart';
 import 'features/payments/presentation/service_payment_panel.dart';
 import 'features/payments/presentation/wallet_page.dart';
@@ -150,6 +151,9 @@ abstract final class AppRoutes {
   /// Cuenta de empresa prestadora (GC-467).
   static const companyDashboard = '/empresa/inicio';
   static const companyTechnicians = '/empresa/tecnicos';
+
+  /// Invitaciones de la empresa a técnicos (GC-525).
+  static const companyInvitations = '/empresa/invitaciones';
   static const companyOpportunities = '/empresa/oportunidades';
 
   /// Historial propio de servicios (GC-449), uno por rol.
@@ -632,6 +636,18 @@ class _FixiaAppState extends State<FixiaApp> {
 
   static const _needsConnection = 'La consulta requiere conexión con Fixia.';
 
+  /// GC-525: la empresa invita a técnicos independientes.
+  Widget _companyInvitationsPage(BuildContext context) {
+    final gateway = widget.backend?.companyInvitations;
+    if (gateway == null) {
+      return const Scaffold(body: Center(child: Text(_needsConnection)));
+    }
+    return CompanyInvitationsPage(
+      gateway: gateway,
+      onSessionExpired: () => _endExpiredSession(context),
+    );
+  }
+
   Widget _companyOpportunitiesPage(BuildContext context) {
     final controller = _companyTechnicians;
     final applications = widget.backend?.companyApplications;
@@ -931,8 +947,9 @@ class _FixiaAppState extends State<FixiaApp> {
   Widget _technicianOpportunitiesPage(BuildContext context) {
     final backend = widget.backend;
     return TechnicianOpportunitiesPage(
-      loadOpportunities:
-          backend == null ? null : () => _loadOpportunities(context, backend),
+      loadOpportunitiesPage: backend == null
+          ? null
+          : (cursor) => _loadOpportunitiesPage(context, backend, cursor),
       applyTo: backend == null
           ? null
           : (id, price) => _applyToOpportunity(context, backend, id, price),
@@ -1017,14 +1034,28 @@ class _FixiaAppState extends State<FixiaApp> {
     }
   }
 
-  /// GC-340: solicitudes compatibles con el técnico, desde ms-services.
+  /// GC-340: primera página de solicitudes compatibles (el inicio solo muestra
+  /// las primeras), desde ms-services.
   Future<List<ServiceOpportunity>> _loadOpportunities(
     BuildContext context,
     BackendIntegrations backend,
+  ) async =>
+      (await _loadOpportunitiesPage(context, backend, null)).items;
+
+  /// GC-532: una página de solicitudes compatibles; [cursor] es el
+  /// `nextCursor` de la anterior, o `null` para la primera.
+  Future<ServiceOpportunityPage> _loadOpportunitiesPage(
+    BuildContext context,
+    BackendIntegrations backend,
+    String? cursor,
   ) async {
     try {
-      final page = await ListCompatibleOpportunities(backend.opportunities)();
-      return [for (final item in page.items) opportunityView(item)];
+      final page = await ListCompatibleOpportunities(backend.opportunities)(
+          cursor: cursor);
+      return ServiceOpportunityPage(
+        items: [for (final item in page.items) opportunityView(item)],
+        nextCursor: page.nextCursor,
+      );
     } on OpportunityFailure catch (failure) {
       if (failure.isSessionExpired && context.mounted) {
         _endExpiredSession(context);
@@ -1503,6 +1534,7 @@ class _FixiaAppState extends State<FixiaApp> {
       ShellDestination.technicianProfile => AppRoutes.technicianProfile,
       ShellDestination.companyHome => AppRoutes.companyDashboard,
       ShellDestination.companyTechnicians => AppRoutes.companyTechnicians,
+      ShellDestination.companyInvitations => AppRoutes.companyInvitations,
       ShellDestination.companyOpportunities => AppRoutes.companyOpportunities,
       ShellDestination.clientWallet ||
       ShellDestination.technicianWallet ||
@@ -1635,6 +1667,8 @@ class _FixiaAppState extends State<FixiaApp> {
             _guard(RouteAccess.company, _companyDashboardPage),
         AppRoutes.companyTechnicians:
             _guard(RouteAccess.company, _companyTechniciansPage),
+        AppRoutes.companyInvitations:
+            _guard(RouteAccess.company, _companyInvitationsPage),
         AppRoutes.companyOpportunities:
             _guard(RouteAccess.company, _companyOpportunitiesPage),
         AppRoutes.chatPrototype: _guard(
