@@ -51,7 +51,9 @@ void main() {
       ShellDestination.clientWallet,
       ShellDestination.clientProfile,
     ]);
-    expect(ShellDestination.of(ShellRole.technician), hasLength(6));
+    expect(ShellDestination.of(ShellRole.technician), hasLength(7));
+    expect(ShellDestination.of(ShellRole.technician),
+        contains(ShellDestination.technicianCompany));
     expect(ShellDestination.of(ShellRole.company), [
       ShellDestination.companyHome,
       ShellDestination.companyTechnicians,
