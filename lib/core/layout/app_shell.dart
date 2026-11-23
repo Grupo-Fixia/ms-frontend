@@ -28,6 +28,8 @@ enum ShellDestination {
       Icons.history_rounded, 'technician-nav-servicios'),
   technicianWallet(ShellRole.technician, 'Billetera',
       Icons.account_balance_wallet_outlined, 'technician-nav-billetera'),
+  technicianCompany(ShellRole.technician, 'Mi empresa',
+      Icons.business_outlined, 'technician-nav-empresa'),
   technicianProfile(ShellRole.technician, 'Perfil profesional',
       Icons.person_outline_rounded, 'technician-nav-perfil'),
   companyHome(

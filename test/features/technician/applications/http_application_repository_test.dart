@@ -169,6 +169,16 @@ void main() {
           throwsA(_failure(HttpApplicationRepository.conflictMessage)));
       expect(writes, 1);
     });
+
+    test('409 COMPANY_MEMBER: el técnico de una empresa se postula por ella',
+        () async {
+      await expectLater(
+          _repository((_) async => _json(409, {
+                'title': 'Perteneces a una empresa',
+                'reasons': ['COMPANY_MEMBER'],
+              })).apply('req-1', proposedPrice: _price),
+          throwsA(_failure(HttpApplicationRepository.companyMemberMessage)));
+    });
   });
   group('apply', () {
     test('precio ausente no permite enviar una postulación incompleta',
