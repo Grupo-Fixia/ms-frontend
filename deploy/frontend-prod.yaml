@@ -30,7 +30,7 @@ spec:
         - name: frontend
           image: ${IMAGE}
           ports:
-            - { name: http, containerPort: 80 }
+            - { name: http, containerPort: 8080 }
           readinessProbe:
             httpGet: { path: /, port: http }
             periodSeconds: 10

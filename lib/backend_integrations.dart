@@ -25,6 +25,8 @@ import 'features/technician/availability/application/ports/technician_availabili
 import 'features/admin/domain/admin.dart';
 import 'features/chat/domain/service_chat.dart';
 import 'features/company/invitations/domain/company_invitation.dart';
+import 'features/technician/company/domain/technician_company.dart';
+import 'features/technician/company/infrastructure/http_technician_company_repository.dart';
 import 'features/company/invitations/infrastructure/http_company_invitations_repository.dart';
 import 'features/chat/infrastructure/http_service_chat_repository.dart';
 import 'features/admin/infrastructure/http_admin_repository.dart';
@@ -53,6 +55,7 @@ class BackendIntegrations {
     this.admin,
     this.chat,
     this.companyInvitations,
+    this.technicianCompany,
   });
 
   /// Todos comparten un solo [AuthorizedHttp]: si varias llamadas reciben
@@ -135,6 +138,11 @@ class BackendIntegrations {
         baseUrl: usersBaseUrl,
         authorizedHttp: authorizedHttp,
       ),
+      technicianCompany: HttpTechnicianCompanyRepository(
+        client: client,
+        baseUrl: usersBaseUrl,
+        authorizedHttp: authorizedHttp,
+      ),
       companyInvitations: HttpCompanyInvitationsRepository(
         client: client,
         baseUrl: usersBaseUrl,
@@ -188,4 +196,7 @@ class BackendIntegrations {
 
   /// Invitaciones de la empresa a técnicos independientes (GC-525).
   final CompanyInvitationsGateway? companyInvitations;
+
+  /// El técnico frente a las empresas: invitaciones y desvincularse (GC-525).
+  final TechnicianCompanyGateway? technicianCompany;
 }
