@@ -160,7 +160,10 @@ class _TechnicianJobsPageState extends State<TechnicianJobsPage> {
                           for (final a in toQuote)
                             _JobCard(
                               key: ValueKey('to-quote-${a.id}'),
-                              eyebrow: 'Te eligieron',
+                              eyebrow: a.providerType ==
+                                      ApplicationProviderType.company
+                                  ? 'Propuesto por tu empresa'
+                                  : 'Te eligieron',
                               highlight: true,
                               title: a.serviceRequest.category.label,
                               subtitle:
