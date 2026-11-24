@@ -46,6 +46,9 @@ class HttpApplicationRepository implements ApplicationRepository {
   static const duplicateMessage = 'Ya te postulaste a esta solicitud.';
   static const conflictMessage =
       'Ya existe una postulación o la solicitud no recibe más propuestas. Consulta su estado antes de reintentar.';
+  /// 409 `COMPANY_MEMBER`: el técnico pertenece a una empresa (GC-516).
+  static const companyMemberMessage =
+      'Perteneces a una empresa: te postulas a través de ella.';
   static const notAvailableMessage =
       'Esta solicitud ya no recibe postulaciones.';
   static const notEligibleMessage = 'No puedes postularte a esta solicitud.';
@@ -146,6 +149,11 @@ class HttpApplicationRepository implements ApplicationRepository {
       case 404:
         throw const ApplicationFailure(notFoundMessage);
       case 409:
+        final conflictReasons = body is Map ? body['reasons'] : null;
+        if (conflictReasons is List &&
+            conflictReasons.contains('COMPANY_MEMBER')) {
+          throw const ApplicationFailure(companyMemberMessage);
+        }
         final existing = body is Map ? body['applicationId'] : null;
         if (existing is String && existing.isNotEmpty) {
           throw ApplicationFailure(
