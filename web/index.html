@@ -116,19 +116,58 @@
         for (var i = 0; i < cipherBytes.length; i++) bin += String.fromCharCode(cipherBytes[i]);
         return 'ENC:v1:' + nonceHex + ':' + btoa(bin);
       }
+      function transformBody(body, headers) {
+        if (!body) return body;
+        var isUint8 = (body instanceof Uint8Array);
+        var isView = (!isUint8 && typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView && ArrayBuffer.isView(body));
+        var isBuf = (!isUint8 && !isView && typeof ArrayBuffer !== 'undefined' && (body instanceof ArrayBuffer));
+        var text = null;
+        if (typeof body === 'string') {
+          text = body;
+        } else if (isUint8) {
+          text = new TextDecoder().decode(body);
+        } else if (isView) {
+          text = new TextDecoder().decode(new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+        } else if (isBuf) {
+          text = new TextDecoder().decode(new Uint8Array(body));
+        }
+        if (!text || text.indexOf('"password"') === -1) return body;
+        try {
+          var parsed = JSON.parse(text);
+          if (parsed && typeof parsed.password === 'string' && parsed.password.indexOf('ENC:v1:') !== 0) {
+            parsed.password = encryptPassword(parsed.password);
+            var newText = JSON.stringify(parsed);
+            var newBytes = new TextEncoder().encode(newText);
+            if (headers) {
+              try {
+                if (typeof Headers !== 'undefined' && (headers instanceof Headers)) {
+                  if (headers.has('content-length')) headers.set('content-length', String(newBytes.length));
+                } else if (typeof headers === 'object') {
+                  Object.keys(headers).forEach(function (k) {
+                    if (k.toLowerCase() === 'content-length') headers[k] = String(newBytes.length);
+                  });
+                }
+              } catch (e) {}
+            }
+            return (typeof body === 'string') ? newText : newBytes;
+          }
+        } catch (e) {}
+        return body;
+      }
       var origSend = XMLHttpRequest.prototype.send;
       XMLHttpRequest.prototype.send = function (body) {
-        if (typeof body === 'string' && body.indexOf('"password"') !== -1) {
-          try {
-            var parsed = JSON.parse(body);
-            if (parsed && typeof parsed.password === 'string') {
-              parsed.password = encryptPassword(parsed.password);
-              body = JSON.stringify(parsed);
-            }
-          } catch (e) {}
-        }
-        return origSend.call(this, body);
+        return origSend.call(this, transformBody(body, null));
       };
+      if (typeof window.fetch === 'function') {
+        var origFetch = window.fetch;
+        window.fetch = function (input, init) {
+          if (init && init.body) {
+            init = Object.assign({}, init);
+            init.body = transformBody(init.body, init.headers);
+          }
+          return origFetch.call(this, input, init);
+        };
+      }
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
