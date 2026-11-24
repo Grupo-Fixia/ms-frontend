@@ -12,10 +12,11 @@ import 'package:ms_frontend/features/technician/jobs/presentation/technician_quo
 import '../../service_flow_fakes.dart';
 
 ServiceApplication _application(String id, ApplicationStatus status,
-        {String requestId = 'req-1'}) =>
+        {String requestId = 'req-1', ApplicationProviderType? providerType}) =>
     ServiceApplication(
       id: id,
       status: status,
+      providerType: providerType,
       proposedPrice: ProposedPrice.tryParse('140000'),
       serviceRequest: ApplicationRequestSummary(
         id: requestId,
@@ -68,6 +69,26 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Buscar oportunidades'));
       expect(opened, ['cotizar a1', 'contrato c1', 'oportunidades']);
+    });
+
+    testWidgets('marca el trabajo que su empresa le designó', (tester) async {
+      await _pump(
+        tester,
+        TechnicianJobsPage(
+          loadApplications: () async => [
+            _application('a1', ApplicationStatus.selected,
+                providerType: ApplicationProviderType.company),
+            _application('a2', ApplicationStatus.selected, requestId: 'req-2'),
+          ],
+          loadContracts: () async => [],
+          onOpenQuotation: (_) async {},
+          onOpenContract: (_) async {},
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('to-quote-a1')), findsOneWidget);
+      expect(find.text('PROPUESTO POR TU EMPRESA'), findsOneWidget);
+      expect(find.text('TE ELIGIERON'), findsOneWidget);
     });
 
     testWidgets('separa los servicios en curso de los finalizados',
